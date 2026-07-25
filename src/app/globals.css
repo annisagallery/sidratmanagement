@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+html {
+  width: 100%;
+  height: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* SimpleBar custom track */
+.simplebar-scrollbar::before {
+  background-color: rgba(100, 100, 100, 0.48);
+}
+
+.simplebar-track.simplebar-vertical {
+  width: 10px;
+}
+
+.simplebar-track.simplebar-horizontal .simplebar-scrollbar {
+  height: 6px;
+}
+
+.admin-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.admin-sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.admin-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.unreset {
+  all: initial;
+}
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .no-print,
+  aside,
+  nav,
+  header[role='banner'] {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .report-print {
+    max-width: none !important;
+  }
+
+  .report-print table {
+    font-size: 9px !important;
+  }
+
+  .report-print tr {
+    break-inside: avoid;
+  }
+}
+
+@layer components {
+  .input-field {
+    @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800
+           transition placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2
+           focus:ring-blue-400;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin design system — brand token + shared primitives              */
+/* --brand is set at runtime on the admin root from site primaryColor */
+/* ------------------------------------------------------------------ */
+.admin-root {
+  --brand: #c8a96e;
+  --brand-soft: color-mix(in srgb, var(--brand) 12%, white);
+  --brand-strong: color-mix(in srgb, var(--brand) 88%, black);
+  --brand-ring: color-mix(in srgb, var(--brand) 45%, transparent);
+}
+
+/* Full-screen overlays are often rendered after page content inside a
+   Tailwind space-y container. The sibling-spacing margin must never offset a
+   viewport overlay from inset-0. */
+.admin-root .fixed.inset-0 {
+  margin: 0 !important;
+}
+
+@layer components {
+  /* Buttons */
+  .btn-brand {
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-md px-3.5 text-sm font-semibold
+           text-white transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed;
+    background-color: var(--brand);
+  }
+  .btn-ghost {
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white
+           px-3.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white
+           text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Inputs */
+  .input-ui {
+    @apply h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800
+           transition placeholder-slate-400 focus:outline-none focus:ring-2;
+  }
+  .input-ui:focus {
+    --tw-ring-color: var(--brand-ring);
+    border-color: var(--brand);
+  }
+  .select-ui {
+    @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700
+           transition focus:outline-none focus:ring-2;
+  }
+  .select-ui:focus {
+    --tw-ring-color: var(--brand-ring);
+    border-color: var(--brand);
+  }
+
+  /* Surface */
+  .card-ui {
+    @apply rounded-md border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-global-table > table > thead {
+    @apply border-b border-slate-200 bg-slate-50;
+  }
+  .admin-global-table > table > thead th {
+    @apply whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .admin-global-table > table > tbody {
+    @apply divide-y divide-slate-100;
+  }
+  .admin-global-table > table > tbody > tr {
+    @apply transition-colors hover:bg-slate-50/80;
+  }
+  .admin-global-table > table > tbody > tr > td {
+    @apply px-3 py-2 text-[13px] text-slate-700;
+  }
+
+  /* Tab header menu (parent page nested-page nav) */
+  .tab-link {
+    @apply -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-4 py-2.5
+           text-sm font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-800;
+  }
+  .tab-link-active {
+    color: var(--brand-strong);
+    border-color: var(--brand);
+  }
+}
