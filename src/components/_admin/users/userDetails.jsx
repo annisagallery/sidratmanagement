@@ -26,6 +26,7 @@ import {
 import { FiPackage } from 'react-icons/fi';
 import { fDate, fDateTime } from 'src/utils/formatTime';
 import { addressDistrict, addressUpazila } from 'src/utils/bangladeshAddress';
+import { isAdminAccount } from 'src/utils/adminRole';
 
 const BDT = '৳';
 
@@ -803,7 +804,7 @@ export default function UserDetails({ userPhone }) {
               <Pill
                 label={user.role}
                 cls={
-                  user.role === 'admin' || user.role === 'super admin'
+                  isAdminAccount(user)
                     ? 'bg-purple-100 text-purple-700'
                     : 'bg-gray-100 text-gray-600'
                 }

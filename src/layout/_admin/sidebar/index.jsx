@@ -7,6 +7,7 @@ import { FiX } from 'react-icons/fi';
 import { hrefMatches, navGroups } from 'src/layout/_admin/navConfig';
 import { usePermissions } from 'src/context/PermissionsContext';
 import useAdminUserStore from 'src/stores/userStore';
+import { isSuperAdmin } from 'src/utils/adminRole';
 
 function activeItemKey(pathname) {
   let match = null;
@@ -37,7 +38,7 @@ function Navigation({ pathname, close }) {
       ...group,
       items: group.items.filter(
         (item) =>
-          (!item.superAdminOnly || user?.role === 'super admin') &&
+          (!item.superAdminOnly || isSuperAdmin(user)) &&
           (!item.subject || can(item.action || 'read', item.subject))
       )
     }))

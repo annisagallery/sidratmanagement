@@ -14,6 +14,7 @@ import PageHeader from 'src/components/_admin/ui/PageHeader';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
+import { isSuperAdmin } from 'src/utils/adminRole';
 
 const fmtDateTime = (date) => (date ? fDateTime(date) : '—');
 
@@ -30,15 +31,15 @@ export default function TrashPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
 
-  const isSuperAdmin = user?.role === 'super admin';
+  const hasSuperAdminAccess = isSuperAdmin(user);
 
-  const { data: summaryData } = useQuery('trash-summary', api.getTrashSummary, { enabled: isSuperAdmin });
+  const { data: summaryData } = useQuery('trash-summary', api.getTrashSummary, { enabled: hasSuperAdminAccess });
   const models = summaryData?.data || [];
   const totalDeleted = models.reduce((sum, m) => sum + m.count, 0);
 
   const params = new URLSearchParams({ model, page, limit, ...(search && { search }) }).toString();
   const { data, isLoading, isFetching } = useQuery(['trash-items', params], () => api.getTrashItems(params), {
-    enabled: isSuperAdmin,
+    enabled: hasSuperAdminAccess,
     keepPreviousData: true,
     onError: (error) => Swal.fire(error?.response?.data?.message || 'Something went wrong!', '', 'error')
   });

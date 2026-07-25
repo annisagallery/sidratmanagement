@@ -11,6 +11,7 @@ import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { isSuperAdmin } from 'src/utils/adminRole';
 
 const STATUS_OPTS = [
   { label: 'All Status', value: '' },
@@ -43,7 +44,12 @@ function StatusBadge({ status }) {
 }
 
 // legacy enum → seeded role slug (for users not yet assigned a roleSlug)
-const LEGACY_SLUGS = { 'super admin': 'super-admin', admin: 'admin', salesman: 'salesman', user: 'user' };
+const USER_ROLE_SLUGS = {
+  super_admin: 'super-admin',
+  admin: 'admin',
+  salesman: 'salesman',
+  user: 'user'
+};
 
 export default function AdminList() {
   const qc = useQueryClient();
@@ -196,8 +202,8 @@ export default function AdminList() {
       key: 'role',
       label: 'Role',
       render: (u) => {
-        const currentSlug = u.roleSlug || LEGACY_SLUGS[u.role] || 'admin';
-        if (!canAssignRoles || u.role === 'super admin') {
+        const currentSlug = u.roleSlug || USER_ROLE_SLUGS[u.role] || 'admin';
+        if (!canAssignRoles || isSuperAdmin(u)) {
           const current = roles.find((r) => r.slug === currentSlug);
           return <span className="text-slate-600 capitalize">{current?.name || u.role}</span>;
         }
