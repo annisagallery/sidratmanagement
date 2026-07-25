@@ -1,37 +1,48 @@
-# Annisa Gallery E-commerce Admin
+# Management application
 
-## Overview
+Next.js 16 administration application for the ecommerce API.
 
-This is the Admin repository for Annisa Gallery, an e-commerce platform. The application is designed to provide a seamless shopping experience, showcasing products in a visually appealing and efficient way.
+## Requirements
 
-## Author
+- Node.js 20.9 or newer
+- npm 10 or newer
+- A deployed API with a public HTTPS domain
+- A deployed customer storefront with a public HTTPS domain
 
-**Md Rafiqul Hasan**  
-Email: [mdrafiqulhasan110@gmail.com](mailto:mdrafiqulhasan110@gmail.com)
+## Environment
 
-## Technology Stack
+Copy `.env.example` to `.env.local` for local development:
 
-The project leverages the following technologies:
+- `NEXT_PUBLIC_BASE_URL`: public API origin without `/api` or a trailing slash
+- `NEXT_PUBLIC_FRONTEND_URL`: public customer-storefront origin without a trailing slash
 
-- **Next.js**: A React-based framework for building fast, scalable, and SEO-friendly web applications.
-- **React**: For building the UI components and managing the user interface.
-- **Tailwind CSS**: A utility-first CSS framework for styling.
-- **Axios**: For handling API requests.
-- **Redux Toolkit**: For state management.
-- **ESLint and Prettier**: For maintaining code quality and consistency.
+Both values are public URLs. Never place database credentials, JWT secrets,
+courier credentials, SMS credentials, or other private keys in this frontend.
 
-## Features
+The browser calls `/backend-api/*`, which Next.js proxies to the API. This keeps
+the admin authentication cookie first-party. Server-rendered requests use the
+API origin directly.
 
-- Responsive design for various devices.
-- Product listing and detail pages.
-- Shopping cart functionality.
-- User authentication and account management.
-- Integration with a backend API.
+## Commands
 
-## Contributing
+```bash
+npm ci
+npm run lint
+npm run build
+npm start
+```
 
-Contributions are welcome! Please open an issue or submit a pull request.
+## Coolify deployment
 
-## License
+1. Create an application from the management GitHub repository.
+2. Select **Nixpacks**. A Dockerfile is not required.
+3. Leave the install, build, and start command overrides empty.
+4. Expose port `3000`.
+5. Add `NEXT_PUBLIC_BASE_URL` and `NEXT_PUBLIC_FRONTEND_URL` from
+   `.env.example`. Make both variables available during the build because
+   Next.js embeds public variables and compiles the API rewrite at build time.
+6. Assign the management HTTPS domain and deploy.
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+The API domain must allow the management origin in `ALLOWED_ORIGINS`. Deploy the
+API first, create the initial super-admin, then sign into this application with
+that account's email and password.

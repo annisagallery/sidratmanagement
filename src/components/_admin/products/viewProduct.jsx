@@ -58,6 +58,7 @@ export default function ViewProduct({ slug }) {
     retry: false
   });
   const { balances: invBalances = [], units: invUnits = [] } = invQuery.data?.data || {};
+  const productVariations = product?.variations;
 
   const invBranches = useMemo(() => {
     const seen = new Map();
@@ -72,7 +73,7 @@ export default function ViewProduct({ slug }) {
 
   const invByVariation = useMemo(() => {
     const map = new Map();
-    (product?.variations || []).forEach((variation) => {
+    (productVariations || []).forEach((variation) => {
       map.set(String(variation._id), { variation, byBranch: {} });
     });
     invBalances.forEach((b) => {
@@ -81,7 +82,7 @@ export default function ViewProduct({ slug }) {
       map.get(key).byBranch[String(b.branch._id)] = { onHand: b.onHand, reserved: b.reserved };
     });
     return [...map.values()];
-  }, [invBalances, product?.variations]);
+  }, [invBalances, productVariations]);
 
   const invUnitsByVariation = useMemo(() => {
     const map = new Map();

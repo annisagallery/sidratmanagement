@@ -2,12 +2,16 @@
   "name": "annisagallery-management",
   "version": "0.0.1",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev --webpack -H 0.0.0.0 -p 4000",
     "build": "next build --webpack",
-    "start": "next start",
-    "lint": "next lint",
-    "prod": "next build --webpack && next start"
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.production scripts/validate-production-env.js && next start -H 0.0.0.0",
+    "lint": "eslint src",
+    "check:production-env": "node --env-file-if-exists=.env --env-file-if-exists=.env.production scripts/validate-production-env.js",
+    "prod": "npm run build && npm run start"
   },
   "dependencies": {
     "@bangladeshi/bangladesh-address": "^2.1.0",

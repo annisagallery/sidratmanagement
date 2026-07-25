@@ -92,13 +92,25 @@ function SvgDonut({ series, colors, labels }) {
     sw = 22;
   const circumference = 2 * Math.PI * r;
 
-  let cum = 0;
-  const segments = series.map((v, i) => {
-    const dash = total > 0 ? (v / total) * circumference : 0;
-    const offset = circumference - cum;
-    cum += dash;
-    return { dash, offset, color: colors[i], label: labels[i], v };
-  });
+  const { segments } = series.reduce(
+    (result, v, i) => {
+      const dash = total > 0 ? (v / total) * circumference : 0;
+      return {
+        consumed: result.consumed + dash,
+        segments: [
+          ...result.segments,
+          {
+            dash,
+            offset: circumference - result.consumed,
+            color: colors[i],
+            label: labels[i],
+            v
+          }
+        ]
+      };
+    },
+    { consumed: 0, segments: [] }
+  );
 
   return (
     <div className="flex flex-col items-center gap-4">
