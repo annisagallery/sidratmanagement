@@ -80,7 +80,7 @@ function SecretInput({ value, onChange, placeholder }) {
 }
 
 function AccountForm({ initial, onSave, onCancel, saving }) {
-  const editing = Boolean(initial?._id);
+  const editing = Boolean(initial?.id);
   const [form, setForm] = useState(
     initial ? { ...EMPTY_FORM, ...initial, credentials: { ...(initial.credentials || {}) } } : EMPTY_FORM
   );
@@ -218,15 +218,15 @@ export default function CourierAccountsManager() {
       showCancelButton: true,
       confirmButtonColor: '#EF4444',
       confirmButtonText: 'Remove'
-    }).then((r) => r.isConfirmed && remove.mutate(account._id));
+    }).then((r) => r.isConfirmed && remove.mutate(account.id));
 
   const checkBalance = async (account) => {
-    setBalances((p) => ({ ...p, [account._id]: '…' }));
+    setBalances((p) => ({ ...p, [account.id]: '…' }));
     try {
-      const res = await api.getCourierAccountBalance(account._id);
-      setBalances((p) => ({ ...p, [account._id]: `৳${res?.data?.balance ?? '?'}` }));
+      const res = await api.getCourierAccountBalance(account.id);
+      setBalances((p) => ({ ...p, [account.id]: `৳${res?.data?.balance ?? '?'}` }));
     } catch (e) {
-      setBalances((p) => ({ ...p, [account._id]: 'error' }));
+      setBalances((p) => ({ ...p, [account.id]: 'error' }));
       Swal.fire('Balance check failed', e?.response?.data?.message || 'Check the credentials.', 'error');
     }
   };
@@ -255,7 +255,7 @@ export default function CourierAccountsManager() {
           initial={editingAccount}
           saving={create.isLoading || update.isLoading}
           onSave={(form) =>
-            editingAccount ? update.mutate({ id: editingAccount._id, ...form }) : create.mutate(form)
+            editingAccount ? update.mutate({ id: editingAccount.id, ...form }) : create.mutate(form)
           }
           onCancel={() => {
             setShowForm(false);
@@ -306,7 +306,7 @@ export default function CourierAccountsManager() {
               {accounts.map((account) => {
                 const meta = PROVIDER_META[account.provider] || PROVIDER_META.steadfast;
                 return (
-                  <tr key={account._id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                  <tr key={account.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                     <td className="px-4 py-3">
                       <p className="text-sm font-semibold text-gray-800">{account.name}</p>
                       {account.webhookSecret ? (
@@ -325,7 +325,7 @@ export default function CourierAccountsManager() {
                         </span>
                       ) : (
                         <button
-                          onClick={() => setDefault.mutate(account._id)}
+                          onClick={() => setDefault.mutate(account.id)}
                           disabled={setDefault.isLoading}
                           className="text-xs text-gray-400 hover:text-[var(--brand-strong)] hover:underline"
                         >
@@ -346,7 +346,7 @@ export default function CourierAccountsManager() {
                           onClick={() => checkBalance(account)}
                           className="text-xs text-[var(--brand-strong)] hover:underline"
                         >
-                          {balances[account._id] || 'Check balance'}
+                          {balances[account.id] || 'Check balance'}
                         </button>
                       ) : (
                         <span className="text-xs text-gray-300">—</span>

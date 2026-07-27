@@ -335,11 +335,11 @@ function AttributeRow({ attr, onSave, onDelete, onAddVal, onSaveVal, onDeleteVal
         <div className="flex flex-wrap items-center gap-1.5">
           {sortedValues.map((val) => (
             <ValueChip
-              key={val._id}
+              key={val.id}
               val={val}
               attrType={attr.type}
               onDelete={() => onDeleteVal(val)}
-              onSave={(draft) => onSaveVal(val._id, draft)}
+              onSave={(draft) => onSaveVal(val.id, draft)}
             />
           ))}
           <AddValueChip attrType={attr.type} onAdd={onAddVal} />
@@ -406,7 +406,7 @@ export default function AttributesManager() {
 
   const saveAttr = async (attr, form) => {
     try {
-      await updateAttributeByAdmin({ id: attr._id, ...form });
+      await updateAttributeByAdmin({ id: attr.id, ...form });
       await load(true);
       return true;
     } catch (e) {
@@ -426,7 +426,7 @@ export default function AttributesManager() {
     });
     if (!r.isConfirmed) return;
     try {
-      await deleteAttributeByAdmin(attr._id);
+      await deleteAttributeByAdmin(attr.id);
       await load(true);
     } catch (e) {
       Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
@@ -436,7 +436,7 @@ export default function AttributesManager() {
   // ── Value CRUD ──────────────────────────────────────────────────────────────
   const addVal = async (attr, payload) => {
     try {
-      await createAttributeValueByAdmin({ attributeId: attr._id, ...payload });
+      await createAttributeValueByAdmin({ attributeId: attr.id, ...payload });
       await load(true);
       return true;
     } catch (e) {
@@ -447,7 +447,7 @@ export default function AttributesManager() {
 
   const saveVal = async (attr, valueId, draft) => {
     try {
-      await updateAttributeValueByAdmin({ attributeId: attr._id, valueId, ...draft });
+      await updateAttributeValueByAdmin({ attributeId: attr.id, valueId, ...draft });
       await load(true);
     } catch (e) {
       Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
@@ -464,7 +464,7 @@ export default function AttributesManager() {
     });
     if (!r.isConfirmed) return;
     try {
-      await deleteAttributeValueByAdmin({ attributeId: attr._id, valueId: val._id });
+      await deleteAttributeValueByAdmin({ attributeId: attr.id, valueId: val.id });
       await load(true);
     } catch (e) {
       Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
@@ -512,7 +512,7 @@ export default function AttributesManager() {
             <tbody>
               {attributes.map((attr) => (
                 <AttributeRow
-                  key={attr._id}
+                  key={attr.id}
                   attr={attr}
                   onSave={(form) => saveAttr(attr, form)}
                   onDelete={() => delAttr(attr)}

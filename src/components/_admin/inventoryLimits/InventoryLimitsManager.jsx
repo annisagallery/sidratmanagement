@@ -54,11 +54,11 @@ export default function InventoryLimitsManager() {
   }, []);
 
   const selectedAttr = useMemo(
-    () => attributes.find((a) => a._id === selectedAttrId) || null,
+    () => attributes.find((a) => a.id === selectedAttrId) || null,
     [attributes, selectedAttrId]
   );
   const selectedValue = useMemo(
-    () => (selectedAttr?.values || []).find((v) => v._id === selectedValueId) || null,
+    () => (selectedAttr?.values || []).find((v) => v.id === selectedValueId) || null,
     [selectedAttr, selectedValueId]
   );
 
@@ -74,11 +74,11 @@ export default function InventoryLimitsManager() {
     setForm((prev) => ({
       ...prev,
       attributes: [
-        ...prev.attributes.filter((attr) => attr.attribute !== selectedAttr._id),
+        ...prev.attributes.filter((attr) => attr.attribute !== selectedAttr.id),
         {
-          attribute: selectedAttr._id,
+          attribute: selectedAttr.id,
           attributeName: selectedAttr.name,
-          value: selectedValue._id,
+          value: selectedValue.id,
           valueName: selectedValue.value,
           colorHex: selectedValue.colorHex || null
         }
@@ -107,7 +107,7 @@ export default function InventoryLimitsManager() {
     setSaving(true);
     try {
       const payload = { attributes: form.attributes, quantity: Number(form.quantity || 0) };
-      if (editing) await updateInventoryLimitByAdmin({ id: editing._id, ...payload });
+      if (editing) await updateInventoryLimitByAdmin({ id: editing.id, ...payload });
       else await createInventoryLimitByAdmin(payload);
       reset();
       await load();
@@ -129,7 +129,7 @@ export default function InventoryLimitsManager() {
       confirmButtonText: 'Delete'
     });
     if (!r.isConfirmed) return;
-    await deleteInventoryLimitByAdmin(limit._id);
+    await deleteInventoryLimitByAdmin(limit.id);
     await load();
   };
 
@@ -182,7 +182,7 @@ export default function InventoryLimitsManager() {
                 >
                   <option value="">Attribute</option>
                   {attributes.map((attr) => (
-                    <option key={attr._id} value={attr._id}>
+                    <option key={attr.id} value={attr.id}>
                       {attr.name}
                     </option>
                   ))}
@@ -195,7 +195,7 @@ export default function InventoryLimitsManager() {
                 >
                   <option value="">Value</option>
                   {(selectedAttr?.values || []).map((val) => (
-                    <option key={val._id} value={val._id}>
+                    <option key={val.id} value={val.id}>
                       {val.value}
                       {val.active === false ? ' (disabled)' : ''}
                     </option>
@@ -281,12 +281,12 @@ export default function InventoryLimitsManager() {
                   </tr>
                 ) : (
                   limits.map((limit) => (
-                    <tr key={limit._id} className="border-b last:border-b-0">
+                    <tr key={limit.id} className="border-b last:border-b-0">
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1.5">
                           {(limit.attributes || []).map((attr) => (
                             <span
-                              key={`${limit._id}-${attr.value}`}
+                              key={`${limit.id}-${attr.value}`}
                               className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600"
                             >
                               {attrLabel(attr)}

@@ -98,7 +98,7 @@ function NeedCard({ need, selected, onSelect, onAssign, assigning }) {
       )}
       <button
         type="button"
-        onClick={() => onAssign(need._id)}
+        onClick={() => onAssign(need.id)}
         disabled={assigning || selected || (need.isCustom && !need.availableCustomStock)}
         className="text-left text-xs font-semibold text-emerald-700 hover:text-emerald-900 disabled:opacity-40 md:col-span-5"
       >
@@ -112,10 +112,10 @@ function BatchEditModal({ batch, products, onClose, onSave, saving }) {
   const [note, setNote] = useState(batch.note || '');
   const [items, setItems] = useState(
     (batch.items || []).map((item) => ({
-      _key: item._id,
-      orderItem: item.orderItem?._id || item.orderItem || null,
-      product: item.product?._id || item.product,
-      variation: item.variation?._id || item.variation || '',
+      _key: item.id,
+      orderItem: item.orderItem?.id || item.orderItem || null,
+      product: item.product?.id || item.product,
+      variation: item.variation?.id || item.variation || '',
       quantity: item.quantity,
       note: item.note || '',
       productName: item.product?.name,
@@ -124,12 +124,12 @@ function BatchEditModal({ batch, products, onClose, onSave, saving }) {
     }))
   );
   const [manual, setManual] = useState({ product: '', variation: '', quantity: 1, note: '' });
-  const selectedProduct = products.find((product) => product._id === manual.product);
+  const selectedProduct = products.find((product) => product.id === manual.product);
 
   const addManual = () => {
     if (!manual.product || Number(manual.quantity) < 1) return;
-    const product = products.find((entry) => entry._id === manual.product);
-    const variation = product?.variations?.find((entry) => entry._id === manual.variation);
+    const product = products.find((entry) => entry.id === manual.product);
+    const variation = product?.variations?.find((entry) => entry.id === manual.variation);
     setItems((current) => [
       ...current,
       {
@@ -247,7 +247,7 @@ function BatchEditModal({ batch, products, onClose, onSave, saving }) {
                 >
                   <option value="">Choose product</option>
                   {products.map((product) => (
-                    <option key={product._id} value={product._id}>
+                    <option key={product.id} value={product.id}>
                       {product.name} · #{product.code}
                     </option>
                   ))}
@@ -260,7 +260,7 @@ function BatchEditModal({ batch, products, onClose, onSave, saving }) {
                 >
                   <option value="">{selectedProduct?.variations?.length ? 'Choose variation' : 'Base product'}</option>
                   {(selectedProduct?.variations || []).map((variation) => (
-                    <option key={variation._id} value={variation._id}>
+                    <option key={variation.id} value={variation.id}>
                       {variationLabel(variation)}
                     </option>
                   ))}
@@ -293,7 +293,7 @@ function BatchEditModal({ batch, products, onClose, onSave, saving }) {
             disabled={saving || !items.length}
             onClick={() =>
               onSave({
-                id: batch._id,
+                id: batch.id,
                 note,
                 items: items.map((item) => ({
                   orderItem: item.orderItem,
@@ -439,8 +439,8 @@ function ProductionScanModal({ batch, onClose, onSubmit, saving }) {
 }
 
 function BatchViewModal({ batch, onClose, onEdit, onScan }) {
-  const unitsQuery = useQuery(['production-batch-units', batch._id], () => getProductionBatchUnits(batch._id), {
-    enabled: Boolean(batch?._id) && batch.status !== 'DRAFT'
+  const unitsQuery = useQuery(['production-batch-units', batch.id], () => getProductionBatchUnits(batch.id), {
+    enabled: Boolean(batch?.id) && batch.status !== 'DRAFT'
   });
   const unitsByBatchItem = useMemo(() => {
     const map = new Map();
@@ -515,11 +515,11 @@ function BatchViewModal({ batch, onClose, onEdit, onScan }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {batch.items.map((item) => {
-                    const units = unitsByBatchItem.get(String(item._id)) || [];
+                    const units = unitsByBatchItem.get(String(item.id)) || [];
                     const submittedCodes = (item.submissions || []).flatMap((submission) => submission.unitBarcodes || []);
                     const unitCodes = units.length ? units.map((unit) => unit.barcode) : submittedCodes;
                     return (
-                      <tr key={item._id}>
+                      <tr key={item.id}>
                         <td className="px-4 py-3">
                           <p className="font-bold text-slate-900">
                             {item.product?.name}{' '}
@@ -629,7 +629,7 @@ function BatchListTable({ batches, onView, onEdit, onStart }) {
             {batches.map((batch) => {
               const total = batch.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
               return (
-                <tr key={batch._id} className="hover:bg-slate-50/70">
+                <tr key={batch.id} className="hover:bg-slate-50/70">
                   <td className="px-4 py-4">
                     <button onClick={() => onView(batch)} className="text-left">
                       <p className="font-mono text-xs font-black text-blue-600">{batch.batchNo}</p>
@@ -667,7 +667,7 @@ function BatchListTable({ batches, onView, onEdit, onStart }) {
                         <FiEdit2 /> Edit
                       </button>
                       {batch.status === 'DRAFT' && (
-                        <button onClick={() => onStart(batch._id)} className={`${action} bg-amber-400 text-slate-950`}>
+                        <button onClick={() => onStart(batch.id)} className={`${action} bg-amber-400 text-slate-950`}>
                           Start
                         </button>
                       )}
@@ -706,8 +706,8 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
   const needs = needsQuery.data?.data || [];
   const batches = batchesQuery.data?.data || [];
   const products = productsQuery.data?.data || productsQuery.data || [];
-  const selectedIds = useMemo(() => new Set(selectedNeeds.map((need) => need._id)), [selectedNeeds]);
-  const selectedProduct = products.find((product) => product._id === manual.product);
+  const selectedIds = useMemo(() => new Set(selectedNeeds.map((need) => need.id)), [selectedNeeds]);
+  const selectedProduct = products.find((product) => product.id === manual.product);
 
   const refresh = () => {
     queryClient.invalidateQueries('production-needs');
@@ -729,8 +729,8 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
 
   const addManual = () => {
     if (!manual.product || Number(manual.quantity) < 1) return;
-    const product = products.find((entry) => entry._id === manual.product);
-    const variation = product?.variations?.find((entry) => entry._id === manual.variation);
+    const product = products.find((entry) => entry.id === manual.product);
+    const variation = product?.variations?.find((entry) => entry.id === manual.variation);
     setManualItems((items) => [
       ...items,
       {
@@ -746,7 +746,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
   const saveBatch = () => {
     const items = [
       ...selectedNeeds.map((need) => ({
-        orderItem: need._id,
+        orderItem: need.id,
         note: need.productionNote ?? need.customizeDetails ?? ''
       })),
       ...manualItems.map((item) => ({
@@ -810,12 +810,12 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                 <span></span>
               </div>
               {needs
-                .filter((need) => !selectedIds.has(need._id))
+                .filter((need) => !selectedIds.has(need.id))
                 .map((need) => (
                   <NeedCard
-                    key={need._id}
+                    key={need.id}
                     need={need}
-                    selected={selectedIds.has(need._id)}
+                    selected={selectedIds.has(need.id)}
                     onSelect={(entry) => setSelectedNeeds((items) => [...items, entry])}
                     onAssign={(id) => assignMut.mutate(id)}
                     assigning={assignMut.isLoading}
@@ -855,7 +855,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                 <span></span>
               </div>
               {selectedNeeds.map((need) => (
-                <div key={need._id} className="border-b border-slate-100 bg-blue-50/70 p-3">
+                <div key={need.id} className="border-b border-slate-100 bg-blue-50/70 p-3">
                   <div className="grid grid-cols-[minmax(0,1fr)_64px_36px] items-center gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-900">{need.pid?.name}</p>
@@ -864,7 +864,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                     <p className="text-right font-mono text-sm font-black text-slate-950">{need.quantity}</p>
                     <button
                       aria-label="Remove selected work"
-                      onClick={() => setSelectedNeeds((items) => items.filter((item) => item._id !== need._id))}
+                      onClick={() => setSelectedNeeds((items) => items.filter((item) => item.id !== need.id))}
                       className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                     >
                       <FiTrash2 />
@@ -876,7 +876,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                     onChange={(event) =>
                       setSelectedNeeds((items) =>
                         items.map((entry) =>
-                          entry._id === need._id ? { ...entry, productionNote: event.target.value } : entry
+                          entry.id === need.id ? { ...entry, productionNote: event.target.value } : entry
                         )
                       )
                     }
@@ -928,7 +928,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                 >
                   <option value="">Choose product</option>
                   {products.map((product) => (
-                    <option key={product._id} value={product._id}>
+                    <option key={product.id} value={product.id}>
                       {product.name} · #{product.code}
                     </option>
                   ))}
@@ -941,7 +941,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
                   >
                     <option value="">Choose variation</option>
                     {selectedProduct.variations.map((variation) => (
-                      <option key={variation._id} value={variation._id}>
+                      <option key={variation.id} value={variation.id}>
                         {variationLabel(variation)}
                       </option>
                     ))}

@@ -42,7 +42,7 @@ export default function OrderToolbarActions({ data }) {
       <OrderPdfDownload data={data} />
 
       <button
-        onClick={() => mutate(data?._id)}
+        onClick={() => mutate(data?.id)}
         disabled={deleteLoading}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 hover:bg-gray-800 rounded-md disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       >

@@ -13,7 +13,7 @@ export default function AuthProvider({ children }) {
   const router = useRouter();
   const { isAuthenticated, user, logout, _hasHydrated } = useAdminUserStore();
   const [loading, setLoading] = useState(true);
-  const accountKey = user?._id || user?.id || user?.email || 'unknown';
+  const accountKey = user?.id || user?.id || user?.email || 'unknown';
   const { isSuccess, isError } = useQuery(
     ['admin-panel-access', accountKey],
     api.getMyAbility,

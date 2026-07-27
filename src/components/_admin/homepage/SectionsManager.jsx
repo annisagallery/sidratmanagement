@@ -144,7 +144,7 @@ function AddModal({ onClose, onAdd }) {
             >
               <option value="">— Select campaign —</option>
               {campaigns.map((c) => (
-                <option key={c._id} value={c.slug}>
+                <option key={c.id} value={c.slug}>
                   {c.name}
                 </option>
               ))}
@@ -260,21 +260,21 @@ export default function SectionsManager() {
   const onDragEnd = () => {
     dragIdx.current = null;
     // Send the current ref order (guaranteed up-to-date)
-    reorderMut.mutate(orderRef.current.map((s) => s._id));
+    reorderMut.mutate(orderRef.current.map((s) => s.id));
   };
 
   const handleToggle = (s) => {
     const next = !s.isVisible;
     // Optimistic UI
-    const updated = orderRef.current.map((x) => (x._id === s._id ? { ...x, isVisible: next } : x));
+    const updated = orderRef.current.map((x) => (x.id === s.id ? { ...x, isVisible: next } : x));
     orderRef.current = updated;
     setDisplaySections([...updated]);
-    toggleMut.mutate({ id: s._id, isVisible: next });
+    toggleMut.mutate({ id: s.id, isVisible: next });
   };
 
   const handleDelete = (s) => {
     if (!confirm(`Remove "${s.label}" section?`)) return;
-    deleteMut.mutate(s._id);
+    deleteMut.mutate(s.id);
   };
 
   if (isLoading && displaySections.length === 0) {
@@ -298,7 +298,7 @@ export default function SectionsManager() {
           const meta = typeMeta(s.type);
           return (
             <div
-              key={s._id}
+              key={s.id}
               draggable
               onDragStart={() => onDragStart(idx)}
               onDragOver={(e) => onDragOver(e, idx)}

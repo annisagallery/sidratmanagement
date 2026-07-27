@@ -45,9 +45,9 @@ const normalizeList = (res) => {
 const attrValueName = (value) => value?.value || value?.valueName || value?.name || value;
 
 const buildAttrOption = (attr = {}, attrName = '') => ({
-  attribute: attr.attribute?._id || attr.attribute || null,
+  attribute: attr.attribute?.id || attr.attribute || null,
   attributeName: attr.attributeName || attr.name || attrName,
-  value: attr.value?._id || attr.value || attr._id || null,
+  value: attr.value?.id || attr.value || attr.id || null,
   valueName: attr.valueName || attr.value || attr.name || '',
   colorHex: attr.colorHex || null
 });
@@ -86,9 +86,9 @@ const getAttrDimensions = (product = {}) => {
       const valueName = attrValueName(value);
       if (!valueName) return;
       map[name].options.set(valueName, {
-        attribute: entry.attribute?._id || entry.attribute || null,
+        attribute: entry.attribute?.id || entry.attribute || null,
         attributeName: name,
-        value: value?._id || value || null,
+        value: value?.id || value || null,
         valueName,
         colorHex: value?.colorHex || null
       });
@@ -142,7 +142,7 @@ const hasCustomSelection = (item = {}) => (item.selectedAttrs || {})['Type'] ===
 
 const normalizeOrderItemId = (value) => {
   if (!value) return '';
-  if (typeof value === 'object') return String(value._id || value.id || '');
+  if (typeof value === 'object') return String(value.id || value.id || '');
   return String(value);
 };
 
@@ -216,13 +216,13 @@ const buildItem = (product) => {
 
   return {
     _key: uid(), // Always unique: same product can be added multiple times.
-    productId: product._id || product.id,
+    productId: product.id || product.id,
     productName: product.name || product.title || 'Untitled product',
     productSlug: product.slug,
     variations,
     attrDimensions,
     selectedAttrs,
-    selectedVariationId: firstVariation?._id || firstVariation?.id || null,
+    selectedVariationId: firstVariation?.id || firstVariation?.id || null,
     motherRegular: prices.motherRegular,
     motherDiscount: prices.motherDiscount,
     regularPrice: Number(prices.regularPrice || 0),
@@ -377,7 +377,7 @@ function POSProductSearch({ onAdd }) {
       {results.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-[99] mt-1 max-h-80 overflow-auto rounded-md border border-gray-200 bg-white shadow-xl">
           {results.map((product) => {
-            const key = product._id || product.id || product.slug;
+            const key = product.id || product.id || product.slug;
             const stock =
               product.stock ??
               product.quantity ??
@@ -426,7 +426,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
 
     onUpdate(item._key, {
       selectedAttrs,
-      selectedVariationId: matched?._id || matched?.id || item.selectedVariationId || null,
+      selectedVariationId: matched?.id || matched?.id || item.selectedVariationId || null,
       regularPrice: Number(prices.regularPrice || item.motherRegular || 0),
       discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
       stock: isCustom ? 0 : Math.max(0, availableForVariation(matched) - Number(matched?.presaleAvailable || 0)),
@@ -1074,7 +1074,7 @@ function TagPicker({ selected, onChange }) {
   return (
     <div className="flex flex-wrap gap-2">
       {tags.map((tag) => {
-        const id = tag._id || tag.id;
+        const id = tag.id || tag.id;
         const active = selected.includes(id);
 
         return (
@@ -1178,7 +1178,7 @@ function TrxLookupSection({ linked, onChange }) {
     }
   };
 
-  const remove = (id) => onChange(linked.filter((p) => p._id !== id));
+  const remove = (id) => onChange(linked.filter((p) => p.id !== id));
 
   return (
     <div className="space-y-3">
@@ -1213,14 +1213,14 @@ function TrxLookupSection({ linked, onChange }) {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {linked.map((p) => (
-                <tr key={p._id}>
+                <tr key={p.id}>
                   <td className="px-3 py-2 font-semibold uppercase text-gray-700">{p.type}</td>
                   <td className="px-3 py-2 font-mono text-gray-400">{p.trxId || '—'}</td>
                   <td className="px-3 py-2 text-right font-bold text-gray-700">{fmt(p.amount)}</td>
                   <td className="px-2 text-center">
                     <button
                       type="button"
-                      onClick={() => remove(p._id)}
+                      onClick={() => remove(p.id)}
                       className="text-lg leading-none text-gray-300 hover:text-red-500"
                     >
                       ×
@@ -1384,12 +1384,12 @@ export default function CreateOrder({ orderNo = null }) {
       deliveryType: o.deliveryType || 'regular',
       estimatedDelivery: o.estimatedDelivery?.slice(0, 10) || addDays(7)
     });
-    setTags((o.tags || []).map((tag) => (typeof tag === 'object' && tag !== null ? tag._id || tag.id : tag)).filter(Boolean));
+    setTags((o.tags || []).map((tag) => (typeof tag === 'object' && tag !== null ? tag.id || tag.id : tag)).filter(Boolean));
 
     // Customer
     if (o.userId) {
       setCustomer({
-        _id: o.userId._id || o.userId,
+        id: o.userId.id || o.userId,
         name: o.userId.name || '',
         phone: addr.phone || o.userId.phone || ''
       });
@@ -1399,18 +1399,18 @@ export default function CreateOrder({ orderNo = null }) {
     const linked = (o.payments || [])
       .filter((p) => p.paymentId)
       .map((p) => ({
-        _id: p.paymentId,
+        id: p.paymentId,
         type: p.method,
         trxId: p.trxId,
         amount: p.amount,
-        orderId: o._id,
+        orderId: o.id,
         orderNo: o.orderNo
       }));
     setLinkedPayments(linked);
 
     // Load items — fetch full product data so ItemsTable variant picker works
     const serverItems = o.items || [];
-    setOriginalServerItemIds(serverItems.map((i) => i._id));
+    setOriginalServerItemIds(serverItems.map((i) => i.id));
 
     if (!serverItems.length) {
       setInitialized(true);
@@ -1425,7 +1425,7 @@ export default function CreateOrder({ orderNo = null }) {
           const base = buildItem(res?.data || si.pid || {});
 
           // Track which server item this was
-          base._serverId = si._id;
+          base._serverId = si.id;
           base._serverStatus = si.status;
           base._serverIsCustom = Boolean(si.isCustom);
           base._serverProductionBatch = si.productionBatch || null;
@@ -1438,7 +1438,7 @@ export default function CreateOrder({ orderNo = null }) {
           if (Object.keys(savedAttrs).length) {
             base.selectedAttrs = savedAttrs;
             const matched = findVariation(base.variations, savedAttrs);
-            base.selectedVariationId = matched?._id || matched?.id || si.variationId || base.selectedVariationId;
+            base.selectedVariationId = matched?.id || matched?.id || si.variationId || base.selectedVariationId;
           } else {
             base.selectedVariationId = si.variationId || base.selectedVariationId;
           }
@@ -1573,11 +1573,11 @@ export default function CreateOrder({ orderNo = null }) {
         }
 
         // 4. Link newly added payments (those not already on this order)
-        const orderId = existingOrderData?.data?._id?.toString();
+        const orderId = existingOrderData?.data?.id?.toString();
         for (const p of linkedPayments) {
           if (!p.orderId || p.orderId?.toString() !== orderId) {
             try {
-              await api.assignPaymentByAdmin({ id: p._id, orderNo });
+              await api.assignPaymentByAdmin({ id: p.id, orderNo });
             } catch (_) {}
           }
         }
@@ -1605,7 +1605,7 @@ export default function CreateOrder({ orderNo = null }) {
 
     // ── Create mode ────────────────────────────────────────────────────────────
     try {
-      let userId = customer?._id || customer?.id || null;
+      let userId = customer?.id || customer?.id || null;
 
       if (!userId) {
         if (typeof api.createGuestCustomer !== 'function') {
@@ -1613,7 +1613,7 @@ export default function CreateOrder({ orderNo = null }) {
         }
 
         const guest = await api.createGuestCustomer({ name: address.name, phone: address.phone || customer?.phone });
-        userId = guest?.data?._id || guest?.data?.id;
+        userId = guest?.data?.id || guest?.data?.id;
       }
 
       const uploadedAdminNoteImages = await uploadAdminNoteImages(adminNoteImages);
@@ -1639,8 +1639,8 @@ export default function CreateOrder({ orderNo = null }) {
         deliveryType: delivery.deliveryType,
         estimatedDelivery: delivery.estimatedDelivery || null,
         adminNote: adminNote || null,
-        adminNoteImages: uploadedAdminNoteImages.map((image) => image._id || image.id),
-        linkedPaymentIds: linkedPayments.map((p) => p._id),
+        adminNoteImages: uploadedAdminNoteImages.map((image) => image.id || image.id),
+        linkedPaymentIds: linkedPayments.map((p) => p.id),
         paymentMethod: linkedPayments[0]?.type || 'cod'
       };
 

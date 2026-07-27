@@ -142,7 +142,7 @@ export default function UserList() {
     if (!isConfirmed || !slug) return;
 
     const targetRole = staffRoles.find((r) => r.slug === slug);
-    const payload = { userId: row._id };
+    const payload = { userId: row.id };
 
     if (targetRole?.requiresBranch) {
       let branches = [];
@@ -153,7 +153,7 @@ export default function UserList() {
         return Swal.fire('Error', 'Could not load branches.', 'error');
       }
       if (!branches.length) return Swal.fire('No branches', 'Create an active branch first.', 'info');
-      const options = Object.fromEntries(branches.map((b) => [b._id, `${b.name}${b.code ? ` (${b.code})` : ''}`]));
+      const options = Object.fromEntries(branches.map((b) => [b.id, `${b.name}${b.code ? ` (${b.code})` : ''}`]));
       const { isConfirmed: branchOk, value: branch } = await Swal.fire({
         title: 'Select branch',
         text: `"${targetRole.name}" is branch-scoped — ${row.name} will only work within this branch.`,
@@ -233,7 +233,7 @@ export default function UserList() {
             <MdOpenInNew size={17} />
           </Link>
           <button
-            onClick={() => handleChangeStatus(u._id)}
+            onClick={() => handleChangeStatus(u.id)}
             className="rounded-md p-2 transition hover:bg-slate-100"
             style={{ color: 'var(--brand-strong)' }}
             title="Toggle Status"

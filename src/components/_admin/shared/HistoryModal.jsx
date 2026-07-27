@@ -67,7 +67,7 @@ export default function HistoryModal({ title, model, docId, onClose }) {
               <div className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-100" />
               <div className="space-y-4">
                 {entries.map((e) => (
-                  <div key={e._id} className="flex gap-3 relative">
+                  <div key={e.id} className="flex gap-3 relative">
                     <div className="w-9 h-9 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0 z-10">
                       {actionIcon(e.description)}
                     </div>

@@ -94,7 +94,7 @@ export default function BranchPaymentMethods() {
       showCancelButton: true,
       confirmButtonText: 'Remove'
     });
-    if (confirmed.isConfirmed) deleteMutation.mutate({ branchId, id: method._id });
+    if (confirmed.isConfirmed) deleteMutation.mutate({ branchId, id: method.id });
   };
 
   return (
@@ -130,16 +130,16 @@ export default function BranchPaymentMethods() {
               </tr>
             )}
             {methods.map((method) =>
-              editingId === method._id ? (
+              editingId === method.id ? (
                 <MethodEditor
-                  key={method._id}
+                  key={method.id}
                   initial={{ name: method.name, color: method.color, accounts: (method.accounts || []).join(', '), isActive: method.isActive }}
                   saving={updateMutation.isLoading}
-                  onSave={(form) => save(form, method._id)}
+                  onSave={(form) => save(form, method.id)}
                   onCancel={() => setEditingId(null)}
                 />
               ) : (
-                <tr key={method._id} className="transition hover:bg-slate-50">
+                <tr key={method.id} className="transition hover:bg-slate-50">
                   <td className="px-3 py-2 text-[13px] font-semibold text-slate-700">
                     <span className="mr-2 inline-block h-2.5 w-2.5 rounded-md align-middle" style={{ backgroundColor: method.color }} />
                     {method.name}
@@ -153,7 +153,7 @@ export default function BranchPaymentMethods() {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-1">
-                      <button className="btn-icon" onClick={() => setEditingId(method._id)} aria-label={`Edit ${method.name}`}>
+                      <button className="btn-icon" onClick={() => setEditingId(method.id)} aria-label={`Edit ${method.name}`}>
                         <MdEdit size={15} />
                       </button>
                       <button className="btn-icon text-red-400 hover:text-red-600" onClick={() => remove(method)} aria-label={`Remove ${method.name}`}>

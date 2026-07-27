@@ -86,11 +86,11 @@ export default function CampaignForm({ data: existing }) {
   const searchResults = searchData?.data ?? [];
 
   const addProduct = (p) => {
-    if (!form.products.find((x) => x._id === p._id)) {
+    if (!form.products.find((x) => x.id === p.id)) {
       setForm((prev) => ({ ...prev, products: [...prev.products, p] }));
     }
   };
-  const removeProduct = (id) => setForm((p) => ({ ...p, products: p.products.filter((x) => x._id !== id) }));
+  const removeProduct = (id) => setForm((p) => ({ ...p, products: p.products.filter((x) => x.id !== id) }));
 
   // Image upload helpers
   const handleImageChange = async (e) => {
@@ -154,7 +154,7 @@ export default function CampaignForm({ data: existing }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    saveMut.mutate({ ...form, products: form.products.map((p) => p._id) });
+    saveMut.mutate({ ...form, products: form.products.map((p) => p.id) });
   };
 
   return (
@@ -258,7 +258,7 @@ export default function CampaignForm({ data: existing }) {
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                     {searchResults.map((p) => (
                       <button
-                        key={p._id}
+                        key={p.id}
                         type="button"
                         onClick={() => {
                           addProduct(p);
@@ -291,7 +291,7 @@ export default function CampaignForm({ data: existing }) {
             {form.products.length > 0 ? (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {form.products.map((p) => (
-                  <div key={p._id} className="flex items-center gap-3 p-2 border border-gray-100 rounded-md">
+                  <div key={p.id} className="flex items-center gap-3 p-2 border border-gray-100 rounded-md">
                     {p.featuredImage?.path || p.images?.[0]?.path ? (
                       <Image
                         src={p.featuredImage?.path || p.images[0]?.path || '/placeholder.svg'}
@@ -309,7 +309,7 @@ export default function CampaignForm({ data: existing }) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeProduct(p._id)}
+                      onClick={() => removeProduct(p.id)}
                       className="text-gray-300 hover:text-red-500 shrink-0"
                     >
                       <FiX size={16} />

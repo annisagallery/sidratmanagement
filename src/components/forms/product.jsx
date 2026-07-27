@@ -65,9 +65,9 @@ function buildVariations(attrSelections, existingVars, basePrice) {
 
   const valueSets = entries.map((e) =>
     e.values.map((v) => ({
-      attribute: e.attr._id,
+      attribute: e.attr.id,
       attributeName: e.attr.name,
-      value: v._id,
+      value: v.id,
       valueName: v.value,
       colorHex: v.colorHex || null
     }))
@@ -78,7 +78,7 @@ function buildVariations(attrSelections, existingVars, basePrice) {
     const existing = existingVars.find(
       (ev) =>
         ev.attributes.length === combo.length &&
-        combo.every((c) => ev.attributes.some((a) => (a.value?._id || a.value)?.toString() === c.value?.toString()))
+        combo.every((c) => ev.attributes.some((a) => (a.value?.id || a.value)?.toString() === c.value?.toString()))
     );
     const customPrice = existing ? existing.regularPrice != null : false;
     return {
@@ -163,7 +163,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
       const uploaded = await Promise.all(files.map(doUpload));
       setPool((prev) => {
         const next = [...prev, ...uploaded];
-        if (!featuredId && next.length > 0) setFeaturedId(next[0]._id);
+        if (!featuredId && next.length > 0) setFeaturedId(next[0].id);
         return next;
       });
     } catch {
@@ -176,8 +176,8 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
 
   const removeFromPool = (id) => {
     setPool((prev) => {
-      const next = prev.filter((img) => img._id !== id);
-      if (featuredId === id) setFeaturedId(next[0]?._id || null);
+      const next = prev.filter((img) => img.id !== id);
+      if (featuredId === id) setFeaturedId(next[0]?.id || null);
       return next;
     });
   };
@@ -201,10 +201,10 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
         <div className="space-y-3">
           <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3">
             {pool.map((img) => {
-              const isFeatured = img._id === featuredId;
+              const isFeatured = img.id === featuredId;
               return (
                 <div
-                  key={img._id}
+                  key={img.id}
                   className={`relative aspect-square rounded-md overflow-hidden border-2 group transition-all ${isFeatured ? 'border-yellow-400 shadow-md' : 'border-gray-200'}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -217,14 +217,14 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-start justify-between p-1.5">
                     <button
                       type="button"
-                      onClick={() => setFeaturedId(img._id)}
+                      onClick={() => setFeaturedId(img.id)}
                       className={`p-1 rounded-md transition ${isFeatured ? 'text-yellow-400' : 'text-white hover:text-yellow-300'}`}
                     >
                       {isFeatured ? <MdStar size={18} /> : <MdStarOutline size={18} />}
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeFromPool(img._id)}
+                      onClick={() => removeFromPool(img.id)}
                       className="p-1 rounded-md text-white hover:text-red-300 transition"
                     >
                       <MdClose size={16} />
@@ -432,24 +432,24 @@ function LivePreview({
               <div className="border-t pt-2 space-y-2">
                 {varAttrEntries.map((e) => {
                   const isColor = e.attr.type === 'color';
-                  const sel = previewAttr[e.attr._id];
+                  const sel = previewAttr[e.attr.id];
                   return (
-                    <div key={e.attr._id}>
+                    <div key={e.attr.id}>
                       <p className="text-xs font-semibold text-gray-700 mb-1">
                         {e.attr.name}
                         {sel && <span className="font-normal text-gray-400 ml-1">: {sel.value}</span>}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {e.values.map((v) => {
-                          const isSel = sel?.id === v._id;
+                          const isSel = sel?.id === v.id;
                           return isColor && v.colorHex ? (
                             <button
-                              key={v._id}
+                              key={v.id}
                               type="button"
                               onClick={() =>
                                 setPreviewAttr((p) => ({
                                   ...p,
-                                  [e.attr._id]: isSel ? null : { id: v._id, value: v.value }
+                                  [e.attr.id]: isSel ? null : { id: v.id, value: v.value }
                                 }))
                               }
                               title={v.value}
@@ -458,12 +458,12 @@ function LivePreview({
                             />
                           ) : (
                             <button
-                              key={v._id}
+                              key={v.id}
                               type="button"
                               onClick={() =>
                                 setPreviewAttr((p) => ({
                                   ...p,
-                                  [e.attr._id]: isSel ? null : { id: v._id, value: v.value }
+                                  [e.attr.id]: isSel ? null : { id: v.id, value: v.value }
                                 }))
                               }
                               className={`px-2.5 py-1 rounded-md border text-xs transition ${isSel ? 'bg-blue-700 text-white border-blue-700' : 'bg-gray-50 text-gray-700 border-gray-300 hover:border-blue-400'}`}
@@ -485,11 +485,11 @@ function LivePreview({
                 <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Product Info</p>
                 <div className="space-y-1">
                   {infoAttrEntries.map((e) => (
-                    <div key={e.attr._id} className="flex items-start gap-2 text-xs">
+                    <div key={e.attr.id} className="flex items-start gap-2 text-xs">
                       <span className="text-gray-500 font-medium min-w-[60px]">{e.attr.name}:</span>
                       <div className="flex flex-wrap gap-1">
                         {e.values.map((v) => (
-                          <span key={v._id} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md text-[10px]">
+                          <span key={v.id} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md text-[10px]">
                             {e.attr.type === 'color' && v.colorHex && (
                               <span
                                 className="inline-block w-2 h-2 rounded-md mr-1 border border-gray-300"
@@ -656,7 +656,7 @@ export default function ProductForm({ currentProduct }) {
   // Without this, React Query's refetchOnWindowFocus rewrites the admin's in-progress edits.
   useEffect(() => {
     if (!currentProduct || !attrData?.data) return;
-    const productId = currentProduct._id?.toString();
+    const productId = currentProduct.id?.toString();
     if (initedForRef.current === productId) return;
     initedForRef.current = productId;
     const p = currentProduct;
@@ -664,7 +664,7 @@ export default function ProductForm({ currentProduct }) {
     setSlug(p.slug || '');
     setStatus(p.status || 'draft');
     setIsFeatured(!!p.isFeatured);
-    setCategory(p.category?._id || '');
+    setCategory(p.category?.id || '');
     setPrice(p.price?.toString() || '');
     setPriceSale(p.priceSale?.toString() || '');
     setRate(p.rate?.toString() || '');
@@ -680,27 +680,27 @@ export default function ProductForm({ currentProduct }) {
     setSizeChart(p.sizeChart || null);
 
     const pool = [...(p.images || [])];
-    if (p.featuredImage?._id && !pool.some((img) => img._id === p.featuredImage._id)) pool.unshift(p.featuredImage);
+    if (p.featuredImage?.id && !pool.some((img) => img.id === p.featuredImage.id)) pool.unshift(p.featuredImage);
     setImagePool(pool);
-    setFeaturedImageId(p.featuredImage?._id || pool[0]?._id || null);
+    setFeaturedImageId(p.featuredImage?.id || pool[0]?.id || null);
 
     const varAttrIds = new Set();
     (p.variations || []).forEach((v) =>
-      v.attributes?.forEach((a) => varAttrIds.add((a.attribute?._id || a.attribute)?.toString()))
+      v.attributes?.forEach((a) => varAttrIds.add((a.attribute?.id || a.attribute)?.toString()))
     );
 
     const sel = {};
     for (const pa of p.attributes || []) {
-      const attrId = (pa.attribute?._id || pa.attribute)?.toString();
-      const attrDef = attrData.data.find((a) => a._id === attrId);
+      const attrId = (pa.attribute?.id || pa.attribute)?.toString();
+      const attrDef = attrData.data.find((a) => a.id === attrId);
       if (!attrDef) continue;
       const selectedValues = attrDef.values.filter((v) =>
-        (pa.values || []).some((pv) => (pv._id || pv)?.toString() === v._id?.toString())
+        (pa.values || []).some((pv) => (pv.id || pv)?.toString() === v.id?.toString())
       );
-      sel[attrDef._id] = {
+      sel[attrDef.id] = {
         attr: attrDef,
         values: selectedValues,
-        forVariation: varAttrIds.has(attrDef._id?.toString())
+        forVariation: varAttrIds.has(attrDef.id?.toString())
       };
     }
     setAttrSelections(sel);
@@ -708,7 +708,7 @@ export default function ProductForm({ currentProduct }) {
     setVariations(
       (p.variations || []).map((v) => ({
         ...v,
-        imageId: v.image?._id?.toString() || (typeof v.image === 'string' && v.image ? v.image : null)
+        imageId: v.image?.id?.toString() || (typeof v.image === 'string' && v.image ? v.image : null)
       }))
     );
   }, [currentProduct, attrData]);
@@ -724,10 +724,10 @@ export default function ProductForm({ currentProduct }) {
   }, [attrSelections]); // eslint-disable-line
 
   // Attribute management
-  const unselectedAttrs = allAttributes.filter((a) => !attrSelections[a._id]);
+  const unselectedAttrs = allAttributes.filter((a) => !attrSelections[a.id]);
 
   const addAttr = (attr) => {
-    setAttrSelections((prev) => ({ ...prev, [attr._id]: { attr, values: [], forVariation: true } }));
+    setAttrSelections((prev) => ({ ...prev, [attr.id]: { attr, values: [], forVariation: true } }));
     setShowAttrMenu(false);
   };
 
@@ -741,15 +741,15 @@ export default function ProductForm({ currentProduct }) {
 
   const toggleValue = useCallback((attr, val) => {
     setAttrSelections((prev) => {
-      const cur = prev[attr._id] || { attr, values: [], forVariation: false };
-      const has = cur.values.some((v) => v._id === val._id);
-      const next = has ? cur.values.filter((v) => v._id !== val._id) : [...cur.values, val];
+      const cur = prev[attr.id] || { attr, values: [], forVariation: false };
+      const has = cur.values.some((v) => v.id === val.id);
+      const next = has ? cur.values.filter((v) => v.id !== val.id) : [...cur.values, val];
       if (!next.length) {
         const c = { ...prev };
-        delete c[attr._id];
+        delete c[attr.id];
         return c;
       }
-      return { ...prev, [attr._id]: { ...cur, attr, values: next } };
+      return { ...prev, [attr.id]: { ...cur, attr, values: next } };
     });
   }, []);
 
@@ -848,12 +848,12 @@ export default function ProductForm({ currentProduct }) {
       description,
       metaTitle,
       metaDescription,
-      featuredImage: featuredImageId || imagePool[0]?._id || null,
-      sizeChart: sizeChart?._id || null,
-      images: imagePool.map((img) => img._id),
+      featuredImage: featuredImageId || imagePool[0]?.id || null,
+      sizeChart: sizeChart?.id || null,
+      images: imagePool.map((img) => img.id),
       attributes: Object.values(attrSelections)
         .filter((e) => e.values.length > 0)
-        .map((e) => ({ attribute: e.attr._id, attributeName: e.attr.name, values: e.values.map((v) => v._id) })),
+        .map((e) => ({ attribute: e.attr.id, attributeName: e.attr.name, values: e.values.map((v) => v.id) })),
       customizableFields: [],
       variations: (() => {
         const payload = variations
@@ -873,8 +873,8 @@ export default function ProductForm({ currentProduct }) {
     });
   };
 
-  const catName = categories.find((c) => c._id === category)?.name;
-  const featuredImg = imagePool.find((img) => img._id === featuredImageId);
+  const catName = categories.find((c) => c.id === category)?.name;
+  const featuredImg = imagePool.find((img) => img.id === featuredImageId);
   const enabledVariations = variations.filter((v) => v.enabled !== false);
   const disabledCount = variations.length - enabledVariations.length;
 
@@ -930,7 +930,7 @@ export default function ProductForm({ currentProduct }) {
                 <select className="input-field" value={category} onChange={(e) => setCategory(e.target.value)}>
                   <option value="">Select category…</option>
                   {categories.map((c) => (
-                    <option key={c._id} value={c._id}>
+                    <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
@@ -1137,7 +1137,7 @@ export default function ProductForm({ currentProduct }) {
                       ) : (
                         unselectedAttrs.map((attr) => (
                           <button
-                            key={attr._id}
+                            key={attr.id}
                             type="button"
                             onClick={() => addAttr(attr)}
                             className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between"
@@ -1163,7 +1163,7 @@ export default function ProductForm({ currentProduct }) {
                   const hasValues = sel.values.length > 0;
                   return (
                     <div
-                      key={sel.attr._id}
+                      key={sel.attr.id}
                       className={`border rounded-md transition-colors ${hasValues ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-white'}`}
                     >
                       <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
@@ -1183,14 +1183,14 @@ export default function ProductForm({ currentProduct }) {
                             <div className="flex items-center gap-0.5 bg-white rounded-md border p-0.5">
                               <button
                                 type="button"
-                                onClick={() => setForVariation(sel.attr._id, false)}
+                                onClick={() => setForVariation(sel.attr.id, false)}
                                 className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${!sel.forVariation ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-700'}`}
                               >
                                 <MdInfo size={12} /> Info only
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setForVariation(sel.attr._id, true)}
+                                onClick={() => setForVariation(sel.attr.id, true)}
                                 className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${sel.forVariation ? 'bg-[var(--brand)] text-white' : 'text-gray-500 hover:text-gray-700'}`}
                               >
                                 <MdTune size={12} /> Variations
@@ -1199,7 +1199,7 @@ export default function ProductForm({ currentProduct }) {
                           )}
                           <button
                             type="button"
-                            onClick={() => removeAttr(sel.attr._id)}
+                            onClick={() => removeAttr(sel.attr.id)}
                             className="p-1 text-gray-400 hover:text-red-500 transition"
                           >
                             <MdClose size={16} />
@@ -1208,17 +1208,17 @@ export default function ProductForm({ currentProduct }) {
                       </div>
                       <div className="px-4 py-3 flex flex-wrap gap-2">
                         {(sel.attr.values || []).filter(
-                          (val) => val.active !== false || sel.values.some((v) => v._id === val._id)
+                          (val) => val.active !== false || sel.values.some((v) => v.id === val.id)
                         ).length === 0 ? (
                           <span className="text-xs text-gray-400 italic">No values defined for this attribute</span>
                         ) : (
                           (sel.attr.values || [])
-                            .filter((val) => val.active !== false || sel.values.some((v) => v._id === val._id))
+                            .filter((val) => val.active !== false || sel.values.some((v) => v.id === val.id))
                             .map((val) => {
-                              const selected = sel.values.some((v) => v._id === val._id);
+                              const selected = sel.values.some((v) => v.id === val.id);
                               return (
                                 <button
-                                  key={val._id}
+                                  key={val.id}
                                   type="button"
                                   onClick={() => toggleValue(sel.attr, val)}
                                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all ${selected ? 'bg-[var(--brand)] text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'} ${val.active === false ? 'opacity-60' : ''}`}
@@ -1303,7 +1303,7 @@ export default function ProductForm({ currentProduct }) {
                     </thead>
                     <tbody>
                       {variations.map((v, idx) => {
-                        const varImg = imagePool.find((img) => img._id === v.imageId);
+                        const varImg = imagePool.find((img) => img.id === v.imageId);
                         return (
                           <tr
                             key={idx}
@@ -1474,13 +1474,13 @@ export default function ProductForm({ currentProduct }) {
                         ) : (
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                             {imagePool.map((img) => {
-                              const selected = String(variations[pickingFor]?.imageId || '') === String(img._id);
+                              const selected = String(variations[pickingFor]?.imageId || '') === String(img.id);
                               return (
                                 <button
-                                  key={img._id}
+                                  key={img.id}
                                   type="button"
                                   onClick={() => {
-                                    updateVar(pickingFor, 'imageId', img._id);
+                                    updateVar(pickingFor, 'imageId', img.id);
                                     setPickingFor(null);
                                   }}
                                   className={`group relative aspect-square overflow-hidden rounded-md border-2 bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${

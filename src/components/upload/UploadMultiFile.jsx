@@ -31,7 +31,7 @@ const UploadMultiFile = ({ files, setFiles, model }) => {
           }
         });
 
-        newFiles.push({ id: data._id, path: data.path });
+        newFiles.push({ id: data.id, path: data.path });
       }
       setFiles([...files, ...newFiles]);
     } catch (error) {

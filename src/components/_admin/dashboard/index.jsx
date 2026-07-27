@@ -301,7 +301,7 @@ function BestSellers({ products, isLoading }) {
               {products.map((p, i) => {
                 const lowStock = p.stock < 10;
                 return (
-                  <tr key={p._id || i} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={p.id || i} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <span className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-400 shrink-0">

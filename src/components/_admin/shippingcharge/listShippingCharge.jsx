@@ -81,7 +81,7 @@ export default function ShippingChargeList() {
     }
   );
 
-  const handleDelete = async (_id) => {
+  const handleDelete = async (id) => {
     const r = await Swal.fire({
       title: 'Delete charge?',
       icon: 'warning',
@@ -91,7 +91,7 @@ export default function ShippingChargeList() {
     });
     if (r.isConfirmed) {
       try {
-        await api.deleteShippingChargeByAdmin(_id);
+        await api.deleteShippingChargeByAdmin(id);
         Swal.fire({ title: 'Deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
         refetch();
       } catch (err) {
@@ -139,7 +139,7 @@ export default function ShippingChargeList() {
       render: (c) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            onClick={() => router.push(`/shippingcharge/${c._id}`)}
+            onClick={() => router.push(`/shippingcharge/${c.id}`)}
             className="rounded-md p-2 transition hover:bg-slate-100"
             style={{ color: 'var(--brand-strong)' }}
             title="Edit"
@@ -147,7 +147,7 @@ export default function ShippingChargeList() {
             <MdEdit size={17} />
           </button>
           <button
-            onClick={() => handleDelete(c._id)}
+            onClick={() => handleDelete(c.id)}
             className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
             title="Delete"
           >

@@ -47,7 +47,7 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
     initialValues: {
       name: currentCategory?.name || '',
       metaTitle: currentCategory?.metaTitle || '',
-      image: currentCategory?.image?._id || null,
+      image: currentCategory?.image?.id || null,
       description: currentCategory?.description || '',
       metaDescription: currentCategory?.metaDescription || '',
       file: currentCategory?.image?.path || '',

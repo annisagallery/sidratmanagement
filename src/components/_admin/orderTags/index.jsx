@@ -106,7 +106,7 @@ export default function OrderTagsManager() {
     onError: (e) => Swal.fire(e?.response?.data?.message || 'Error', '', 'error')
   });
 
-  const toggleActive = (tag) => update.mutate({ id: tag._id, isActive: !tag.isActive });
+  const toggleActive = (tag) => update.mutate({ id: tag.id, isActive: !tag.isActive });
 
   const handleDelete = (id) =>
     Swal.fire({
@@ -158,7 +158,7 @@ export default function OrderTagsManager() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {data.map((tag) => (
-                  <React.Fragment key={tag._id}>
+                  <React.Fragment key={tag.id}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -182,14 +182,14 @@ export default function OrderTagsManager() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <button
-                            onClick={() => setEditing(editingTag?._id === tag._id ? null : tag)}
+                            onClick={() => setEditing(editingTag?.id === tag.id ? null : tag)}
                             className="text-xs hover:underline"
                             style={{ color: 'var(--brand-strong)' }}
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(tag._id)}
+                            onClick={() => handleDelete(tag.id)}
                             className="text-xs text-red-500 hover:underline"
                           >
                             Delete
@@ -197,12 +197,12 @@ export default function OrderTagsManager() {
                         </div>
                       </td>
                     </tr>
-                    {editingTag?._id === tag._id && (
+                    {editingTag?.id === tag.id && (
                       <tr>
                         <td colSpan={4} className="px-4 pb-3">
                           <TagForm
                             initial={tag}
-                            onSave={(payload) => update.mutate({ id: tag._id, ...payload })}
+                            onSave={(payload) => update.mutate({ id: tag.id, ...payload })}
                             onCancel={() => setEditing(null)}
                           />
                         </td>

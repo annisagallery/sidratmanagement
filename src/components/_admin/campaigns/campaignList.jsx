@@ -96,7 +96,7 @@ export default function CampaignList() {
       confirmButtonColor: '#d33',
       confirmButtonText: 'Yes, delete'
     });
-    if (r.isConfirmed) deleteMut(c._id);
+    if (r.isConfirmed) deleteMut(c.id);
   };
 
   const campaigns = data?.data || [];

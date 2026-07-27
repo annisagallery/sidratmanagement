@@ -31,8 +31,8 @@ function ComplaintPanel({ complaint, onClose }) {
     isLoading: detailLoading,
     isFetching: detailFetching,
     refetch: refetchDetail
-  } = useQuery(['admin-complaint', complaint._id], () => api.getComplaintByAdmin(complaint._id), {
-    enabled: !!complaint._id,
+  } = useQuery(['admin-complaint', complaint.id], () => api.getComplaintByAdmin(complaint.id), {
+    enabled: !!complaint.id,
     refetchInterval: 30000,
     refetchOnWindowFocus: true
   });
@@ -47,7 +47,7 @@ function ComplaintPanel({ complaint, onClose }) {
   const saveSettings = useMutation(
     () =>
       api.updateComplaintByAdmin({
-        id: complaint._id,
+        id: complaint.id,
         status: form.status,
         priority: form.priority,
         adminNote: form.adminNote
@@ -55,7 +55,7 @@ function ComplaintPanel({ complaint, onClose }) {
     {
       onSuccess: () => {
         qc.invalidateQueries('admin-complaints');
-        qc.invalidateQueries(['admin-complaint', complaint._id]);
+        qc.invalidateQueries(['admin-complaint', complaint.id]);
         Swal.fire({
           title: 'Internal settings saved',
           icon: 'success',
@@ -75,9 +75,9 @@ function ComplaintPanel({ complaint, onClose }) {
         const data = new FormData();
         replyFiles.forEach((entry) => data.append('files', entry.file));
         const uploaded = await api.uploadComplaintImagesByAdmin(data);
-        attachmentIds = (uploaded.data || []).map((image) => image._id);
+        attachmentIds = (uploaded.data || []).map((image) => image.id);
       }
-      return api.updateComplaintByAdmin({ id: complaint._id, message: form.message, attachmentIds });
+      return api.updateComplaintByAdmin({ id: complaint.id, message: form.message, attachmentIds });
     },
     {
       onSuccess: async () => {
@@ -129,9 +129,9 @@ function ComplaintPanel({ complaint, onClose }) {
                 <div className="grid grid-cols-3 gap-2">
                   {detail.attachments.map((attachment, attachmentIndex) => (
                     <PrivateComplaintImage
-                      key={String(attachment._id || `complaint-attachment-${attachmentIndex}`)}
-                      complaintId={detail._id}
-                      imageId={attachment._id}
+                      key={String(attachment.id || `complaint-attachment-${attachmentIndex}`)}
+                      complaintId={detail.id}
+                      imageId={attachment.id}
                       alt="Complaint attachment"
                       className="relative aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-50"
                     />
@@ -207,7 +207,7 @@ function ComplaintPanel({ complaint, onClose }) {
             <div className="space-y-4 bg-slate-50/70 p-4 max-h-[420px] overflow-y-auto">
               {(detail.messages || []).map((msg, messageIndex) => {
                 const fromAdmin = msg.senderRole !== 'user';
-                const messageKey = String(msg._id || `message-${msg.createdAt || messageIndex}-${messageIndex}`);
+                const messageKey = String(msg.id || `message-${msg.createdAt || messageIndex}-${messageIndex}`);
                 return (
                   <div
                     key={messageKey}
@@ -232,9 +232,9 @@ function ComplaintPanel({ complaint, onClose }) {
                           <div className="grid grid-cols-3 gap-2 mt-2">
                             {msg.attachments.map((attachment, attachmentIndex) => (
                               <PrivateComplaintImage
-                                key={String(attachment._id || `${messageKey}-attachment-${attachmentIndex}`)}
-                                complaintId={detail._id}
-                                imageId={attachment._id}
+                                key={String(attachment.id || `${messageKey}-attachment-${attachmentIndex}`)}
+                                complaintId={detail.id}
+                                imageId={attachment.id}
                                 alt="Message attachment"
                                 className="relative aspect-square overflow-hidden rounded-md border border-gray-200 bg-gray-100"
                               />

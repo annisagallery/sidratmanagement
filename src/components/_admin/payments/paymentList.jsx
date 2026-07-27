@@ -33,7 +33,7 @@ function SourceBadge({ source }) {
 
 function AssignModal({ payment, onClose, onDone }) {
   const [orderNo, setOrderNo] = useState('');
-  const { mutate, isLoading } = useMutation(() => api.assignPaymentByAdmin({ id: payment._id, orderNo }), {
+  const { mutate, isLoading } = useMutation(() => api.assignPaymentByAdmin({ id: payment.id, orderNo }), {
     onSuccess: () => {
       onDone();
       onClose();

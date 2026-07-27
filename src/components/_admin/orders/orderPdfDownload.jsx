@@ -15,7 +15,7 @@ export default function OrderPdfDownload({ data }) {
   return (
     <PDFDownloadLink
       document={<OrderPDF data={data} />}
-      fileName={`INVOICE-${data?._id}`}
+      fileName={`INVOICE-${data?.id}`}
       style={{ textDecoration: 'none' }}
     >
       {({ loading }) => (

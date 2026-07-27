@@ -261,7 +261,7 @@ export default function ProductList() {
         >
           <option value="">All Categories</option>
           {categories.map((c) => (
-            <option key={c._id} value={c.slug}>
+            <option key={c.id} value={c.slug}>
               {c.name}
             </option>
           ))}

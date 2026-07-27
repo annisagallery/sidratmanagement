@@ -15,7 +15,7 @@ export default function BranchSelect({ value, onChange, allowAll = false, classN
     <select className={className} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">{allowAll ? 'All branches' : 'Select branch…'}</option>
       {branches.map((branch) => (
-        <option key={branch._id} value={branch._id}>
+        <option key={branch.id} value={branch.id}>
           {branch.name} {branch.code ? `(${branch.code})` : ''}
         </option>
       ))}

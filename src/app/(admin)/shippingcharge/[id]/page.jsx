@@ -10,8 +10,8 @@ import Swal from 'sweetalert2';
 import EditShippingCharge from '@/src/components/_admin/shippingcharge/editShippingCharge';
 
 export default function Page({ params }) {
-  const { _id } = use(params);
-  const { data, isLoading } = useQuery(['admin-size'], () => api.getShippingChargeByAdmin(_id), {
+  const { id } = use(params);
+  const { data, isLoading } = useQuery(['admin-size'], () => api.getShippingChargeByAdmin(id), {
     onError: (err) => {
       Swal.fire(err.response.data.message || 'Something went wrong!', '', 'error');
     }

@@ -213,7 +213,7 @@ export default function BranchesManager() {
     if (confirm(`Archive "${name}"? Its saved data is kept but it is removed from the storefront.`))
       deleteMut.mutate(id);
   };
-  const toggleActive = (b) => updateMut.mutate({ id: b._id, isActive: !b.isActive });
+  const toggleActive = (b) => updateMut.mutate({ id: b.id, isActive: !b.isActive });
 
   if (isLoading) return <div className="p-8 text-slate-400">Loading…</div>;
 
@@ -258,7 +258,7 @@ export default function BranchesManager() {
                     placeholder="HQ address"
                   />
                 </div>
-                <button className="btn-brand" onClick={() => updateMut.mutate({ id: hq._id, address: hqForm.address })}>
+                <button className="btn-brand" onClick={() => updateMut.mutate({ id: hq.id, address: hqForm.address })}>
                   <FiCheck /> Save
                 </button>
                 <button className="btn-ghost" onClick={() => setEditHq(false)}>
@@ -310,12 +310,12 @@ export default function BranchesManager() {
           </div>
           <div className="divide-y divide-slate-50">
             {cityBranches.map((b) => (
-              <div key={b._id}>
-                {editId === b._id ? (
+              <div key={b.id}>
+                {editId === b.id ? (
                   <div className="p-4">
                     <BranchForm
                       initial={b}
-                      onSave={(form) => updateMut.mutate({ id: b._id, ...form })}
+                      onSave={(form) => updateMut.mutate({ id: b.id, ...form })}
                       onCancel={() => setEditId(null)}
                       saving={updateMut.isLoading}
                     />
@@ -365,7 +365,7 @@ export default function BranchesManager() {
                       </button>
                       <button
                         onClick={() => {
-                          setEditId(b._id);
+                          setEditId(b.id);
                           setAdding(false);
                         }}
                         className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
@@ -373,7 +373,7 @@ export default function BranchesManager() {
                         <FiEdit2 size={15} />
                       </button>
                       <button
-                        onClick={() => handleDelete(b._id, b.name)}
+                        onClick={() => handleDelete(b.id, b.name)}
                         className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-500"
                       >
                         <FiTrash2 size={15} />

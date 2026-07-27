@@ -41,7 +41,7 @@ export default function DataTable({
   columns = [],
   data = [],
   sort,
-  rowKey = (row, i) => row._id ?? row.id ?? i,
+  rowKey = (row, i) => row.id ?? row.id ?? i,
   onRowClick,
   isLoading = false,
   empty,
@@ -90,7 +90,7 @@ export default function DataTable({
   };
 
   const copyIdentifiers = async () => {
-    const ids = selectedRows.map((row, i) => row?._id ?? row?.id ?? row?.orderNo ?? i + 1).join('\n');
+    const ids = selectedRows.map((row, i) => row?.id ?? row?.id ?? row?.orderNo ?? i + 1).join('\n');
     await navigator.clipboard.writeText(ids);
     showNotice(`${selectedRows.length} identifier${selectedRows.length === 1 ? '' : 's'} copied`);
   };

@@ -69,8 +69,8 @@ function UsageDrawer({ coupon, onClose }) {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery(
-    ['coupon-usage', coupon._id, page],
-    () => api.getCouponUsageByAdmin(coupon._id, page),
+    ['coupon-usage', coupon.id, page],
+    () => api.getCouponUsageByAdmin(coupon.id, page),
     { keepPreviousData: true }
   );
 
@@ -221,7 +221,7 @@ function UsageDrawer({ coupon, onClose }) {
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {usages.map((u) => (
-                        <tr key={u._id} className="hover:bg-gray-50/60 transition">
+                        <tr key={u.id} className="hover:bg-gray-50/60 transition">
                           <td className="px-4 py-2.5">
                             {u.user?.phone ? (
                               <a href={`/users/${encodeURIComponent(u.user.phone)}`} className="group">
@@ -354,7 +354,7 @@ export default function CouponList() {
       confirmButtonColor: '#d33',
       confirmButtonText: 'Yes, delete'
     });
-    if (r.isConfirmed) deleteMut(c._id);
+    if (r.isConfirmed) deleteMut(c.id);
   };
 
   const coupons = data?.data || [];
@@ -446,7 +446,7 @@ export default function CouponList() {
             <MdBarChart size={17} />
           </button>
           <Link
-            href={`/coupon-codes/${c._id}`}
+            href={`/coupon-codes/${c.id}`}
             className="rounded-md p-2 transition hover:bg-slate-100"
             style={{ color: 'var(--brand-strong)' }}
             title="Edit"

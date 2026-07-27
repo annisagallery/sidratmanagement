@@ -84,8 +84,8 @@ function ModalShell({ title, subtitle, onClose, children, footer, wide = false }
   );
 }
 
-const tagId = (tag) => (typeof tag === 'object' && tag !== null ? tag._id || tag.id : tag);
-const tagName = (tag) => (typeof tag === 'object' && tag !== null ? tag.name || tag.title || tag.slug || tag._id || tag.id : tag);
+const tagId = (tag) => (typeof tag === 'object' && tag !== null ? tag.id || tag.id : tag);
+const tagName = (tag) => (typeof tag === 'object' && tag !== null ? tag.name || tag.title || tag.slug || tag.id || tag.id : tag);
 const tagColor = (tag) => (typeof tag === 'object' && tag !== null ? tag.color : null);
 const normalizeList = (res) => (Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : []);
 
@@ -144,7 +144,7 @@ function AdminComplaintModal({ item, order, onClose, onSubmitted }) {
         const data = new FormData();
         files.forEach((entry) => data.append('files', entry.file));
         const uploaded = await api.uploadComplaintImagesByAdmin(data);
-        attachmentIds = (uploaded.data || []).map((image) => image._id);
+        attachmentIds = (uploaded.data || []).map((image) => image.id);
       }
       return api.createComplaintByAdmin({ ...payload, attachmentIds });
     },
@@ -162,7 +162,7 @@ function AdminComplaintModal({ item, order, onClose, onSubmitted }) {
       Swal.fire('Add complaint details', '', 'warning');
       return;
     }
-    create.mutate({ ...form, orderItemId: item._id });
+    create.mutate({ ...form, orderItemId: item.id });
   };
   return (
     <ModalShell
@@ -484,11 +484,11 @@ function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
   const set = (key, value) => setForm((p) => ({ ...p, [key]: value }));
 
   useEffect(() => {
-    if (!form.accountId && defaultAccount) set('accountId', defaultAccount._id);
+    if (!form.accountId && defaultAccount) set('accountId', defaultAccount.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultAccount?._id]);
+  }, [defaultAccount?.id]);
 
-  const selected = options.find((o) => o._id === form.accountId);
+  const selected = options.find((o) => o.id === form.accountId);
   const address = order.shippingAddress || {};
 
   const send = useMutation(
@@ -573,7 +573,7 @@ function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
             <EditField label="Courier account" className="col-span-2">
               <select className={fieldClass} value={form.accountId} onChange={(e) => set('accountId', e.target.value)}>
                 {options.map((o) => (
-                  <option key={o._id} value={o._id}>
+                  <option key={o.id} value={o.id}>
                     {PROVIDER_LABEL[o.provider]} — {o.name}
                     {o.isDefault ? ' (default)' : ''}
                   </option>
@@ -637,7 +637,7 @@ function ShipmentsListCard({ shipments, onRefresh, refreshingId }) {
             const url = trackingUrl(s);
             return (
               <div
-                key={s._id}
+                key={s.id}
                 className={`flex items-center justify-between gap-3 p-3 rounded-md bg-gray-50 border border-gray-100 group ${s.isActive ? '' : 'opacity-60'}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -661,12 +661,12 @@ function ShipmentsListCard({ shipments, onRefresh, refreshingId }) {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <ShipmentStatusPill status={s.status} />
                   <button
-                    onClick={() => onRefresh(s._id)}
-                    disabled={refreshingId === s._id}
+                    onClick={() => onRefresh(s.id)}
+                    disabled={refreshingId === s.id}
                     className="text-gray-300 hover:text-gray-600 transition disabled:opacity-50"
                     title="Refresh status from the courier"
                   >
-                    <FiRefreshCw size={13} className={refreshingId === s._id ? 'animate-spin' : ''} />
+                    <FiRefreshCw size={13} className={refreshingId === s.id ? 'animate-spin' : ''} />
                   </button>
                   {url && (
                     <a
@@ -731,7 +731,7 @@ export default function OrderDetail({ params }) {
 
   useEffect(() => {
     if (order?.status) setCurrentStatus(order.status);
-  }, [order?._id, order?.status]);
+  }, [order?.id, order?.status]);
 
   useEffect(() => {
     const h = (e) => {
@@ -838,7 +838,7 @@ export default function OrderDetail({ params }) {
         commentFiles.forEach((item) => form.append('files', item.file));
         form.append('model', 'order-admin-comments');
         const uploaded = await api.uploadImages(form);
-        imageIds = (uploaded || []).map((image) => image._id || image.id).filter(Boolean);
+        imageIds = (uploaded || []).map((image) => image.id || image.id).filter(Boolean);
       }
       return api.addOrderAdminComment({ orderNo, body: commentBody.trim(), imageIds });
     },
@@ -1067,7 +1067,7 @@ export default function OrderDetail({ params }) {
 
       {/* modals */}
       {showHistory && (
-        <HistoryModal title={`Order #${order.orderNo} History`} model="Order" docId={order._id} onClose={() => setShowHistory(false)} />
+        <HistoryModal title={`Order #${order.orderNo} History`} model="Order" docId={order.id} onClose={() => setShowHistory(false)} />
       )}
       {complaintItem && (
         <AdminComplaintModal
@@ -1271,7 +1271,7 @@ export default function OrderDetail({ params }) {
                           {(order.items || [])
                             .filter((item) => ['reserved', 'ready'].includes(item.status) && !item.packVerifiedAt)
                             .map((item) => (
-                              <option key={item._id} value={item._id}>
+                              <option key={item.id} value={item.id}>
                                 {item.pid?.name || item.productSnapshot?.name || 'Product'} ·{' '}
                                 {(item.attributes || []).map((attribute) => attribute.valueName).join(' / ')}
                               </option>
@@ -1328,7 +1328,7 @@ export default function OrderDetail({ params }) {
                 </thead>
                 <tbody>
                   {(order.items || []).map((item) => (
-                    <tr key={item._id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-3">
                           {item.pid?.featuredImage?.path && (
@@ -1369,7 +1369,7 @@ export default function OrderDetail({ params }) {
                             <button
                               type="button"
                               disabled={updatingItemStatus}
-                              onClick={() => updateItemStatus({ itemId: item._id, status: nextItemStatus(item.status).value })}
+                              onClick={() => updateItemStatus({ itemId: item.id, status: nextItemStatus(item.status).value })}
                               className="text-[11px] font-semibold text-[var(--brand-strong)] hover:underline disabled:opacity-40"
                             >
                               Move to {nextItemStatus(item.status).label}
@@ -1428,7 +1428,7 @@ export default function OrderDetail({ params }) {
             {(order.payments || []).length > 0 ? (
               <div className="space-y-2">
                 {order.payments.map((p) => (
-                  <div key={p._id} className="flex items-center justify-between gap-3 p-3 rounded-md bg-gray-50 border border-gray-100 group">
+                  <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-md bg-gray-50 border border-gray-100 group">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-md bg-[var(--brand-soft)] flex items-center justify-center flex-shrink-0">
                         <FiDollarSign size={14} className="text-[var(--brand-strong)]" />
@@ -1447,7 +1447,7 @@ export default function OrderDetail({ params }) {
                         {p.status || 'pending'}
                       </span>
                       <button
-                        onClick={() => handleRemovePayment(p._id)}
+                        onClick={() => handleRemovePayment(p.id)}
                         className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"
                         aria-label="Remove payment"
                       >
@@ -1561,9 +1561,9 @@ export default function OrderDetail({ params }) {
               <InfoRow label="Name" value={order.userId?.name || order.guestName} />
               <InfoRow label="Phone" value={order.userId?.phone || order.shippingAddress?.phone} />
               {order.userId?.email && <InfoRow label="Email" value={order.userId.email} />}
-              {order.userId?._id && (
+              {order.userId?.id && (
                 <div className="pt-2">
-                  <a href={`/users/${order.userId._id}`} className="text-xs text-[var(--brand-strong)] hover:underline">
+                  <a href={`/users/${order.userId.id}`} className="text-xs text-[var(--brand-strong)] hover:underline">
                     View customer →
                   </a>
                 </div>
@@ -1581,7 +1581,7 @@ export default function OrderDetail({ params }) {
             <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
               {(order.adminComments || []).length ? (
                 order.adminComments.map((comment) => (
-                  <article key={comment._id} className="p-4">
+                  <article key={comment.id} className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div>
                         <p className="text-sm font-semibold text-gray-800">{comment.author?.name || 'Admin'}</p>
@@ -1593,7 +1593,7 @@ export default function OrderDetail({ params }) {
                       <div className="grid grid-cols-3 gap-2 mt-3">
                         {comment.images.map((image) => (
                           <a
-                            key={image._id}
+                            key={image.id}
                             href={image.path}
                             target="_blank"
                             rel="noreferrer"

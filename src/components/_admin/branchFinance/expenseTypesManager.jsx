@@ -79,7 +79,7 @@ export default function ExpenseTypesManager() {
       showCancelButton: true,
       confirmButtonText: 'Remove'
     });
-    if (confirmed.isConfirmed) deleteMutation.mutate(type._id);
+    if (confirmed.isConfirmed) deleteMutation.mutate(type.id);
   };
 
   return (
@@ -109,16 +109,16 @@ export default function ExpenseTypesManager() {
             </tr>
           )}
           {types.map((type) =>
-            editingId === type._id ? (
+            editingId === type.id ? (
               <TypeEditor
-                key={type._id}
+                key={type.id}
                 initial={{ name: type.name, description: type.description || '', isActive: type.isActive }}
                 saving={updateMutation.isLoading}
-                onSave={(form) => save(form, type._id)}
+                onSave={(form) => save(form, type.id)}
                 onCancel={() => setEditingId(null)}
               />
             ) : (
-              <tr key={type._id} className="transition hover:bg-slate-50">
+              <tr key={type.id} className="transition hover:bg-slate-50">
                 <td className="px-3 py-2 text-[13px] font-semibold text-slate-700">{type.name}</td>
                 <td className="px-3 py-2 text-[13px] text-slate-500">{type.description || '—'}</td>
                 <td className="px-3 py-2 text-center">
@@ -128,7 +128,7 @@ export default function ExpenseTypesManager() {
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex justify-end gap-1">
-                    <button className="btn-icon" onClick={() => setEditingId(type._id)} aria-label={`Edit ${type.name}`}>
+                    <button className="btn-icon" onClick={() => setEditingId(type.id)} aria-label={`Edit ${type.name}`}>
                       <MdEdit size={15} />
                     </button>
                     <button className="btn-icon text-red-400 hover:text-red-600" onClick={() => remove(type)} aria-label={`Remove ${type.name}`}>

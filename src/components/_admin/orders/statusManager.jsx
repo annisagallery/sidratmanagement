@@ -16,7 +16,7 @@ function StatusRow({ s, onSave, onDelete }) {
   const [form, setForm] = useState({ label: s.label, color: s.color, sortOrder: s.sortOrder });
 
   const save = () => {
-    onSave(s._id, form);
+    onSave(s.id, form);
     setEditing(false);
   };
   const cancel = () => {
@@ -97,7 +97,7 @@ function StatusRow({ s, onSave, onDelete }) {
               >
                 Edit
               </button>
-              <button onClick={() => onDelete(s._id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition">
+              <button onClick={() => onDelete(s.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition">
                 <FiTrash2 size={13} />
               </button>
             </>
@@ -271,7 +271,7 @@ export default function StatusManager({ model }) {
             <tbody>
               {statuses.map((s) => (
                 <StatusRow
-                  key={s._id}
+                  key={s.id}
                   s={s}
                   onSave={(id, payload) => updateStatus({ id, ...payload })}
                   onDelete={handleDelete}

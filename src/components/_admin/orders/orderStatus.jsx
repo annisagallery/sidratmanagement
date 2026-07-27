@@ -31,7 +31,7 @@ export default function SelectOrderStatus({ data }) {
   const handleSelect = (status) => {
     setOpen(false);
     setSelected(status);
-    if (status !== selected) mutate({ id: data?._id, status });
+    if (status !== selected) mutate({ id: data?.id, status });
   };
 
   const label = selected || data?.status || 'Loading';

@@ -70,7 +70,7 @@ export default function BannerList() {
       link: banner.link || '',
       alt: banner.alt || '',
       isActive: banner.isActive !== false,
-      imageId: banner.image?._id || null,
+      imageId: banner.image?.id || null,
       imagePath: banner.image?.path || null
     });
     setModal({ mode: 'edit', banner });
@@ -92,7 +92,7 @@ export default function BannerList() {
       fd.append('file', file);
       fd.append('model', 'HomeBanner');
       const res = await api.uploadImage(fd);
-      setForm((f) => ({ ...f, imageId: res._id, imagePath: res.path }));
+      setForm((f) => ({ ...f, imageId: res.id, imagePath: res.path }));
     } catch (err) {
       showToast(err.response?.data?.message || 'Upload failed', 'error');
     } finally {
@@ -118,7 +118,7 @@ export default function BannerList() {
         await api.createHomeBanner(payload);
         showToast('Banner added');
       } else {
-        await api.updateHomeBanner(modal.banner._id, payload);
+        await api.updateHomeBanner(modal.banner.id, payload);
         showToast('Banner updated');
       }
       closeModal();
@@ -134,11 +134,11 @@ export default function BannerList() {
 
   const handleToggleActive = async (banner) => {
     const next = !banner.isActive;
-    setLocalBanners((prev) => prev.map((b) => (b._id === banner._id ? { ...b, isActive: next } : b)));
+    setLocalBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: next } : b)));
     try {
-      await api.updateHomeBanner(banner._id, { isActive: next });
+      await api.updateHomeBanner(banner.id, { isActive: next });
     } catch {
-      setLocalBanners((prev) => prev.map((b) => (b._id === banner._id ? { ...b, isActive: banner.isActive } : b)));
+      setLocalBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: banner.isActive } : b)));
       showToast('Failed to update status', 'error');
     }
   };
@@ -182,7 +182,7 @@ export default function BannerList() {
     setLocalBanners(reordered);
 
     try {
-      await api.reorderHomeBanners(reordered.map((b) => b._id));
+      await api.reorderHomeBanners(reordered.map((b) => b.id));
     } catch {
       showToast('Failed to save new order', 'error');
       qc.invalidateQueries('admin-banners');
@@ -305,7 +305,7 @@ export default function BannerList() {
         <div className="space-y-2">
           {localBanners.map((banner, i) => (
             <div
-              key={banner._id}
+              key={banner.id}
               draggable
               onDragStart={(e) => handleDragStart(e, i)}
               onDragOver={(e) => handleDragOver(e, i)}
@@ -400,7 +400,7 @@ export default function BannerList() {
                   <FiEdit2 className="text-sm" />
                 </button>
                 <button
-                  onClick={() => setDeleteConfirm(banner._id)}
+                  onClick={() => setDeleteConfirm(banner.id)}
                   className="p-2 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition"
                   title="Delete"
                 >
@@ -409,12 +409,12 @@ export default function BannerList() {
               </div>
 
               {/* Inline delete confirm */}
-              {deleteConfirm === banner._id && (
+              {deleteConfirm === banner.id && (
                 <div className="absolute inset-0 bg-white/96 backdrop-blur-[2px] rounded-md flex items-center justify-center gap-3 z-20 border border-red-200">
                   <FiAlertTriangle className="text-red-400 text-lg shrink-0" />
                   <span className="text-sm font-medium text-gray-700">Delete this banner?</span>
                   <button
-                    onClick={() => handleDelete(banner._id)}
+                    onClick={() => handleDelete(banner.id)}
                     className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition"
                   >
                     Delete

@@ -62,7 +62,7 @@ export default function CashModal({ prefilledUser = null, onClose, onDone }) {
     setSaving(true);
     try {
       await adminAdjustCash({
-        userId: user._id,
+        userId: user.id,
         amount: Number(form.amount),
         type: form.type,
         message: form.message.trim()
@@ -145,7 +145,7 @@ export default function CashModal({ prefilledUser = null, onClose, onDone }) {
                   ) : (
                     results.map((u) => (
                       <button
-                        key={u._id}
+                        key={u.id}
                         type="button"
                         onClick={() => selectUser(u)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-green-50 transition text-left"

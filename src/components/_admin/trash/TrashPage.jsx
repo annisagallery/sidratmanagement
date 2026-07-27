@@ -67,7 +67,7 @@ export default function TrashPage() {
       showCancelButton: true,
       confirmButtonText: 'Restore'
     });
-    if (result.isConfirmed) restoreMut.mutate({ model: item.model, id: item._id });
+    if (result.isConfirmed) restoreMut.mutate({ model: item.model, id: item.id });
   };
 
   const confirmBulkRestore = async (selectedItems) => {
@@ -80,7 +80,7 @@ export default function TrashPage() {
     });
     if (!result.isConfirmed) return false;
     try {
-      await Promise.all(selectedItems.map((item) => restoreMut.mutateAsync({ model: item.model, id: item._id })));
+      await Promise.all(selectedItems.map((item) => restoreMut.mutateAsync({ model: item.model, id: item.id })));
       toast.success(`${selectedItems.length} items restored`);
       return true;
     } catch {

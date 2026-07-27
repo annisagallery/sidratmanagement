@@ -381,7 +381,7 @@ function InvoiceBody({ order, settings }) {
               .join(' · ');
             const lineTotal = (item.quantity || 0) * (item.price || 0);
             return (
-              <tr key={item._id || idx} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+              <tr key={item.id || idx} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
                 <td style={{ padding: '10px', color: MUTED, verticalAlign: 'top' }}>{idx + 1}</td>
                 <td style={{ padding: '10px', verticalAlign: 'top' }}>
                   <p style={{ margin: 0, fontWeight: 600, color: INK }}>{name}</p>

@@ -45,7 +45,7 @@ function ProductSelect({ value, onChange, products }) {
     <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)} required>
       <option value="">Select product</option>
       {products.map((product) => (
-        <option key={product._id} value={product._id}>
+        <option key={product.id} value={product.id}>
           {product.name} · #{product.code}
         </option>
       ))}
@@ -54,7 +54,7 @@ function ProductSelect({ value, onChange, products }) {
 }
 
 function VariationSelect({ productId, value, onChange, products }) {
-  const variations = products.find((product) => product._id === productId)?.variations || [];
+  const variations = products.find((product) => product.id === productId)?.variations || [];
   if (!variations.length)
     return (
       <div className="flex h-10 items-center rounded-md border border-dashed border-slate-200 px-3 text-xs text-slate-400">
@@ -65,7 +65,7 @@ function VariationSelect({ productId, value, onChange, products }) {
     <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)} required>
       <option value="">Select variation</option>
       {variations.map((variation) => (
-        <option key={variation._id} value={variation._id}>
+        <option key={variation.id} value={variation.id}>
           {variation.sku ||
             variation.attributes
               ?.map((attribute) => attribute.valueName)
@@ -257,7 +257,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                     {filteredProductStock.map((item) => {
                       const available = Math.max(0, item.totalOnHand - item.totalReserved);
                       return (
-                        <tr key={item._id} className="hover:bg-slate-50">
+                        <tr key={item.id} className="hover:bg-slate-50">
                           <td className="px-5 py-3">
                             <p className="font-semibold text-slate-900">{item.product?.name}</p>
                             <p className="font-mono text-xs text-slate-400">#{item.product?.code}</p>
@@ -335,7 +335,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
               >
                 <option value="">From branch</option>
                 {branches.map((b) => (
-                  <option key={b._id} value={b._id}>
+                  <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
                 ))}
@@ -351,7 +351,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
               >
                 <option value="">To branch</option>
                 {branches.map((b) => (
-                  <option key={b._id} value={b._id}>
+                  <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
                 ))}
@@ -374,11 +374,11 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
               <div className="min-w-[980px] divide-y divide-slate-100">
               {transfer.lines.map((line, index) => {
                 const sourceIsBranch =
-                  branches.find((branch) => branch._id === transfer.sourceBranch)?.type === 'BRANCH';
+                  branches.find((branch) => branch.id === transfer.sourceBranch)?.type === 'BRANCH';
                 const matchingLots = sourceLots.filter(
                   (lot) =>
-                    lot.product?._id === line.product &&
-                    String(lot.variation?._id || '') === String(line.variation || '') &&
+                    lot.product?.id === line.product &&
+                    String(lot.variation?.id || '') === String(line.variation || '') &&
                     lot.onHandQuantity > lot.reservedQuantity
                 );
                 return (
@@ -420,7 +420,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                       >
                         <option value="">Source stock lot</option>
                         {matchingLots.map((lot) => (
-                          <option key={lot._id} value={lot._id}>
+                          <option key={lot.id} value={lot.id}>
                             {lot.onHandQuantity - lot.reservedQuantity} available
                           </option>
                         ))}
@@ -491,7 +491,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                   {transfers.map((item) => {
                     const totalQty = item.lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
                     return (
-                      <tr key={item._id} className="align-top hover:bg-slate-50">
+                      <tr key={item.id} className="align-top hover:bg-slate-50">
                         <td className="px-5 py-4 font-mono text-sm font-black text-slate-950">{item.transferNo}</td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2 font-semibold text-slate-700">
@@ -505,7 +505,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                           <div className="flex max-w-md flex-wrap gap-1.5">
                             {item.lines.slice(0, 3).map((line) => (
                               <span
-                                key={line._id}
+                                key={line.id}
                                 className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
                               >
                                 {line.product?.name} x {line.quantity}
@@ -529,7 +529,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                             {item.status === 'DRAFT' && (
                               <button
                                 className={`${buttonClass} bg-sky-600 text-white`}
-                                onClick={() => approveMut.mutate(item._id)}
+                                onClick={() => approveMut.mutate(item.id)}
                               >
                                 <FiCheck /> Approve
                               </button>
@@ -537,7 +537,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                             {item.status === 'APPROVED' && (
                               <button
                                 className={`${buttonClass} bg-amber-500 text-slate-950`}
-                                onClick={() => dispatchMut.mutate(item._id)}
+                                onClick={() => dispatchMut.mutate(item.id)}
                               >
                                 Dispatch
                               </button>
@@ -545,7 +545,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
                             {item.status === 'IN_TRANSIT' && (
                               <button
                                 className={`${buttonClass} bg-emerald-600 text-white`}
-                                onClick={() => receiveMut.mutate(item._id)}
+                                onClick={() => receiveMut.mutate(item.id)}
                               >
                                 Receive
                               </button>
@@ -602,7 +602,7 @@ export default function InventoryWorkspace({ initialView = 'Stock' }) {
             >
               <option value="">Choose branch</option>
               {branches.map((b) => (
-                <option key={b._id} value={b._id}>
+                <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
               ))}

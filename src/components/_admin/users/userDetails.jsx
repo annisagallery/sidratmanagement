@@ -169,7 +169,7 @@ function OrdersTab({ userPhone }) {
                   const st = ORDER_STATUS[o.status] || { cls: 'bg-gray-50 text-gray-600', icon: MdPending };
                   const Icon = st.icon;
                   return (
-                    <tr key={o._id} className="hover:bg-gray-50/50 transition">
+                    <tr key={o.id} className="hover:bg-gray-50/50 transition">
                       <td className="px-4 py-3">
                         <Link
                           href={`/orders/${o.orderNo}`}
@@ -279,7 +279,7 @@ function CashTab({ userPhone }) {
                   const ct = CASH_TYPE[t.type] || { label: t.type, cls: 'bg-gray-100 text-gray-600', sign: '' };
                   const isPositive = ct.sign === '+';
                   return (
-                    <tr key={t._id} className="hover:bg-gray-50/50 transition">
+                    <tr key={t.id} className="hover:bg-gray-50/50 transition">
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-md font-semibold ${ct.cls}`}>{ct.label}</span>
                       </td>
@@ -374,7 +374,7 @@ function CouponsTab({ userPhone }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {usages.map((u) => (
-                  <tr key={u._id} className="hover:bg-gray-50/50 transition">
+                  <tr key={u.id} className="hover:bg-gray-50/50 transition">
                     <td className="px-4 py-3">
                       <span className="font-mono text-sm font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md">
                         {u.couponCode}
@@ -459,7 +459,7 @@ function AddressesTab({ userPhone }) {
           {addresses.map((addr) => {
             const Icon = labelIcon(addr.label);
             return (
-              <div key={addr._id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50/50 transition">
+              <div key={addr.id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50/50 transition">
                 <div className="w-9 h-9 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
                   <Icon size={18} className="text-blue-500" />
                 </div>
@@ -526,7 +526,7 @@ function ReviewsTab({ userPhone }) {
         <>
           <div className="divide-y">
             {reviews.map((r) => (
-              <div key={r._id} className="px-5 py-4 hover:bg-gray-50/50 transition">
+              <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -583,7 +583,7 @@ function CashModal({ user, onClose, onDone }) {
     setSaving(true);
     try {
       await api.adminAdjustCash({
-        userId: user._id,
+        userId: user.id,
         amount: Number(form.amount),
         type: form.type,
         message: form.message.trim()

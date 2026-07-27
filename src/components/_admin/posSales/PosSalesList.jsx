@@ -181,7 +181,7 @@ export default function PosSalesList() {
         >
           <option value="">All warehouses</option>
           {branches.map((b) => (
-            <option key={b._id} value={b._id}>
+            <option key={b.id} value={b.id}>
               {b.name}
             </option>
           ))}

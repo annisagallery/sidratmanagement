@@ -32,7 +32,7 @@ const UploadSingleFile = ({ file, setFile, model }) => {
           setLoading(percentage);
         }
       });
-      setFile({ id: data._id, path: data.path });
+      setFile({ id: data.id, path: data.path });
     } catch (error) {
       Swal.fire('Failed to upload image', error.message || 'An error occurred during upload.', 'error');
     } finally {

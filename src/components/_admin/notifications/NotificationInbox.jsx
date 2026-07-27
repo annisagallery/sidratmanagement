@@ -53,7 +53,7 @@ export default function NotificationInbox() {
   }, [open]);
 
   const openNotification = (notification) => {
-    if (!notification.opened) markRead.mutate(notification._id);
+    if (!notification.opened) markRead.mutate(notification.id);
     setOpen(false);
     if (notification.actionUrl) router.push(notification.actionUrl);
   };
@@ -107,7 +107,7 @@ export default function NotificationInbox() {
                 const Icon = style.icon;
                 return (
                   <div
-                    key={notification._id}
+                    key={notification.id}
                     className={`group relative border-b border-slate-100 last:border-0 ${notification.opened ? 'bg-white' : 'bg-blue-50/40'}`}
                   >
                     <button
@@ -145,7 +145,7 @@ export default function NotificationInbox() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        remove.mutate(notification._id);
+                        remove.mutate(notification.id);
                       }}
                       aria-label="Delete notification"
                       className="absolute right-3 top-4 hidden h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 group-hover:flex focus:flex"

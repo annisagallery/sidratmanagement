@@ -54,7 +54,7 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
     validationSchema: ShippingChargeSchema,
     onSubmit: async (values) => {
       try {
-        mutate({ ...values, ...(currentCharge && { _id: currentCharge._id }) });
+        mutate({ ...values, ...(currentCharge && { id: currentCharge.id }) });
       } catch (error) {
         console.error(error);
       }

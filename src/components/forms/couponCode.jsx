@@ -15,7 +15,7 @@ export default function CouponCodeForm({ data: cur }) {
   const isAffiliate = Boolean(cur?.isAffiliate);
 
   const { mutate, isLoading } = useMutation(
-    isEdit ? (p) => api.updateCouponCodeByAdmin({ currentId: cur._id, ...p }) : api.addCouponCodeByAdmin,
+    isEdit ? (p) => api.updateCouponCodeByAdmin({ currentId: cur.id, ...p }) : api.addCouponCodeByAdmin,
     {
       onSuccess: (res) => {
         toast.success(res.message || 'Saved');

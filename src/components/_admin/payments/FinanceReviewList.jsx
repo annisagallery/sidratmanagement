@@ -519,9 +519,9 @@ export default function FinanceReviewList() {
   const startReview = async (row) => {
     if (row.status !== 'PENDING' || rowBusyId || bulkProgress) return;
     setActionNotice(null);
-    setRowBusyId(row._id);
+    setRowBusyId(row.id);
     try {
-      const response = await api.updateOrderFinanceActionByAdmin({ id: row._id, status: 'IN_REVIEW' });
+      const response = await api.updateOrderFinanceActionByAdmin({ id: row.id, status: 'IN_REVIEW' });
       setActionNotice({
         tone: 'success',
         text: response?.message || `Order #${row.orderNo} is now in review.`
@@ -538,7 +538,7 @@ export default function FinanceReviewList() {
   const submitDialog = async (payload) => {
     const row = dialog?.row;
     if (!row) throw new Error('Finance action is no longer available.');
-    const response = await api.updateOrderFinanceActionByAdmin({ id: row._id, ...payload });
+    const response = await api.updateOrderFinanceActionByAdmin({ id: row.id, ...payload });
     setActionNotice({
       tone: 'success',
       text: response?.message || `Order #${row.orderNo} was updated.`
@@ -575,7 +575,7 @@ export default function FinanceReviewList() {
       const row = pendingRows[index];
       setBulkProgress({ processed: index, total: pendingRows.length, currentOrderNo: row.orderNo });
       try {
-        await api.updateOrderFinanceActionByAdmin({ id: row._id, status: 'IN_REVIEW' });
+        await api.updateOrderFinanceActionByAdmin({ id: row.id, status: 'IN_REVIEW' });
         succeeded += 1;
       } catch (updateError) {
         failures.push({ orderNo: row.orderNo, message: errorMessage(updateError, 'Update failed.') });
@@ -697,12 +697,12 @@ export default function FinanceReviewList() {
                 disabled={busy}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {rowBusyId === row._id ? (
+                {rowBusyId === row.id ? (
                   <FiRefreshCw aria-hidden="true" className="animate-spin" size={15} />
                 ) : (
                   <FiPlayCircle aria-hidden="true" size={15} />
                 )}
-                {rowBusyId === row._id ? 'Starting…' : 'Start review'}
+                {rowBusyId === row.id ? 'Starting…' : 'Start review'}
               </button>
               <button
                 type="button"

@@ -8,7 +8,7 @@ import { fCurrency } from 'src/utils/formatNumber';
 InvoicePDF.propTypes = {
   data: PropTypes.shape({
     status: PropTypes.string,
-    _id: PropTypes.string,
+    id: PropTypes.string,
     user: PropTypes.shape({
       firstName: PropTypes.string,
       lastName: PropTypes.string,
@@ -104,7 +104,7 @@ export default function InvoicePDF({ data }) {
           <Image source="/logo.png" alt="" style={{ height: 32 }} />
           <View style={{ alignItems: 'right', flexDirection: 'column' }}>
             <Text style={styles.h3}>{data?.status}</Text>
-            <Text>INV-{data?._id}</Text>
+            <Text>INV-{data?.id}</Text>
           </View>
         </View>
 

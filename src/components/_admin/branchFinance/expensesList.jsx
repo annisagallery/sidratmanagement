@@ -109,9 +109,9 @@ function ExpensePanel({ expenseId, onClose }) {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {expense.proofImages.map((image) => (
                     <PrivateExpenseImage
-                      key={image._id}
-                      expenseId={expense._id}
-                      imageId={image._id}
+                      key={image.id}
+                      expenseId={expense.id}
+                      imageId={image.id}
                       alt="Expense proof"
                       className="relative block h-28 w-28 overflow-hidden rounded-md border border-slate-200"
                     />
@@ -265,7 +265,7 @@ export default function ExpensesList() {
         columns={columns}
         data={expenses}
         isLoading={isLoading}
-        onRowClick={(row) => setSelectedId(row._id)}
+        onRowClick={(row) => setSelectedId(row.id)}
         footer={
           <Pagination
             page={page}

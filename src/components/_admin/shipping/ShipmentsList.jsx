@@ -77,9 +77,9 @@ export default function ShipmentsList() {
   };
 
   const refresh = async (shipment) => {
-    setRefreshingId(shipment._id);
+    setRefreshingId(shipment.id);
     try {
-      await api.refreshShipmentStatus(shipment._id);
+      await api.refreshShipmentStatus(shipment.id);
       await refetch();
     } catch (e) {
       Swal.fire('Error', e?.response?.data?.message || 'Could not refresh from the courier', 'error');
@@ -125,10 +125,10 @@ export default function ShipmentsList() {
     });
     if (!evidence.isConfirmed) return;
 
-    setReviewingId(shipment._id);
+    setReviewingId(shipment.id);
     try {
       const response = await api.reconcileShipmentIntent({
-        id: shipment._id,
+        id: shipment.id,
         resolution: choice.isConfirmed ? 'CONFIRMED_CREATED' : 'CONFIRMED_NOT_CREATED',
         consignmentId: choice.isConfirmed ? consignmentId : undefined,
         note: String(evidence.value || '').trim()
@@ -227,7 +227,7 @@ export default function ShipmentsList() {
               {shipments.map((s) => {
                 const url = trackingUrl(s);
                 return (
-                  <tr key={s._id} className={`border-b border-gray-100 hover:bg-gray-50/50 ${s.isActive ? '' : 'opacity-60'}`}>
+                  <tr key={s.id} className={`border-b border-gray-100 hover:bg-gray-50/50 ${s.isActive ? '' : 'opacity-60'}`}>
                     <td className="px-4 py-3">
                       <Link href={`/orders/${s.orderNo}`} className="text-sm font-semibold text-[var(--brand-strong)] hover:underline">
                         #{s.orderNo}
@@ -257,16 +257,16 @@ export default function ShipmentsList() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => refresh(s)}
-                          disabled={refreshingId === s._id || !s.consignmentId}
+                          disabled={refreshingId === s.id || !s.consignmentId}
                           title={s.consignmentId ? 'Refresh status from the courier' : 'Reconcile the intent before refreshing'}
                           className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-md transition disabled:opacity-50"
                         >
-                          <FiRefreshCw size={13} className={refreshingId === s._id ? 'animate-spin' : ''} />
+                          <FiRefreshCw size={13} className={refreshingId === s.id ? 'animate-spin' : ''} />
                         </button>
                         {intentNeedsReview(s) && (
                           <button
                             onClick={() => reconcileIntent(s)}
-                            disabled={reviewingId === s._id}
+                            disabled={reviewingId === s.id}
                             title="Reconcile this uncertain courier request"
                             className="inline-flex min-h-9 items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
                           >

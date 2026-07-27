@@ -276,16 +276,16 @@ export const getAddress = async (payload) => {
   const { data } = await http.get(`/users/addresses?id=${payload}`);
   return data;
 };
-export const updateAddress = async ({ _id, ...payload }) => {
-  const { data } = await http.put(`/users/addresses/${_id}`, payload);
+export const updateAddress = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/users/addresses/${id}`, payload);
   return data;
 };
 export const createAddress = async ({ ...payload }) => {
   const { data } = await http.post(`/users/addresses/`, payload);
   return data;
 };
-export const deleteAddress = async ({ _id }) => {
-  const { data } = await http.delete(`/users/addresses/${_id}`);
+export const deleteAddress = async ({ id }) => {
+  const { data } = await http.delete(`/users/addresses/${id}`);
   return data;
 };
 export const search = async (payload) => {
@@ -586,20 +586,20 @@ export const getAllShippingCharges = async (params) => {
   return data;
 };
 
-export const getShippingChargeByAdmin = async (_id) => {
-  const { data } = await http.get(`/admin/shipping/${_id}`);
+export const getShippingChargeByAdmin = async (id) => {
+  const { data } = await http.get(`/admin/shipping/${id}`);
   return data;
 };
 export const addShippingChargeByAdmin = async (payload) => {
   const { data } = await http.post(`/admin/shipping`, payload);
   return data;
 };
-export const updateShippingChargeByAdmin = async ({ _id, ...payload }) => {
-  const { data } = await http.put(`/admin/shipping/${_id}`, payload);
+export const updateShippingChargeByAdmin = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/admin/shipping/${id}`, payload);
   return data;
 };
-export const deleteShippingChargeByAdmin = async (_id) => {
-  const { data } = await http.delete(`/admin/shipping/${_id}`);
+export const deleteShippingChargeByAdmin = async (id) => {
+  const { data } = await http.delete(`/admin/shipping/${id}`);
   return data;
 };
 

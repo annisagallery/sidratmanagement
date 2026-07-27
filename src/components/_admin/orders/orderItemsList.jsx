@@ -21,7 +21,7 @@ function TagChips({ tags = [] }) {
     <div className="flex flex-wrap gap-1">
       {tags.map((tag) => (
         <span
-          key={tag._id || tag.slug}
+          key={tag.id || tag.slug}
           className="inline-block rounded-md px-1.5 text-[10px] font-medium leading-5"
           style={{
             backgroundColor: tag.color ? `${tag.color}22` : '#f3f4f6',

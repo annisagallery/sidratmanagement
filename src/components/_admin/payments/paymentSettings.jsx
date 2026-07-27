@@ -22,7 +22,7 @@ function TypeRow({ t, onSave, onDelete }) {
   });
 
   const save = () => {
-    onSave(t._id, {
+    onSave(t.id, {
       ...form,
       accounts: form.accounts
         .split(',')
@@ -122,7 +122,7 @@ function TypeRow({ t, onSave, onDelete }) {
               >
                 Edit
               </button>
-              <button onClick={() => onDelete(t._id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md">
+              <button onClick={() => onDelete(t.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md">
                 <FiTrash2 size={13} />
               </button>
             </>
@@ -271,7 +271,7 @@ function PaymentTypesSection() {
             <tbody>
               {types.map((t) => (
                 <TypeRow
-                  key={t._id}
+                  key={t.id}
                   t={t}
                   onSave={(id, payload) => update({ id, ...payload })}
                   onDelete={handleDelete}

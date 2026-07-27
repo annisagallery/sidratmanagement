@@ -50,8 +50,8 @@ export default function ViewProduct({ slug }) {
 
   const product = data?.data;
 
-  const invQuery = useQuery(['product-stock-detail', product?._id], () => api.getProductStockDetail(product._id), {
-    enabled: !!product?._id
+  const invQuery = useQuery(['product-stock-detail', product?.id], () => api.getProductStockDetail(product.id), {
+    enabled: !!product?.id
   });
   const branchsQuery = useQuery('inventory-branchs', api.adminGetBranches, {
     staleTime: 60_000,
@@ -63,10 +63,10 @@ export default function ViewProduct({ slug }) {
   const invBranches = useMemo(() => {
     const seen = new Map();
     (branchsQuery.data?.data || []).forEach((branch) => {
-      if (branch?.isActive !== false) seen.set(String(branch._id), branch);
+      if (branch?.isActive !== false) seen.set(String(branch.id), branch);
     });
     invBalances.forEach((b) => {
-      if (b.branch && !seen.has(String(b.branch._id))) seen.set(String(b.branch._id), b.branch);
+      if (b.branch && !seen.has(String(b.branch.id))) seen.set(String(b.branch.id), b.branch);
     });
     return [...seen.values()];
   }, [invBalances, branchsQuery.data]);
@@ -74,12 +74,12 @@ export default function ViewProduct({ slug }) {
   const invByVariation = useMemo(() => {
     const map = new Map();
     (productVariations || []).forEach((variation) => {
-      map.set(String(variation._id), { variation, byBranch: {} });
+      map.set(String(variation.id), { variation, byBranch: {} });
     });
     invBalances.forEach((b) => {
-      const key = String(b.variation?._id || '__base__');
+      const key = String(b.variation?.id || '__base__');
       if (!map.has(key)) map.set(key, { variation: b.variation, byBranch: {} });
-      map.get(key).byBranch[String(b.branch._id)] = { onHand: b.onHand, reserved: b.reserved };
+      map.get(key).byBranch[String(b.branch.id)] = { onHand: b.onHand, reserved: b.reserved };
     });
     return [...map.values()];
   }, [invBalances, productVariations]);
@@ -87,7 +87,7 @@ export default function ViewProduct({ slug }) {
   const invUnitsByVariation = useMemo(() => {
     const map = new Map();
     invUnits.forEach((u) => {
-      const key = String(u.variation?._id || '__base__');
+      const key = String(u.variation?.id || '__base__');
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(u);
     });
@@ -95,7 +95,7 @@ export default function ViewProduct({ slug }) {
   }, [invUnits]);
 
   const showBranchStockBreakdown = invBranch !== 'all';
-  const visibleBranches = showBranchStockBreakdown ? invBranches.filter((w) => String(w._id) === invBranch) : [];
+  const visibleBranches = showBranchStockBreakdown ? invBranches.filter((w) => String(w.id) === invBranch) : [];
   const availableForSelectedBranch = (row) =>
     Object.entries(row.byBranch)
       .filter(([branchId]) => invBranch === 'all' || branchId === invBranch)
@@ -214,7 +214,7 @@ export default function ViewProduct({ slug }) {
   );
 
   const selectedBalances =
-    invBranch === 'all' ? invBalances : invBalances.filter((balance) => String(balance.branch?._id) === invBranch);
+    invBranch === 'all' ? invBalances : invBalances.filter((balance) => String(balance.branch?.id) === invBranch);
   const selectedAvailable = selectedBalances.reduce(
     (sum, balance) => sum + Math.max(0, Number(balance.onHand || 0) - Number(balance.reserved || 0)),
     0
@@ -227,7 +227,7 @@ export default function ViewProduct({ slug }) {
   const getVariationBarcode = (variation) => {
     if (variation?.primaryBarcode) return variation.primaryBarcode;
     if ((product.variations || []).length === 1 && product.primaryBarcode) return product.primaryBarcode;
-    const index = (product.variations || []).findIndex((item) => String(item._id) === String(variation?._id));
+    const index = (product.variations || []).findIndex((item) => String(item.id) === String(variation?.id));
     const variationCode = variation?.productionCode || index + 1;
     return product.code && variationCode > 0
       ? `${String(product.code).padStart(4, '0')}${String(variationCode).padStart(4, '0')}`
@@ -317,7 +317,7 @@ export default function ViewProduct({ slug }) {
                 if (!path || path === featuredImage?.path) return null;
                 return (
                   <button
-                    key={img._id || path}
+                    key={img.id || path}
                     onClick={() => setSelectedImage(path)}
                     className={`relative aspect-[2/3] w-12 rounded-md border-2 overflow-hidden flex-shrink-0 transition ${
                       displayImage === path ? 'border-[var(--brand)]' : 'border-gray-200 hover:border-gray-300'
@@ -429,7 +429,7 @@ export default function ViewProduct({ slug }) {
               <tbody className="divide-y divide-gray-100">
                 {product.variations.map((v, i) => (
                   <tr
-                    key={v._id || i}
+                    key={v.id || i}
                     className={`hover:bg-gray-50/50 transition ${v.enabled === false ? 'opacity-50' : ''}`}
                   >
                     <td className="px-3 py-3">
@@ -507,7 +507,7 @@ export default function ViewProduct({ slug }) {
               >
                 <option value="all">All branches</option>
                 {invBranches.map((branch) => (
-                  <option key={branch._id} value={String(branch._id)}>
+                  <option key={branch.id} value={String(branch.id)}>
                     {branch.name}
                     {branch.code ? ` (${branch.code})` : ''}
                   </option>
@@ -566,7 +566,7 @@ export default function ViewProduct({ slug }) {
                     {showBranchStockBreakdown ? (
                       visibleBranches.map((w) => (
                         <th
-                          key={w._id}
+                          key={w.id}
                           className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500"
                         >
                           {w.name}
@@ -588,7 +588,7 @@ export default function ViewProduct({ slug }) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {visibleVariationRows.map((row) => {
-                    const varId = String(row.variation?._id || '__base__');
+                    const varId = String(row.variation?.id || '__base__');
                     const varUnits = invUnitsByVariation.get(varId) || [];
                     const attrLabel =
                       (row.variation?.attributes || [])
@@ -637,16 +637,16 @@ export default function ViewProduct({ slug }) {
                         </td>
                         {showBranchStockBreakdown ? (
                           visibleBranches.map((w) => {
-                            const wb = row.byBranch[String(w._id)];
+                            const wb = row.byBranch[String(w.id)];
                             if (!wb)
                               return (
-                                <td key={w._id} className="px-2 py-1.5 text-center font-mono font-bold text-gray-300">
+                                <td key={w.id} className="px-2 py-1.5 text-center font-mono font-bold text-gray-300">
                                   0
                                 </td>
                               );
                             const avail = Math.max(0, Number(wb.onHand || 0) - Number(wb.reserved || 0));
                             return (
-                              <td key={w._id} className="px-2 py-1.5 text-center">
+                              <td key={w.id} className="px-2 py-1.5 text-center">
                                 <span className={`font-mono font-bold ${avail > 0 ? 'text-green-700' : 'text-red-500'}`}>
                                   {avail}
                                 </span>
@@ -684,7 +684,7 @@ export default function ViewProduct({ slug }) {
                             onClick={() =>
                               presaleMutation.mutate({
                                 slug,
-                                variationId: row.variation?._id,
+                                variationId: row.variation?.id,
                                 enabled: !row.variation?.overSale
                               })
                             }
@@ -756,7 +756,7 @@ export default function ViewProduct({ slug }) {
                       DEFECTIVE: 'bg-red-50 text-red-600'
                     };
                     return (
-                      <tr key={unit._id}>
+                      <tr key={unit.id}>
                         <td className="px-5 py-3 font-mono text-xs text-gray-700">{unit.barcode}</td>
                         <td className="px-5 py-3 font-mono text-xs text-gray-500">{unit.unitSerial}</td>
                         <td className="px-5 py-3">

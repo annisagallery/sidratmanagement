@@ -95,7 +95,7 @@ export default function PosSaleDetail() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {(sale.items || []).map((item) => (
-              <tr key={item._id}>
+              <tr key={item.id}>
                 <td className="px-3 py-2 text-[13px] text-slate-700">
                   {item.productSnapshot?.name || item.pid?.name || '—'}
                   {item.attributes?.length > 0 && (
@@ -126,7 +126,7 @@ export default function PosSaleDetail() {
           <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Payments</h3>
           <div className="space-y-1">
             {sale.payments.map((p, i) => (
-              <div key={p._id || i} className="flex items-center justify-between text-sm">
+              <div key={p.id || i} className="flex items-center justify-between text-sm">
                 <span className="capitalize text-slate-600">
                   {p.method === 'exchange-credit' ? 'Exchange credit' : p.method}
                   {p.note && <span className="ml-2 text-xs text-slate-400">{p.note}</span>}
