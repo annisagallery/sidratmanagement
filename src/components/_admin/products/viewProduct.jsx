@@ -94,6 +94,24 @@ export default function ViewProduct({ slug }) {
     return map;
   }, [invUnits]);
 
+  const warehouseSummaries = useMemo(() => {
+    return invBranches
+      .map((branch) => {
+        const branchId = String(branch.id);
+        let quantity = 0;
+        let variationCount = 0;
+        invByVariation.forEach((row) => {
+          const wb = row.byBranch[branchId];
+          if (!wb) return;
+          const avail = Math.max(0, Number(wb.onHand || 0) - Number(wb.reserved || 0));
+          if (avail > 0) variationCount += 1;
+          quantity += avail;
+        });
+        return { branch, quantity, variationCount };
+      })
+      .sort((a, b) => b.quantity - a.quantity);
+  }, [invBranches, invByVariation]);
+
   const showBranchStockBreakdown = invBranch !== 'all';
   const visibleBranches = showBranchStockBreakdown ? invBranches.filter((w) => String(w.id) === invBranch) : [];
   const availableForSelectedBranch = (row) =>
@@ -499,20 +517,15 @@ export default function ViewProduct({ slug }) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start">
-              <select
-                value={invBranch}
-                onChange={(event) => setInvBranch(event.target.value)}
-                aria-label="Branch"
-                className="h-8 min-w-40 rounded-md border border-gray-200 bg-white px-2.5 text-[11px] font-semibold text-gray-700 focus:border-[var(--brand)] focus:outline-none"
-              >
-                <option value="all">All branches</option>
-                {invBranches.map((branch) => (
-                  <option key={branch.id} value={String(branch.id)}>
-                    {branch.name}
-                    {branch.code ? ` (${branch.code})` : ''}
-                  </option>
-                ))}
-              </select>
+              {invBranch !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setInvBranch('all')}
+                  className="h-8 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] px-2.5 text-[11px] font-semibold text-[var(--brand-strong)] hover:brightness-95"
+                >
+                  ← All warehouses
+                </button>
+              )}
               <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-0.5 text-[11px] font-semibold">
                 <button
                   type="button"
@@ -547,11 +560,92 @@ export default function ViewProduct({ slug }) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_3fr] lg:items-start">
+          {!invQuery.isLoading && warehouseSummaries.length > 0 && (
+            <div className="overflow-x-auto -mx-1">
+              <GlobalTable className="table-fixed text-xs">
+                <colgroup>
+                  <col className="w-[60%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[18%]" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      Warehouse
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      Qty
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      Variants
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {warehouseSummaries.map(({ branch, quantity, variationCount }) => {
+                    const branchId = String(branch.id);
+                    const isSelected = invBranch === branchId;
+                    return (
+                      <tr
+                        key={branchId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setInvBranch(isSelected ? 'all' : branchId)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setInvBranch(isSelected ? 'all' : branchId);
+                          }
+                        }}
+                        className={`cursor-pointer transition ${
+                          isSelected ? 'bg-[var(--brand)]/25' : 'hover:bg-gray-50/50'
+                        }`}
+                      >
+                        <td
+                          className={`truncate border-l-4 px-2 py-1.5 font-semibold ${
+                            isSelected ? 'border-[var(--brand)] text-[var(--brand-strong)]' : 'border-transparent text-gray-800'
+                          }`}
+                        >
+                          {branch.name}
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <span
+                            className={`font-mono font-bold ${
+                              isSelected ? 'text-[var(--brand-strong)]' : quantity > 0 ? 'text-green-700' : 'text-gray-400'
+                            }`}
+                          >
+                            {quantity}
+                          </span>
+                        </td>
+                        <td
+                          className={`px-2 py-1.5 text-right font-mono font-semibold ${
+                            isSelected ? 'text-[var(--brand-strong)]' : 'text-gray-600'
+                          }`}
+                        >
+                          {variationCount}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </GlobalTable>
+            </div>
+          )}
+
           {invQuery.isLoading ? (
             <p className="py-6 text-center text-sm text-gray-400">Loading inventory…</p>
           ) : (
             <div className="overflow-x-auto -mx-1">
-              <GlobalTable className="w-full text-xs">
+              <GlobalTable className="table-fixed text-xs">
+                <colgroup>
+                  <col className="w-[28%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
+                </colgroup>
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -569,8 +663,7 @@ export default function ViewProduct({ slug }) {
                           key={w.id}
                           className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500"
                         >
-                          {w.name}
-                          {w.code && <span className="ml-1 font-mono text-gray-400">({w.code})</span>}
+                          Stock
                         </th>
                       ))
                     ) : (
@@ -713,6 +806,7 @@ export default function ViewProduct({ slug }) {
               )}
             </div>
           )}
+          </div>
         </div>
       )}
 
