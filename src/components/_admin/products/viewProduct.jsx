@@ -41,6 +41,7 @@ export default function ViewProduct({ slug }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [invBranch, setInvBranch] = useState('all');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(true);
+  const [attrFilters, setAttrFilters] = useState({});
   const [unitsTarget, setUnitsTarget] = useState(null);
 
   const { data, isLoading, isError } = useQuery(['product-admin', slug], () => api.getOneProductByAdmin(slug), {
@@ -122,6 +123,11 @@ export default function ViewProduct({ slug }) {
           sum + Math.max(0, Number(balance.onHand || 0) - Number(balance.reserved || 0)),
         0
       );
+  const activeAttrFilters = useMemo(
+    () => Object.entries(attrFilters).filter(([, value]) => value && value !== 'all'),
+    [attrFilters]
+  );
+
   const visibleVariationRows = useMemo(() => {
     const availableForRow = (row) =>
       Object.entries(row.byBranch)
@@ -130,14 +136,22 @@ export default function ViewProduct({ slug }) {
           (sum, [, balance]) => sum + Math.max(0, Number(balance.onHand || 0) - Number(balance.reserved || 0)),
           0
         );
-    const rows = showOnlyAvailable ? invByVariation.filter((row) => availableForRow(row) > 0) : [...invByVariation];
+    const matchesAttrFilters = (row) => {
+      const attrs = row.variation?.attributes || [];
+      return activeAttrFilters.every(([name, value]) =>
+        attrs.some((attr) => (attr.attributeName || 'Attribute') === name && attr.valueName === value)
+      );
+    };
+
+    let rows = showOnlyAvailable ? invByVariation.filter((row) => availableForRow(row) > 0) : [...invByVariation];
+    if (activeAttrFilters.length > 0) rows = rows.filter(matchesAttrFilters);
 
     return rows.sort((a, b) => {
       const aValues = (a.variation?.attributes || []).map((attr) => attr.valueName || '').join(' | ');
       const bValues = (b.variation?.attributes || []).map((attr) => attr.valueName || '').join(' | ');
       return aValues.localeCompare(bValues, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [invByVariation, invBranch, showOnlyAvailable]);
+  }, [invByVariation, invBranch, showOnlyAvailable, activeAttrFilters]);
 
   const { mutate: deleteProduct } = useMutation(() => api.deleteProductByAdmin(slug), {
     onSuccess: () => {
@@ -517,15 +531,50 @@ export default function ViewProduct({ slug }) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start">
-              {invBranch !== 'all' && (
+              <select
+                value={invBranch}
+                onChange={(e) => setInvBranch(e.target.value)}
+                className="select-ui h-8 text-[11px]"
+                aria-label="Filter by warehouse"
+              >
+                <option value="all">All warehouses</option>
+                {invBranches.map((branch) => (
+                  <option key={branch.id} value={String(branch.id)}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+
+              {attributeGroups.map((group) => (
+                <select
+                  key={group.name}
+                  value={attrFilters[group.name] || 'all'}
+                  onChange={(e) => setAttrFilters((f) => ({ ...f, [group.name]: e.target.value }))}
+                  className="select-ui h-8 text-[11px]"
+                  aria-label={`Filter by ${group.name}`}
+                >
+                  <option value="all">All {group.name}</option>
+                  {group.values.map((value) => (
+                    <option key={value.name} value={value.name}>
+                      {value.name}
+                    </option>
+                  ))}
+                </select>
+              ))}
+
+              {(invBranch !== 'all' || activeAttrFilters.length > 0) && (
                 <button
                   type="button"
-                  onClick={() => setInvBranch('all')}
+                  onClick={() => {
+                    setInvBranch('all');
+                    setAttrFilters({});
+                  }}
                   className="h-8 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] px-2.5 text-[11px] font-semibold text-[var(--brand-strong)] hover:brightness-95"
                 >
-                  ← All warehouses
+                  Reset filters
                 </button>
               )}
+
               <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-0.5 text-[11px] font-semibold">
                 <button
                   type="button"
@@ -587,21 +636,7 @@ export default function ViewProduct({ slug }) {
                     const branchId = String(branch.id);
                     const isSelected = invBranch === branchId;
                     return (
-                      <tr
-                        key={branchId}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setInvBranch(isSelected ? 'all' : branchId)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setInvBranch(isSelected ? 'all' : branchId);
-                          }
-                        }}
-                        className={`cursor-pointer transition ${
-                          isSelected ? 'bg-[var(--brand)]/25' : 'hover:bg-gray-50/50'
-                        }`}
-                      >
+                      <tr key={branchId} className={isSelected ? 'bg-[var(--brand)]/25' : ''}>
                         <td
                           className={`truncate border-l-4 px-2 py-1.5 font-semibold ${
                             isSelected ? 'border-[var(--brand)] text-[var(--brand-strong)]' : 'border-transparent text-gray-800'
