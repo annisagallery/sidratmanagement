@@ -7,7 +7,8 @@ import Pagination from 'src/components/_admin/ui/Pagination';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { toast } from 'react-toastify';
-import { FiArrowRight, FiCheck, FiClock, FiEdit2, FiPlus, FiRefreshCw, FiTrash2, FiX } from 'react-icons/fi';
+import Swal from 'sweetalert2';
+import { FiArrowRight, FiCheck, FiClock, FiEdit2, FiPlus, FiPrinter, FiRefreshCw, FiTrash2, FiX, FiXCircle } from 'react-icons/fi';
 import {
   assignProductionNeedToStock,
   createProductionBatch,
@@ -17,6 +18,7 @@ import {
   searchProductionProducers,
   searchProducts,
   startProductionBatch,
+  cancelProductionBatch,
   submitProductionUnit,
   updateProductionBatch
 } from 'src/services';
@@ -600,7 +602,7 @@ function BatchViewModal({ batch, onClose, onEdit, onScan }) {
   );
 }
 
-function BatchListTable({ batches, onView, onEdit, onStart }) {
+function BatchListTable({ batches, onView, onEdit, onStart, onCancel }) {
   return (
     <section className="flex min-h-[calc(100vh-190px)] flex-col overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -671,6 +673,24 @@ function BatchListTable({ batches, onView, onEdit, onStart }) {
                           Start
                         </button>
                       )}
+                      {batch.status !== 'DRAFT' && (
+                        <button
+                          onClick={() => window.open(`/production-stickers/${batch.id}`, '_blank')}
+                          title="Print a barcode label for every piece in this batch"
+                          className={`${action} border border-slate-200 bg-white text-slate-700`}
+                        >
+                          <FiPrinter /> Stickers
+                        </button>
+                      )}
+                      {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) && (
+                        <button
+                          onClick={() => onCancel(batch)}
+                          title="Withdraw this batch and return its orders to the queue"
+                          className={`${action} border border-rose-200 bg-rose-50 text-rose-700`}
+                        >
+                          <FiXCircle /> Cancel
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -726,6 +746,21 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
   const assignMut = useAction(assignProductionNeedToStock, 'Ready stock assigned to order');
   const startMut = useAction(startProductionBatch, 'Production batch started');
   const updateMut = useAction(updateProductionBatch, 'Production batch updated');
+  const cancelMut = useAction(cancelProductionBatch, 'Production batch cancelled');
+
+  // Cancelling withdraws every line and voids pieces still on the line, so the
+  // order rows go back to the queue instead of waiting on work nobody is doing.
+  const confirmCancelBatch = async (batch) => {
+    const result = await Swal.fire({
+      title: `Cancel ${batch.batchNo}?`,
+      text: 'Every line is withdrawn and any piece still in production is voided. Order items return to the production queue.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Cancel batch',
+      confirmButtonColor: '#e11d48'
+    });
+    if (result.isConfirmed) cancelMut.mutate({ id: batch.id });
+  };
 
   const addManual = () => {
     if (!manual.product || Number(manual.quantity) < 1) return;
@@ -994,6 +1029,7 @@ export default function ProductionWorkspace({ initialView = 'batches' }) {
             onView={setViewingBatch}
             onEdit={setEditingBatch}
             onStart={(id) => startMut.mutate(id)}
+            onCancel={confirmCancelBatch}
           />
           <Pagination
             page={batchPage}

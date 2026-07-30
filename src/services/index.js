@@ -1087,7 +1087,13 @@ export const createProductionBatch = async (payload) => (await http.post('/admin
 export const updateProductionBatch = async ({ id, ...payload }) =>
   (await http.put(`/admin/production/batches/${id}`, payload)).data;
 export const startProductionBatch = async (id) => (await http.post(`/admin/production/batches/${id}/start`)).data;
+export const cancelProductionBatch = async ({ id, note = '' }) =>
+  (await http.post(`/admin/production/batches/${id}/cancel`, { note })).data;
 export const getProductionBatchUnits = async (id) => (await http.get(`/admin/production/batches/${id}/units`)).data;
+// Variations at or below their reorder point — the make-to-stock half of
+// "what should we make?", which the order-driven queue cannot answer.
+export const getProductionReplenishment = async () =>
+  (await http.get('/admin/production/replenishment')).data;
 export const submitProductionSubmission = async (payload) =>
   (await http.post('/admin/production/submissions', payload)).data;
 export const submitProductionUnit = async ({ barcode, ...payload }) =>

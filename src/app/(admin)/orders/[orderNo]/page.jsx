@@ -3,6 +3,7 @@ import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import React, { useState, useEffect, use, useRef } from 'react';
 import { useMutation, useQuery } from 'react-query';
 import * as api from 'src/services';
+import ActionBar from 'src/components/_admin/orders/ActionBar';
 import { format } from 'date-fns';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.css';
@@ -714,6 +715,7 @@ export default function OrderDetail({ params }) {
   const shipMeta = shipmentsData?.meta || { canSend: true, isResend: false, suggestedCod: 0 };
 
   const [currentStatus, setCurrentStatus] = useState('');
+  const [busyAction, setBusyAction] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [complaintItem, setComplaintItem] = useState(null);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -744,7 +746,7 @@ export default function OrderDetail({ params }) {
   }, [order, router]);
 
   /* mutations */
-  const { mutate: updateStatus, isLoading: updatingStatus } = useMutation(
+  const { mutate: updateStatus, mutateAsync: updateStatusAsync, isLoading: updatingStatus } = useMutation(
     (status) => api.updateOrderStatusByAdmin({ orderNo, status }),
     {
       onSuccess: (_, status) => {
@@ -756,7 +758,7 @@ export default function OrderDetail({ params }) {
     }
   );
 
-  const { mutate: packOrder, isLoading: packingOrder } = useMutation(() => api.packOrderByAdmin(orderNo), {
+  const { mutate: packOrder, mutateAsync: packOrderAsync, isLoading: packingOrder } = useMutation(() => api.packOrderByAdmin(orderNo), {
     onSuccess: () => {
       refetch();
       toast('Order packed');
@@ -882,6 +884,24 @@ export default function OrderDetail({ params }) {
       if (target) URL.revokeObjectURL(target.preview);
       return current.filter((item) => item.id !== id);
     });
+  }
+
+  // One handler for every server-offered action. SHIP opens the courier modal
+  // rather than setting a status, because creating the consignment IS the act
+  // of shipping — the server advances the order off the back of it.
+  async function handleAction(action) {
+    setBusyAction(action.action);
+    try {
+      if (action.action === 'PACK') return await packOrderAsync();
+      if (action.action === 'SHIP') return setShowShip(true);
+      await updateStatusAsync(
+        { CONFIRM: 'confirmed', DELIVER: 'delivered', CANCEL: 'cancelled', RETURN: 'returned' }[action.action],
+      );
+    } catch (error) {
+      Swal.fire(action.label, error?.response?.data?.message || 'The action could not be completed.', 'error');
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   function handleStatusChange(e) {
@@ -1479,49 +1499,28 @@ export default function OrderDetail({ params }) {
           <div className={card}>
             <h2 className="font-semibold text-gray-800 mb-3 text-sm">Actions</h2>
             <div className="space-y-2">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Order status</span>
-                <select
-                  value={currentStatus}
-                  onChange={handleStatusChange}
-                  disabled={updatingStatus}
-                  className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--brand)] font-medium disabled:opacity-50 bg-white"
-                >
-                  {visibleOrderStatuses.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                onClick={() => packOrder()}
-                disabled={!order.canPack || packingOrder || order.status === 'packed'}
-                title={order.canPack ? 'Pack this verified order' : 'Scan every reserved or ready product first'}
-                className={`${actionBtn} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
-              >
-                <FiPackage size={15} /> {packingOrder ? 'Packing…' : order.status === 'packed' ? 'Packed' : 'Pack order'}
-              </button>
-
-              <button
-                onClick={() => setShowShip(true)}
-                disabled={!shipMeta.canSend}
-                title={
-                  shipMeta.canSend
-                    ? shipMeta.isResend
-                      ? 'Previous shipment was cancelled/returned — send again'
-                      : 'Send this order with Pathao, Steadfast or CarryBee'
-                    : 'An active shipment already exists'
-                }
-                className={`${actionBtn} ${
-                  shipMeta.isResend
-                    ? 'border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100'
-                    : 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                }`}
-              >
-                <FiTruck size={15} /> {shipMeta.isResend ? 'Re-send shipment' : 'Send shipment'}
-              </button>
+              {/* Server-driven: the operator performs an act, the status
+                  follows. Falls back to the legacy dropdown only if this build
+                  is talking to an API that predates availableActions. */}
+              {order.availableActions ? (
+                <ActionBar actions={order.availableActions} onAction={handleAction} busyAction={busyAction} />
+              ) : (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-600">Order status</span>
+                  <select
+                    value={currentStatus}
+                    onChange={handleStatusChange}
+                    disabled={updatingStatus}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--brand)] font-medium disabled:opacity-50 bg-white"
+                  >
+                    {visibleOrderStatuses.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <button onClick={() => setShowAddPayment(true)} className={`${actionBtn} border-gray-200 bg-white text-gray-700 hover:bg-gray-50`}>
                 <FiPlus size={15} /> Add payment
