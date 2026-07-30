@@ -183,16 +183,16 @@ const orderItemPayload = (item = {}) => ({
 });
 
 const pickPrice = (product, variation) => {
-  const motherRegular = product.price ?? product.regularPrice ?? 0;
-  const motherDiscount = product.priceSale ?? product.salePrice ?? null;
+  const baseRegular = product.price ?? product.regularPrice ?? 0;
+  const baseDiscount = product.priceSale ?? product.salePrice ?? null;
 
-  const regularPrice = variation?.regularPrice ?? variation?.price ?? motherRegular;
+  const regularPrice = variation?.regularPrice ?? variation?.price ?? baseRegular;
   const discountPrice =
     variation?.salePrice ??
     variation?.discountPrice ??
-    (motherDiscount != null && Number(motherDiscount) < Number(regularPrice) ? motherDiscount : null);
+    (baseDiscount != null && Number(baseDiscount) < Number(regularPrice) ? baseDiscount : null);
 
-  return { regularPrice, discountPrice, motherRegular, motherDiscount };
+  return { regularPrice, discountPrice, baseRegular, baseDiscount };
 };
 
 const availableForVariation = (variation = {}) =>
@@ -223,8 +223,8 @@ const buildItem = (product) => {
     attrDimensions,
     selectedAttrs,
     selectedVariationId: firstVariation?.id || firstVariation?.id || null,
-    motherRegular: prices.motherRegular,
-    motherDiscount: prices.motherDiscount,
+    baseRegular: prices.baseRegular,
+    baseDiscount: prices.baseDiscount,
     regularPrice: Number(prices.regularPrice || 0),
     discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
     stock: Math.max(0, availableForVariation(firstVariation) - Number(firstVariation?.presaleAvailable || 0)),
@@ -422,12 +422,12 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
     }
 
     const matched = findVariation(item.variations, selectedAttrs);
-    const prices = pickPrice({ price: item.motherRegular, priceSale: item.motherDiscount }, matched || undefined);
+    const prices = pickPrice({ price: item.baseRegular, priceSale: item.baseDiscount }, matched || undefined);
 
     onUpdate(item._key, {
       selectedAttrs,
       selectedVariationId: matched?.id || matched?.id || item.selectedVariationId || null,
-      regularPrice: Number(prices.regularPrice || item.motherRegular || 0),
+      regularPrice: Number(prices.regularPrice || item.baseRegular || 0),
       discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
       stock: isCustom ? 0 : Math.max(0, availableForVariation(matched) - Number(matched?.presaleAvailable || 0)),
       overSale: isCustom ? true : Boolean(matched?.overSale ?? item.overSale),

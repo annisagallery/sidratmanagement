@@ -9,13 +9,14 @@ import * as api from 'src/services';
 import Swal from 'sweetalert2';
 import UploadSingleFile from '../upload/UploadSingleFile';
 import RichTextEditor from 'src/components/richTextEditor';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 
 CategoryForm.propTypes = {
   data: PropTypes.object,
   isLoading: PropTypes.bool
 };
 
-const STATUS_OPTIONS = ['active', 'deactive'];
+const STATUS_OPTIONS = ['active', 'inactive'];
 
 export default function CategoryForm({ data: currentCategory, isLoading: categoryLoading }) {
   const router = useRouter();
@@ -52,7 +53,8 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
       metaDescription: currentCategory?.metaDescription || '',
       file: currentCategory?.image?.path || '',
       slug: currentCategory?.slug || '',
-      status: currentCategory?.status || STATUS_OPTIONS[0]
+      status: currentCategory?.status || STATUS_OPTIONS[0],
+      isVisibleInEcom: currentCategory?.isVisibleInEcom !== false
     },
     enableReinitialize: true,
     validationSchema: NewCategorySchema,
@@ -121,6 +123,30 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Ecommerce visibility</label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={formik.values.isVisibleInEcom}
+                  onClick={() => setFieldValue('isVisibleInEcom', !formik.values.isVisibleInEcom)}
+                  className={`mt-2 flex w-full items-center gap-3 rounded-md border px-4 py-3 text-left text-sm font-medium transition ${
+                    formik.values.isVisibleInEcom
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-300 bg-slate-50 text-slate-600'
+                  }`}
+                >
+                  {formik.values.isVisibleInEcom ? <MdVisibility size={18} /> : <MdVisibilityOff size={18} />}
+                  <span>
+                    {formik.values.isVisibleInEcom ? 'Visible on ecommerce' : 'Hidden from ecommerce'}
+                    <span className="mt-0.5 block text-xs font-normal opacity-75">
+                      {formik.values.isVisibleInEcom
+                        ? 'Customers can find this category in menus, filters, and category pages.'
+                        : 'Products remain in the catalog, but this category is not shown on the storefront.'}
+                    </span>
+                  </span>
+                </button>
               </div>
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700">

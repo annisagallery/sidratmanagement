@@ -35,6 +35,19 @@ function slugify(str) {
     .replace(/\s+/g, '-');
 }
 
+function splitLegacyCodes(value) {
+  const codes = [...new Set(
+    String(value || '')
+      .split(',')
+      .map((code) => code.trim())
+      .filter(Boolean)
+  )];
+  return {
+    primaryBarcode: codes[0] || null,
+    legacyBarcodes: codes.slice(1)
+  };
+}
+
 function cartesian(arrays) {
   if (!arrays.length) return [[]];
   const [first, ...rest] = arrays;
@@ -55,8 +68,10 @@ function buildVariations(attrSelections, existingVars, basePrice) {
         regularPrice: null,
         salePrice: null,
         overSale: existing?.overSale ?? false,
-        primaryBarcode: existing?.primaryBarcode ?? '',
-        legacyBarcodes: existing?.legacyBarcodes ?? [],
+        productionCode: existing?.productionCode ?? null,
+        legacyCodes:
+          existing?.legacyCodes ??
+          [existing?.primaryBarcode, ...(existing?.legacyBarcodes || [])].filter(Boolean).join(', '),
         imageId: existing?.imageId ?? null,
         enabled: existing?.enabled ?? true
       }
@@ -87,8 +102,10 @@ function buildVariations(attrSelections, existingVars, basePrice) {
       regularPrice: existing?.regularPrice ?? null,
       salePrice: existing?.salePrice ?? null,
       overSale: existing?.overSale ?? false,
-      primaryBarcode: existing?.primaryBarcode ?? '',
-      legacyBarcodes: existing?.legacyBarcodes ?? [],
+      productionCode: existing?.productionCode ?? null,
+      legacyCodes:
+        existing?.legacyCodes ??
+        [existing?.primaryBarcode, ...(existing?.legacyBarcodes || [])].filter(Boolean).join(', '),
       imageId: existing?.imageId ?? null,
       enabled: existing?.enabled ?? true
     };
@@ -295,16 +312,16 @@ function LivePreview({
   const infoAttrEntries = Object.values(attrSelections).filter((e) => !e.forVariation && e.values.length > 0);
 
   const displayPrice = (() => {
-    const motherReg = Number(price) || 0;
-    const motherSale = priceSale ? Number(priceSale) : null;
+    const baseRegular = Number(price) || 0;
+    const baseSale = priceSale ? Number(priceSale) : null;
     if (!variations.length) {
-      return motherSale && motherSale < motherReg
-        ? { show: motherSale, original: motherReg }
-        : { show: motherReg, original: null };
+      return baseSale && baseSale < baseRegular
+        ? { show: baseSale, original: baseRegular }
+        : { show: baseRegular, original: null };
     }
     const allPrices = variations.map((v) => {
-      const reg = v.customPrice ? (v.regularPrice ?? motherReg) : motherReg;
-      const sale = v.customPrice ? v.salePrice : motherSale;
+      const reg = v.customPrice ? (v.regularPrice ?? baseRegular) : baseRegular;
+      const sale = v.customPrice ? v.salePrice : baseSale;
       return { eff: sale != null && sale > 0 && sale < reg ? sale : reg, reg };
     });
     const minEff = Math.min(...allPrices.map((p) => p.eff));
@@ -599,7 +616,6 @@ export default function ProductForm({ currentProduct }) {
   const [price, setPrice] = useState('');
   const [priceSale, setPriceSale] = useState('');
   const [rate, setRate] = useState('');
-  const [primaryBarcode, setPrimaryBarcode] = useState('');
   const [legacyBarcodes, setLegacyBarcodes] = useState('');
   const [trackInventory, setTrackInventory] = useState(true);
   const [productionEnabled, setProductionEnabled] = useState(true);
@@ -668,8 +684,7 @@ export default function ProductForm({ currentProduct }) {
     setPrice(p.price?.toString() || '');
     setPriceSale(p.priceSale?.toString() || '');
     setRate(p.rate?.toString() || '');
-    setPrimaryBarcode(p.primaryBarcode || '');
-    setLegacyBarcodes((p.legacyBarcodes || []).join(', '));
+    setLegacyBarcodes([p.primaryBarcode, ...(p.legacyBarcodes || [])].filter(Boolean).join(', '));
     setTrackInventory(p.trackInventory !== false);
     setProductionEnabled(p.productionEnabled !== false);
     setIsVisible(p.isVisible !== false);
@@ -708,6 +723,7 @@ export default function ProductForm({ currentProduct }) {
     setVariations(
       (p.variations || []).map((v) => ({
         ...v,
+        legacyCodes: [v.primaryBarcode, ...(v.legacyBarcodes || [])].filter(Boolean).join(', '),
         imageId: v.image?.id?.toString() || (typeof v.image === 'string' && v.image ? v.image : null)
       }))
     );
@@ -836,11 +852,7 @@ export default function ProductForm({ currentProduct }) {
       price: Number(price),
       priceSale: priceSale ? Number(priceSale) : null,
       rate: rate ? Number(rate) : 0,
-      primaryBarcode: primaryBarcode.trim() || null,
-      legacyBarcodes: legacyBarcodes
-        .split(',')
-        .map((code) => code.trim())
-        .filter(Boolean),
+      ...splitLegacyCodes(legacyBarcodes),
       trackInventory,
       productionEnabled,
       isVisible,
@@ -863,8 +875,7 @@ export default function ProductForm({ currentProduct }) {
             regularPrice: v.customPrice ? (v.regularPrice ?? null) : null,
             salePrice: v.customPrice ? v.salePrice : null,
             overSale: v.overSale,
-            primaryBarcode: v.primaryBarcode?.trim() || null,
-            legacyBarcodes: v.legacyBarcodes || [],
+            ...splitLegacyCodes(v.legacyCodes),
             image: v.imageId || null
           }));
         console.log('[handleSubmit] variations payload to backend:', JSON.stringify(payload));
@@ -956,7 +967,7 @@ export default function ProductForm({ currentProduct }) {
                 </button>
               </div>
               <div>
-                <FL>Mother Price (৳) *</FL>
+                <FL>Base Price (৳) *</FL>
                 <input
                   type="number"
                   min="0"
@@ -968,7 +979,7 @@ export default function ProductForm({ currentProduct }) {
                 <p className="text-xs text-gray-400 mt-1">Default price for all variations unless overridden.</p>
               </div>
               <div>
-                <FL>Mother Sale Price (৳)</FL>
+                <FL>Sale Price (৳)</FL>
                 <input
                   type="number"
                   min="0"
@@ -991,23 +1002,27 @@ export default function ProductForm({ currentProduct }) {
                 />
               </div>
               <div>
-                <FL>Primary Barcode</FL>
+                <FL>Product Code</FL>
                 <input
-                  className="input-field font-mono"
-                  value={primaryBarcode}
-                  onChange={(e) => setPrimaryBarcode(e.target.value)}
-                  placeholder="Scan or enter new barcode"
+                  className="input-field cursor-not-allowed bg-gray-50 font-mono text-gray-500"
+                  value={currentProduct?.code ? String(currentProduct.code).padStart(4, '0') : 'Assigned when saved'}
+                  readOnly
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  The system assigns this permanent code. Unit labels use Production–Product–Option.
+                </p>
               </div>
               <div className="md:col-span-2">
-                <FL>Previous POS Barcodes</FL>
+                <FL>Legacy Product Codes</FL>
                 <input
                   className="input-field font-mono"
                   value={legacyBarcodes}
                   onChange={(e) => setLegacyBarcodes(e.target.value)}
                   placeholder="Separate multiple barcodes with commas"
                 />
-                <p className="text-xs text-gray-400 mt-1">Old and new codes resolve to the same product.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Previous POS or supplier codes remain scannable. Separate multiple codes with commas.
+                </p>
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 <input type="checkbox" checked={trackInventory} onChange={(e) => setTrackInventory(e.target.checked)} />
@@ -1292,12 +1307,13 @@ export default function ProductForm({ currentProduct }) {
                           On
                         </th>
                         <th className="px-4 py-2.5 text-left">Variation</th>
-                        <th className="px-3 py-2.5 text-center w-16" title="Uncheck to use mother price">
+                        <th className="px-3 py-2.5 text-center w-16" title="Uncheck to use base price">
                           Custom Price
                         </th>
                         <th className="px-3 py-2.5 text-right w-28">Reg. Price</th>
                         <th className="px-3 py-2.5 text-right w-28">Sale Price</th>
-                        <th className="px-3 py-2.5 text-left w-36">Barcode</th>
+                        <th className="px-3 py-2.5 text-center w-24">Option Code</th>
+                        <th className="px-3 py-2.5 text-left w-44">Legacy Option Codes</th>
                         <th className="px-3 py-2.5 text-center w-20">Image</th>
                       </tr>
                     </thead>
@@ -1354,7 +1370,7 @@ export default function ProductForm({ currentProduct }) {
                                 onChange={(e) => toggleCustomPrice(idx, e.target.checked)}
                                 disabled={v.attributes.length === 0}
                                 className="w-4 h-4 cursor-pointer accent-blue-500"
-                                title="Uncheck to use mother price"
+                                title="Uncheck to use base price"
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -1392,11 +1408,14 @@ export default function ProductForm({ currentProduct }) {
                                 </span>
                               )}
                             </td>
+                            <td className="px-2 py-1.5 text-center font-mono text-xs font-semibold text-gray-600">
+                              {v.productionCode ? String(v.productionCode).padStart(4, '0') : 'Auto'}
+                            </td>
                             <td className="px-2 py-1.5">
                               <input
-                                value={v.primaryBarcode || ''}
-                                onChange={(e) => updateVar(idx, 'primaryBarcode', e.target.value)}
-                                placeholder="Scan code"
+                                value={v.legacyCodes || ''}
+                                onChange={(e) => updateVar(idx, 'legacyCodes', e.target.value)}
+                                placeholder="Old codes, comma separated"
                                 className="w-full border rounded-md px-2 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
                               />
                             </td>

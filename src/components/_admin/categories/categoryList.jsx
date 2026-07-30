@@ -4,7 +4,7 @@ import { useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Swal from 'sweetalert2';
 import Image from 'next/image';
-import { MdAdd, MdEdit, MdInbox } from 'react-icons/md';
+import { MdAdd, MdEdit, MdInbox, MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import * as api from 'src/services';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
@@ -112,6 +112,24 @@ export default function CategoryList() {
       sortable: true,
       align: 'center',
       render: (c) => <StatusBadge status={c.status} />
+    },
+    {
+      key: 'isVisibleInEcom',
+      label: 'Ecommerce',
+      sortable: true,
+      align: 'center',
+      render: (c) => (
+        <span
+          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+            c.isVisibleInEcom !== false
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {c.isVisibleInEcom !== false ? <MdVisibility size={14} /> : <MdVisibilityOff size={14} />}
+          {c.isVisibleInEcom !== false ? 'Visible' : 'Hidden'}
+        </span>
+      )
     },
     {
       key: 'actions',

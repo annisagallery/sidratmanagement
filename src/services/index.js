@@ -510,6 +510,11 @@ export const getCategoryBySlug = async (category) => {
   return data;
 };
 
+export const getCategoryBySlugAdmin = async (category) => {
+  const { data } = await http.get(`/admin/categories/${category}`);
+  return data;
+};
+
 export const getCategorySlugs = async () => {
   const { data } = await http.get(`/categories-slugs`); //
   return data;

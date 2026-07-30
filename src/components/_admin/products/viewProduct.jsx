@@ -256,13 +256,11 @@ export default function ViewProduct({ slug }) {
       .filter(([branchId]) => invBranch === 'all' || branchId === invBranch)
       .some(([, balance]) => Number(balance.onHand || 0) - Number(balance.reserved || 0) > 0)
   ).length;
-  const getVariationBarcode = (variation) => {
-    if (variation?.primaryBarcode) return variation.primaryBarcode;
-    if ((product.variations || []).length === 1 && product.primaryBarcode) return product.primaryBarcode;
+  const getOptionCatalogCode = (variation) => {
     const index = (product.variations || []).findIndex((item) => String(item.id) === String(variation?.id));
     const variationCode = variation?.productionCode || index + 1;
     return product.code && variationCode > 0
-      ? `${String(product.code).padStart(4, '0')}${String(variationCode).padStart(4, '0')}`
+      ? `${String(product.code).padStart(4, '0')}-${String(variationCode).padStart(4, '0')}`
       : '—';
   };
 
@@ -373,10 +371,14 @@ export default function ViewProduct({ slug }) {
 
             <InfoRow label="Type" value={productType} />
             <InfoRow label="Name" value={product.name} />
-            <InfoRow label="Code" value={product.code} />
+            <InfoRow label="Product code" value={product.code ? String(product.code).padStart(4, '0') : '—'} />
+            <InfoRow
+              label="Legacy codes"
+              value={[product.primaryBarcode, ...(product.legacyBarcodes || [])].filter(Boolean).join(', ') || '—'}
+            />
             <InfoRow label="Category" value={product.category?.name} />
             <InfoRow label="Cost (Rate)" value={`৳${Number(product.rate || 0).toFixed(2)}`} />
-            <InfoRow label="Price" value={`৳${Number(product.price || 0).toFixed(2)}`} />
+            <InfoRow label="Base Price" value={`৳${Number(product.price || 0).toFixed(2)}`} />
             {product.priceSale > 0 && <InfoRow label="Sale Price" value={`৳${Number(product.priceSale).toFixed(2)}`} />}
 
             <div className="flex items-start gap-4 py-2.5 border-b border-gray-50">
@@ -454,7 +456,7 @@ export default function ViewProduct({ slug }) {
                     Stock
                   </th>
                   <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Code
+                    Option Code
                   </th>
                 </tr>
               </thead>
@@ -510,7 +512,14 @@ export default function ViewProduct({ slug }) {
                         {v.available ?? 0}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-xs text-gray-500">{v.primaryBarcode || '—'}</td>
+                    <td className="px-3 py-3 text-right">
+                      <p className="font-mono text-xs font-semibold text-gray-600">
+                        {v.productionCode ? String(v.productionCode).padStart(4, '0') : '—'}
+                      </p>
+                      <p className="mt-0.5 font-mono text-[10px] text-gray-400">
+                        {[v.primaryBarcode, ...(v.legacyBarcodes || [])].filter(Boolean).join(', ') || 'No legacy code'}
+                      </p>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -687,7 +696,7 @@ export default function ViewProduct({ slug }) {
                       Variation
                     </th>
                     <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Code
+                      Product–Option Code
                     </th>
                     <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                       Price
@@ -751,7 +760,7 @@ export default function ViewProduct({ slug }) {
                           )}
                         </td>
                         <td className="px-2 py-1.5 font-mono text-[10px] font-semibold text-gray-600">
-                          {getVariationBarcode(row.variation)}
+                          {getOptionCatalogCode(row.variation)}
                         </td>
                         <td className="px-2 py-1.5 text-right text-[11px]">
                           <span className="font-semibold text-gray-800">

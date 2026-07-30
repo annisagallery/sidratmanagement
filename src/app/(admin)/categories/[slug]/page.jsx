@@ -17,7 +17,7 @@ Page.propTypes = {
 };
 export default function Page({ params }) {
   const { slug } = use(params);
-  const { data, isLoading } = useQuery(['category'], () => api.getCategoryBySlug(slug), {
+  const { data, isLoading } = useQuery(['admin-category', slug], () => api.getCategoryBySlugAdmin(slug), {
     onError: (err) => {
       Swal.fire(err.response.data.message || 'Something went wrong!', '', 'error');
     }

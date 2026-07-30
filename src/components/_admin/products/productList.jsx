@@ -119,7 +119,9 @@ export default function ProductList() {
               {p.name}
               {p.isFeatured && <span className="ml-1.5 text-xs text-amber-500">⭐</span>}
             </p>
-            <p className="mt-0.5 font-mono text-xs text-slate-400">{p.slug}</p>
+            <p className="mt-0.5 font-mono text-xs text-slate-400">
+              {p.code ? `#${String(p.code).padStart(4, '0')} · ` : ''}{p.slug}
+            </p>
           </div>
         </div>
       )
@@ -228,7 +230,7 @@ export default function ProductList() {
         search={search}
         onSearchChange={setSearch}
         onSubmit={() => setPage(1)}
-        searchPlaceholder="Search by name…"
+        searchPlaceholder="Search by name or product code…"
         onReset={() => {
           setSearch('');
           setStatus('');
