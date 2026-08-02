@@ -26,10 +26,11 @@ const ICONS = {
   RETURN: FiCornerUpLeft,
 };
 
+// The app's own button vocabulary — nothing new to recognise.
 const INTENT_CLASS = {
-  primary: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
-  danger: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
-  default: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+  primary: 'btn-brand w-full',
+  danger: 'btn-ghost w-full !border-rose-200 !text-rose-600 hover:!bg-rose-50',
+  default: 'btn-ghost w-full'
 };
 
 export default function ActionBar({ actions = [], onAction, busyAction = null }) {
@@ -74,13 +75,13 @@ export default function ActionBar({ actions = [], onAction, busyAction = null })
               type="button"
               onClick={() => run(action)}
               disabled={!action.enabled || busy}
-              className={`flex w-full items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${tone}`}
+              className={tone}
             >
               {busy ? <FiLoader size={15} className="animate-spin" /> : <Icon size={15} />}
               {busy ? 'Working…' : action.label}
             </button>
             {!action.enabled && action.blockedBy ? (
-              <p className="mt-1 px-1 text-[11px] font-medium leading-snug text-slate-500">{action.blockedBy}</p>
+              <p className="mt-1 px-0.5 text-[11px] leading-snug text-slate-500">{action.blockedBy}</p>
             ) : null}
           </div>
         );

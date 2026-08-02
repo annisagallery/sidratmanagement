@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Barcodes and unit serials are matched by eye against stickers on garments,
+   so they are set in a face where 0/O and 1/l/I cannot be confused. This is
+   the only typographic exception to the configured brand font. */
+.ops-code {
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-variant-ligatures: none;
+  letter-spacing: 0.02em;
+}
+
 *,
 *::before,
 *::after {

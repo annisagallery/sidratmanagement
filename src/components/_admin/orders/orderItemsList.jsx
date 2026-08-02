@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import { useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
-import { FiExternalLink } from 'react-icons/fi';
+import { FiExternalLink, FiPackage } from 'react-icons/fi';
 import { MdInbox } from 'react-icons/md';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
 import { StatusBadge, StatusSelect } from 'src/components/_admin/shared/StatusBadge';
@@ -72,18 +73,50 @@ export default function OrderItemsList() {
   const sort = { by: 'estimatedDelivery', order: sortOrder, onSort: toggleDelivery };
 
   const columns = [
-    { key: 'code', label: 'Code', render: (item) => <span className="font-mono text-xs font-semibold tracking-wider text-slate-500">{item.code || '—'}</span> },
     {
       key: 'product',
       label: 'Product',
       render: (item) => {
         const attrs = (item.attributes || []).map((a) => a.valueName).filter(Boolean).join(', ');
+        const image = item.product?.featuredImage?.path || item.pid?.featuredImage?.path;
         return (
-          <div className="max-w-[200px]">
-            <p className="truncate text-[13px] font-medium text-slate-800">{item.product?.name || 'Unknown product'}</p>
-            {attrs && <p className="truncate text-[11px] text-slate-400">{attrs}</p>}
-            {item.customizeDetails && <p className="truncate text-[11px]" style={{ color: 'var(--brand-strong)' }}>{item.customizeDetails}</p>}
+          <div className="flex items-start gap-2.5">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+              {image ? (
+                <Image src={image} alt="" fill sizes="40px" className="object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-slate-300">
+                  <FiPackage size={15} />
+                </span>
+              )}
+            </div>
+            <div className="max-w-[200px]">
+              <p className="truncate text-[13px] font-medium text-slate-800">{item.product?.name || 'Unknown product'}</p>
+              {attrs && <p className="truncate text-[11px] text-slate-400">{attrs}</p>}
+              {item.customizeDetails && <p className="truncate text-[11px]" style={{ color: 'var(--brand-strong)' }}>{item.customizeDetails}</p>}
+            </div>
           </div>
+        );
+      }
+    },
+    {
+      // The production code of the physical piece. The bound unit is the piece
+      // this item actually owns; a unit still on the line is shown muted, since
+      // a code on screen must never read as a piece in hand.
+      key: 'code',
+      label: 'Production code',
+      render: (item) => {
+        const bound = item.packingBarcode || item.assignedUnit?.barcode;
+        const inProgress = item.productionUnits?.[0];
+        const code = bound || inProgress?.barcode;
+        if (!code) return <span className="text-xs text-slate-300">—</span>;
+        return (
+          <span
+            title={bound ? 'Piece bound to this item' : `Being made — unit is ${inProgress?.status}`}
+            className={`font-mono text-xs font-semibold tracking-wider ${bound ? 'text-slate-600' : 'text-slate-400'}`}
+          >
+            {code}
+          </span>
         );
       }
     },

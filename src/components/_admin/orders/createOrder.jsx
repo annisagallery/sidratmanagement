@@ -799,6 +799,10 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
         setSavedAddresses(addrs);
         setSelectedAddrIdx(-1); // nothing selected yet
         if (addrs.length > 0) setShowAddrList(true);
+        // Seed the delivery phone with the number just searched. The not-found
+        // branch below already does this; leaving the found branch blank is how
+        // an order reached the courier with no phone on it.
+        onAddressChange({ name: c?.name || '', phone: q, district: '', upazila: '', address: '' });
       } catch (err) {
         if (id !== requestRef.current) return;
         // Backend returns fraud data even on 404 (new customer) — read it from the error body
@@ -816,7 +820,9 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
   const handleSelectSavedAddress = (addr, idx) => {
     setSelectedAddrIdx(idx);
     setShowAddrList(false);
-    const built = getCustomerAddress({ shippingAddress: addr });
+    // A saved address recorded before the phone was required can have none;
+    // fall back to the searched number rather than clearing the field.
+    const built = getCustomerAddress({ shippingAddress: addr }, phone.trim());
     onAddressChange(built);
   };
 
@@ -1477,7 +1483,11 @@ export default function CreateOrder({ orderNo = null }) {
     });
 
   const handleSubmit = async () => {
-    if (!address.phone && !customer?.phone) return Swal.fire('Enter customer phone', '', 'warning');
+    // The delivery phone specifically. Accepting the customer's account phone
+    // as a stand-in let an order through with an empty shipping phone — the
+    // courier has no one to call, and the account number may belong to someone
+    // other than the recipient.
+    if (!address.phone?.trim()) return Swal.fire('Enter the delivery phone number', '', 'warning');
     if (!address.name) return Swal.fire('Enter customer name', '', 'warning');
     if (!address.address) return Swal.fire('Enter customer address', '', 'warning');
     if (!items.length) return Swal.fire('Add at least one product', '', 'warning');

@@ -95,7 +95,8 @@ export const navParents = [
     tabs: [
       { label: 'Stock', href: '/inventory', icon: MdOutlineInventory2 },
       { label: 'Production', href: '/production', icon: LuFactory },
-      { label: 'Production Scan', href: '/production/scan', icon: LuFactory }
+      { label: 'Production Scan', href: '/production/scan', icon: LuFactory },
+      { label: 'Transfers', href: '/inventory/transfers', icon: MdSwapHoriz }
     ]
   },
   {
@@ -172,6 +173,17 @@ export const navParents = [
 ];
 
 /**
+ * Production is one desk reached from two sidebar entries — the planner's and
+ * the factory floor's — so both carry the same tab bar.
+ */
+const productionTabs = [
+  { label: 'Batches', href: '/production' },
+  { label: 'Queue', href: '/production/queue' },
+  { label: 'New batch', href: '/production/create' },
+  { label: 'Scan desk', href: '/production/scan' }
+];
+
+/**
  * Sidebar information architecture.
  * Group -> primary navigation -> nested navigation.
  * `navParents` above remains the source for page-level tabs.
@@ -224,10 +236,51 @@ export const navGroups = [
     key: 'inventory',
     label: 'Inventory',
     items: [
-      { key: 'stock', label: 'Stock', href: '/inventory', icon: MdOutlineInventory2, subject: 'Inventory' },
-      { key: 'production', label: 'Production', href: '/production', icon: LuFactory, subject: 'Production' },
-      { key: 'production-scan', label: 'Production Scan', href: '/production/scan', icon: LuFactory, subject: 'Production' },
-      { key: 'transfers', label: 'Transfers', href: '/inventory/transfers', icon: MdSwapHoriz, subject: 'StockTransfer' },
+      // Each of these is a desk, and its `children` become the page's tab bar.
+      // A tab is a real route, so the browser's back button and a pasted link
+      // both land where the operator expects.
+      {
+        key: 'stock',
+        label: 'Stock',
+        href: '/inventory',
+        icon: MdOutlineInventory2,
+        subject: 'Inventory',
+        children: [
+          { label: 'On hand', href: '/inventory' },
+          { label: 'Movements', href: '/inventory/movements' },
+          { label: 'Barcode lookup', href: '/inventory/lookup' }
+        ]
+      },
+      {
+        key: 'production',
+        label: 'Production',
+        href: '/production',
+        icon: LuFactory,
+        subject: 'Production',
+        children: productionTabs
+      },
+      // The scan desk keeps its own sidebar entry — it is used by the factory
+      // floor, not the planner — but carries the same tabs so nobody is
+      // stranded there.
+      {
+        key: 'production-scan',
+        label: 'Production Scan',
+        href: '/production/scan',
+        icon: LuFactory,
+        subject: 'Production',
+        children: productionTabs
+      },
+      {
+        key: 'transfers',
+        label: 'Transfers',
+        href: '/inventory/transfers',
+        icon: MdSwapHoriz,
+        subject: 'StockTransfer',
+        children: [
+          { label: 'All transfers', href: '/inventory/transfers' },
+          { label: 'New transfer', href: '/inventory/transfers/create' }
+        ]
+      },
       { key: 'warehouses', label: 'Warehouses', href: '/inventory/warehouses', icon: FiMapPin, subject: 'Branch' }
     ]
   },

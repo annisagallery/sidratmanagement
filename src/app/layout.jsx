@@ -41,6 +41,13 @@ export default async function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?family=${font.query}&display=swap`} />
+        {/* Operational face for barcodes, serials and quantities. Separate from
+            the configurable brand face on purpose: an operator matches codes
+            against physical labels, so 0/O and 1/l/I must never be confusable. */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap"
+        />
       </head>
       <body style={{ fontFamily: font.family }}>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

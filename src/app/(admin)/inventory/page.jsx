@@ -1,4 +1,5 @@
-import InventoryWorkspace from 'src/components/_admin/inventory/InventoryWorkspace';
-export default function InventoryPage() {
-  return <InventoryWorkspace />;
+import StockList from 'src/components/_admin/inventory/StockList';
+
+export default function StockPage() {
+  return <StockList />;
 }

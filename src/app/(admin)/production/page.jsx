@@ -1,4 +1,5 @@
-import ProductionWorkspace from 'src/components/_admin/production/ProductionWorkspace';
+import BatchList from 'src/components/_admin/production/BatchList';
+
 export default function ProductionPage() {
-  return <ProductionWorkspace initialView="batches" />;
+  return <BatchList />;
 }

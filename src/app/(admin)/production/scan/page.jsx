@@ -1,430 +1,403 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Production scan desk — finished pieces in, faulty pieces out.
+ *
+ * Scans accumulate locally and post as one submission. That is deliberate: a
+ * factory network drops, and a desk that needs the server for every scan stops
+ * the line. Nothing leaves this screen until "Post" is pressed, and until then
+ * every line can be removed.
+ *
+ * Three acts share one desk because one person does all three in a single pass:
+ * receive what was made, reject what failed QC, and record work that has no
+ * barcode at all.
+ */
+
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import { toast } from 'react-toastify';
-import { FiCheckCircle, FiMinusCircle, FiPlus, FiRefreshCw, FiTrash2, FiUser, FiX } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheck, FiPlus, FiRefreshCw, FiTrash2, FiUser } from 'react-icons/fi';
 import { MdQrCodeScanner } from 'react-icons/md';
 
 import { searchProductionProducers, submitProductionSubmission } from 'src/services';
+import ScanStation from 'src/components/_admin/scan/ScanStation';
+import { Code } from 'src/components/_admin/ops/primitives';
+import {
+  Field,
+  Notice,
+  PageBar,
+  Pill,
+  Section,
+  SectionBody,
+  StatTile,
+  errorAlert,
+  money,
+  qty,
+  toast
+} from 'src/components/_admin/ui/primitives';
 
-const message = (error) => error?.response?.data?.message || 'The production submission could not be posted.';
-const timeLabel = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const modeLabel = {
-  UNIT_RECEIPT: 'Production',
-  UNIT_REVERSAL: 'Remove',
-  EXTRA_PAY: 'Extra'
-};
+/**
+ * The three acts, in the words used at the desk. `tone` drives the whole
+ * screen's accent so the current mode is impossible to mistake — rejecting a
+ * piece writes it off stock and must never be done by accident.
+ */
+const MODES = [
+  {
+    key: 'UNIT_RECEIPT',
+    label: 'Receive',
+    tone: 'good',
+    scanLabel: 'Scan a finished piece',
+    hint: 'Each piece is added to stock, and binds to the oldest waiting order for that product.'
+  },
+  {
+    key: 'UNIT_REVERSAL',
+    label: 'Reject',
+    tone: 'bad',
+    scanLabel: 'Scan the faulty piece',
+    hint: 'Writes the piece off stock. If it was promised to an order, that order returns to the queue with a fresh barcode.'
+  },
+  { key: 'EXTRA_PAY', label: 'Extra work', tone: 'warn', scanLabel: null, hint: 'Work with no piece attached — repairs, alterations, overtime.' }
+];
+
+const MODE_LABEL = { UNIT_RECEIPT: 'Received', UNIT_REVERSAL: 'Rejected', EXTRA_PAY: 'Extra work' };
+const MODE_TONE = { UNIT_RECEIPT: 'good', UNIT_REVERSAL: 'bad', EXTRA_PAY: 'warn' };
 
 export default function ProductionScanPage() {
-  const [barcode, setBarcode] = useState('');
-  const [mode, setMode] = useState('UNIT_RECEIPT');
-  const [query, setQuery] = useState('');
-  const [producer, setProducer] = useState(null);
-  const [lines, setLines] = useState([]);
-  const [note, setNote] = useState('');
-  const [extraAmount, setExtraAmount] = useState('');
-  const [extraNote, setExtraNote] = useState('');
-  const [qcConfirmed, setQcConfirmed] = useState(false);
-  const [scanHistory, setScanHistory] = useState([]);
-  const inputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  const { data } = useQuery(['production-producers', query], () => searchProductionProducers(query), {
-    keepPreviousData: true
-  });
+  const [producerId, setProducerId] = useState('');
+  const [producerSearch, setProducerSearch] = useState('');
+  const [mode, setMode] = useState('UNIT_RECEIPT');
+  const [lines, setLines] = useState([]);
+  const [note, setNote] = useState('');
+  const [extra, setExtra] = useState({ amount: '', note: '' });
+  const [qcConfirmed, setQcConfirmed] = useState(false);
+  const [outcome, setOutcome] = useState(null);
+
+  const { data: producerData } = useQuery(
+    ['production-producers', producerSearch],
+    () => searchProductionProducers(producerSearch),
+    { keepPreviousData: true }
+  );
+  const producers = producerData?.data || [];
+  const producer = producers.find((entry) => String(entry.userId) === producerId);
+  const activeMode = MODES.find((entry) => entry.key === mode) || MODES[0];
 
   const summary = useMemo(
     () =>
       lines.reduce(
-        (acc, line) => {
-          if (line.kind === 'UNIT_RECEIPT') acc.receipts += 1;
-          if (line.kind === 'UNIT_REVERSAL') acc.reversals += 1;
-          if (line.kind === 'EXTRA_PAY') acc.extra += Number(line.amount || 0);
-          return acc;
-        },
-        { receipts: 0, reversals: 0, extra: 0 }
+        (acc, line) => ({
+          receipts: acc.receipts + (line.kind === 'UNIT_RECEIPT' ? 1 : 0),
+          rejects: acc.rejects + (line.kind === 'UNIT_REVERSAL' ? 1 : 0),
+          extra: acc.extra + (line.kind === 'EXTRA_PAY' ? Number(line.amount || 0) : 0)
+        }),
+        { receipts: 0, rejects: 0, extra: 0 }
       ),
     [lines]
   );
 
   const post = useMutation(submitProductionSubmission, {
     onSuccess: (response) => {
-      const posted = response?.data?.submission;
-      setScanHistory((items) =>
-        [
-          {
-            no: posted?.submissionNo || 'Posted',
-            employee: producer?.name,
-            code: producer?.employeeCode,
-            count: lines.length,
-            time: timeLabel()
-          },
-          ...items
-        ].slice(0, 12)
-      );
+      setOutcome({
+        submissionNo: response?.data?.submission?.submissionNo,
+        bindings: response?.data?.bindings || [],
+        requeued: response?.data?.requeued || []
+      });
       setLines([]);
-      setBarcode('');
       setNote('');
-      setExtraAmount('');
-      setExtraNote('');
       setQcConfirmed(false);
+      toast(`Posted as ${response?.data?.submission?.submissionNo || 'submission'}`);
       queryClient.invalidateQueries('production-batches');
-      queryClient.invalidateQueries('inventory-balances');
-      toast.success('Production submission posted.');
+      queryClient.invalidateQueries('production-needs');
+      queryClient.invalidateQueries('inventory-product-stock');
     },
-    onError: (error) => toast.error(message(error)),
-    onSettled: () => requestAnimationFrame(() => inputRef.current?.focus())
+    onError: (error) => errorAlert('The submission was not posted', error, 'Nothing was recorded — the lines are still here.')
   });
 
-  useEffect(() => inputRef.current?.focus(), []);
-  const producers = data?.data || [];
-
-  const addBarcode = (event) => {
-    event.preventDefault();
-    const value = barcode.trim().toUpperCase();
-    if (!value) return;
-    if (value === '0000') {
+  /**
+   * A scan is only added to the local list; nothing is sent yet. `0000` is the
+   * floor's long-standing shortcut for "this work has no barcode".
+   */
+  const handleScan = async (barcode) => {
+    if (barcode === '0000') {
       setMode('EXTRA_PAY');
-      setBarcode('');
-      return;
+      return { ok: true, message: 'Switched to extra work — enter the amount and what it was for.' };
     }
-    if (lines.some((line) => line.barcode === value)) {
-      toast.warn('This barcode is already in the submission.');
-      setBarcode('');
-      return;
+    if (lines.some((line) => line.barcode === barcode)) {
+      return { ok: false, message: `${barcode} is already in this submission.` };
     }
     const kind = mode === 'UNIT_REVERSAL' ? 'UNIT_REVERSAL' : 'UNIT_RECEIPT';
-    setLines((items) => [{ kind, barcode: value }, ...items]);
+    setLines((current) => [{ kind, barcode }, ...current]);
+    // A new piece invalidates a QC tick that was given for a shorter list.
     if (kind === 'UNIT_RECEIPT') setQcConfirmed(false);
-    setBarcode('');
+    return { ok: true, message: kind === 'UNIT_RECEIPT' ? `${barcode} received.` : `${barcode} marked faulty.` };
   };
 
   const addExtra = () => {
-    const amount = Number(extraAmount);
-    const cleanNote = extraNote.trim();
-    if (!amount || amount <= 0 || !cleanNote) {
-      toast.warn('Extra work needs an amount and a note.');
-      return;
-    }
-    setLines((items) => [
-      { kind: 'EXTRA_PAY', barcode: '0000', amount, note: cleanNote },
-      ...items
-    ]);
-    setExtraAmount('');
-    setExtraNote('');
-    setMode('UNIT_RECEIPT');
-    requestAnimationFrame(() => inputRef.current?.focus());
+    const amount = Number(extra.amount);
+    const reason = extra.note.trim();
+    if (!(amount > 0) || !reason) return toast('Extra work needs an amount and a reason');
+    setLines((current) => [{ kind: 'EXTRA_PAY', barcode: '0000', amount, note: reason }, ...current]);
+    setExtra({ amount: '', note: '' });
+    return setMode('UNIT_RECEIPT');
   };
 
-  const submit = () => {
-    if (!producer || !lines.length || post.isLoading) return;
-    if (summary.receipts > 0 && !qcConfirmed) {
-      toast.warn('Complete QC and confirm it before final submission.');
-      return;
-    }
-    post.mutate({
-      producedBy: producer.userId,
-      note,
-      qcConfirmed: summary.receipts > 0 ? qcConfirmed : false,
-      lines
-    });
-  };
+  const blocked = !producerId
+    ? 'Choose who made these pieces.'
+    : !lines.length
+      ? 'Scan at least one piece.'
+      : summary.receipts > 0 && !qcConfirmed
+        ? 'Confirm QC before posting.'
+        : null;
 
   const reset = () => {
-    setBarcode('');
     setLines([]);
     setNote('');
-    setExtraAmount('');
-    setExtraNote('');
+    setExtra({ amount: '', note: '' });
     setQcConfirmed(false);
     setMode('UNIT_RECEIPT');
-    requestAnimationFrame(() => inputRef.current?.focus());
+    setOutcome(null);
   };
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-xs font-black uppercase tracking-[0.18em] text-blue-600">Production terminal</p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Production scan desk</h1>
-        </div>
-        <button
-          type="button"
-          onClick={reset}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-        >
-          <FiRefreshCw /> Reset
+    <div className="space-y-4">
+      <PageBar
+        eyebrow="Production"
+        title="Scan desk"
+        subtitle="Scans are held here until you post them, so a dropped network never loses work."
+      >
+        <button type="button" onClick={reset} className="btn-ghost">
+          <FiRefreshCw size={14} /> Clear desk
         </button>
-      </header>
+      </PageBar>
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Employee</p>
+      {/* What the last post actually did — the only proof auto-binding works. */}
+      {outcome ? (
+        <Notice tone="good" icon={FiCheck} title={`Posted as ${outcome.submissionNo || 'submission'}`}>
+          <div className="mt-1 space-y-1">
+            {outcome.bindings.length ? (
+              <p className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold">Sent to customers:</span>
+                {outcome.bindings.map((bound) => (
+                  <Link key={bound.orderItemId} href={`/orders/${bound.orderNo}`} className="hover:underline">
+                    <Code className="text-emerald-800">#{bound.orderNo}</Code>
+                  </Link>
+                ))}
+              </p>
+            ) : null}
+            {outcome.requeued.length ? (
+              <p className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold">Back in the queue:</span>
+                {outcome.requeued.map((row) => (
+                  <Link key={row.orderItemId} href={`/orders/${row.orderNo}`} className="hover:underline">
+                    <Code className="text-emerald-800">#{row.orderNo}</Code>
+                  </Link>
+                ))}
+              </p>
+            ) : null}
+            {!outcome.bindings.length && !outcome.requeued.length ? <p>Everything went to free stock.</p> : null}
           </div>
-          <div className="p-5">
-            {producer ? (
-              <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 p-4">
-                <div>
-                  <p className="font-black text-slate-900">{producer.name}</p>
-                  <p className="font-mono text-xs text-slate-500">{producer.employeeCode}</p>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Change employee"
-                  onClick={() => setProducer(null)}
-                  className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-slate-900"
+        </Notice>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile label="Receiving" value={qty(summary.receipts)} note="Pieces into stock" tone={summary.receipts ? 'good' : 'muted'} />
+        <StatTile label="Rejecting" value={qty(summary.rejects)} note="Pieces written off" tone={summary.rejects ? 'bad' : 'muted'} />
+        <StatTile label="Extra work" value={money(summary.extra)} note="Paid outside piece rates" tone={summary.extra ? 'warn' : 'muted'} />
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {/* ── entry ─────────────────────────────────────────────────────── */}
+        <Section title="Entry" icon={MdQrCodeScanner} hint={producer ? producer.name : 'No employee chosen'}>
+          <SectionBody className="space-y-4 p-4">
+            <Field label="Who made these pieces">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+                <select
+                  value={producerId}
+                  onChange={(event) => setProducerId(event.target.value)}
+                  className="select-ui h-10 w-full"
                 >
-                  <FiX />
+                  <option value="">Choose employee…</option>
+                  {producers.map((entry) => (
+                    <option key={entry.userId} value={entry.userId}>
+                      {entry.name} — {entry.employeeCode}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={producerSearch}
+                  onChange={(event) => setProducerSearch(event.target.value)}
+                  placeholder="Search…"
+                  className="input-ui h-10"
+                  aria-label="Search employees"
+                />
+              </div>
+            </Field>
+
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">What are you doing</span>
+              <div className="flex flex-wrap gap-1.5">
+                {MODES.map((entry) => {
+                  const active = mode === entry.key;
+                  return (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      onClick={() => setMode(entry.key)}
+                      aria-pressed={active}
+                      className={`h-9 rounded-md border px-3.5 text-[13px] font-semibold transition ${
+                        active
+                          ? entry.key === 'UNIT_REVERSAL'
+                            ? 'border-rose-300 bg-rose-50 text-rose-700'
+                            : entry.key === 'EXTRA_PAY'
+                              ? 'border-amber-300 bg-amber-50 text-amber-700'
+                              : 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {entry.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">{activeMode.hint}</p>
+            </div>
+
+            {mode === 'EXTRA_PAY' ? (
+              <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_auto]">
+                <input
+                  value={extra.amount}
+                  onChange={(event) => setExtra({ ...extra, amount: event.target.value })}
+                  inputMode="decimal"
+                  placeholder="Amount ৳"
+                  className="input-ui ops-code h-10"
+                  aria-label="Extra work amount"
+                />
+                <input
+                  value={extra.note}
+                  onChange={(event) => setExtra({ ...extra, note: event.target.value })}
+                  placeholder="What was the work?"
+                  className="input-ui h-10"
+                  aria-label="Extra work reason"
+                />
+                <button type="button" onClick={addExtra} className="btn-brand h-10">
+                  <FiPlus size={14} /> Add
                 </button>
               </div>
             ) : (
-              <div>
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search production employee"
-                  className="h-11 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-                <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200">
-                  {producers.map((item) => (
-                    <button
-                      key={item.userId}
-                      type="button"
-                      onClick={() => setProducer(item)}
-                      className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-slate-50"
-                    >
-                      <span className="text-sm font-bold text-slate-800">{item.name}</span>
-                      <span className="font-mono text-xs text-slate-400">{item.employeeCode}</span>
-                    </button>
-                  ))}
-                  {!producers.length && (
-                    <div className="flex h-28 items-center justify-center text-sm text-slate-400">
-                      <FiUser className="mr-2" /> No employees found
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ScanStation
+                onScan={handleScan}
+                label={activeMode.scanLabel}
+                placeholder="Scan a unit barcode, then press Enter"
+                disabled={!producerId}
+                disabledReason="Choose the employee first — a scan has to belong to someone."
+                historyLimit={5}
+              />
             )}
 
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Add</p>
-                <p className="mt-1 font-mono text-xl font-black text-slate-950">{summary.receipts}</p>
-              </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Remove</p>
-                <p className="mt-1 font-mono text-xl font-black text-rose-600">{summary.reversals}</p>
-              </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Extra</p>
-                <p className="mt-1 font-mono text-xl font-black text-emerald-700">{summary.extra}</p>
-              </div>
-            </div>
-          </div>
-        </aside>
+            {mode === 'UNIT_REVERSAL' ? (
+              <p className="flex items-start gap-1.5 text-xs font-medium text-rose-600">
+                <FiAlertTriangle size={13} className="mt-0.5 shrink-0" />
+                Rejecting is not reversible from this desk.
+              </p>
+            ) : null}
+          </SectionBody>
+        </Section>
 
-        <section className="overflow-hidden rounded-md border border-slate-800 bg-slate-950 text-white shadow-sm">
-          <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <form onSubmit={addBarcode}>
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-emerald-400 text-slate-950">
-                  <MdQrCodeScanner className="text-3xl" />
-                </span>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">Unit barcode</p>
-                  <p className="font-mono text-xs text-slate-500">{producer?.name || 'Select employee'}</p>
-                </div>
-                <div className="ml-auto inline-flex overflow-hidden rounded-md border border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setMode('UNIT_RECEIPT')}
-                    className={`h-10 px-3 text-xs font-black ${mode === 'UNIT_RECEIPT' ? 'bg-emerald-400 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('UNIT_REVERSAL')}
-                    className={`h-10 px-3 text-xs font-black ${mode === 'UNIT_REVERSAL' ? 'bg-rose-400 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
-                  >
-                    Remove
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('EXTRA_PAY')}
-                    className={`h-10 px-3 text-xs font-black ${mode === 'EXTRA_PAY' ? 'bg-amber-300 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
-                  >
-                    0000
-                  </button>
-                </div>
-              </div>
-
-              {mode === 'EXTRA_PAY' ? (
-                <div className="grid gap-3 md:grid-cols-[150px_minmax(0,1fr)_120px]">
-                  <input
-                    value={extraAmount}
-                    onChange={(event) => setExtraAmount(event.target.value)}
-                    inputMode="decimal"
-                    placeholder="Amount"
-                    className="h-14 rounded-md border border-slate-700 bg-slate-900 px-4 font-mono text-lg font-black outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
-                  />
-                  <input
-                    value={extraNote}
-                    onChange={(event) => setExtraNote(event.target.value)}
-                    placeholder="Note for extra work"
-                    className="h-14 rounded-md border border-slate-700 bg-slate-900 px-4 text-sm font-bold outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
-                  />
-                  <button
-                    type="button"
-                    onClick={addExtra}
-                    className="h-14 rounded-md bg-amber-300 text-sm font-black text-slate-950 hover:bg-amber-200"
-                  >
-                    Add 0000
-                  </button>
-                </div>
-              ) : (
-                <input
-                  ref={inputRef}
-                  id="production-scan"
-                  value={barcode}
-                  onChange={(event) => setBarcode(event.target.value)}
-                  disabled={post.isLoading}
-                  placeholder={mode === 'UNIT_REVERSAL' ? 'Scan unit to remove' : 'Scan unit to add'}
-                  className="h-20 w-full rounded-md border border-slate-700 bg-slate-900 px-5 font-mono text-2xl font-black uppercase tracking-wide outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
-                />
-              )}
-            </form>
-
-            <div className="grid content-end gap-3">
-              {summary.receipts > 0 && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-amber-300/50 bg-amber-300/10 p-3 text-amber-100">
-                  <input
-                    type="checkbox"
-                    checked={qcConfirmed}
-                    onChange={(event) => setQcConfirmed(event.target.checked)}
-                    className="mt-0.5 h-5 w-5 rounded border-amber-300"
-                  />
-                  <span>
-                    <span className="block text-xs font-black uppercase tracking-wide">QC passed</span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-300">
-                      Final submit receives these units into inventory. There is no QC step afterward.
-                    </span>
-                  </span>
-                </label>
-              )}
-              <div className="rounded-md border border-slate-800 bg-slate-900 p-4">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Cart</p>
-                <p className={`mt-2 text-sm font-bold ${producer ? 'text-emerald-300' : 'text-amber-300'}`}>
-                  {producer ? `${lines.length} lines ready` : 'Employee needed'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!producer || !lines.length || post.isLoading || (summary.receipts > 0 && !qcConfirmed)}
-                className="h-14 w-full rounded-md bg-emerald-400 text-sm font-black text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {post.isLoading ? 'Posting...' : 'Post submission'}
+        {/* ── the pending submission ────────────────────────────────────── */}
+        <Section
+          title="This submission"
+          icon={FiUser}
+          hint={`${lines.length} line${lines.length === 1 ? '' : 's'}`}
+          actions={
+            lines.length ? (
+              <button type="button" onClick={() => setLines([])} className="btn-ghost h-8 !px-2.5 !text-xs">
+                Clear lines
               </button>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <section className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-3 border-b border-slate-200 px-5 py-4 md:grid-cols-[minmax(0,1fr)_260px]">
-          <div>
-            <h2 className="font-black text-slate-900">Current submission</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-400">{modeLabel[mode]} mode</p>
-          </div>
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Submission note"
-            className="h-10 rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-          />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Type</th>
-                <th className="px-5 py-3">Code</th>
-                <th className="px-5 py-3">Note</th>
-                <th className="px-5 py-3 text-right">Amount</th>
-                <th className="px-5 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {lines.map((item, index) => (
-                <tr key={`${item.kind}-${item.barcode}-${index}`} className="hover:bg-slate-50">
-                  <td className="px-5 py-3">
-                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-black ${item.kind === 'UNIT_REVERSAL' ? 'bg-rose-50 text-rose-700' : item.kind === 'EXTRA_PAY' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                      {item.kind === 'UNIT_REVERSAL' ? <FiMinusCircle /> : <FiPlus />}
-                      {modeLabel[item.kind]}
+            ) : null
+          }
+        >
+          <div className="max-h-[320px] overflow-y-auto">
+            {lines.length ? (
+              <ul className="divide-y divide-slate-100">
+                {lines.map((line, index) => (
+                  <li key={`${line.barcode}-${index}`} className="flex items-center gap-3 px-3 py-2">
+                    <Pill tone={MODE_TONE[line.kind]}>{MODE_LABEL[line.kind]}</Pill>
+                    <span className="min-w-0 flex-1">
+                      {line.kind === 'EXTRA_PAY' ? (
+                        <span className="text-[13px] text-slate-700">{line.note}</span>
+                      ) : (
+                        <Code className="text-slate-700">{line.barcode}</Code>
+                      )}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 font-mono font-black text-slate-950">{item.barcode}</td>
-                  <td className="px-5 py-3 font-semibold text-slate-600">{item.note || '-'}</td>
-                  <td className="px-5 py-3 text-right font-mono font-bold text-slate-700">
-                    {item.kind === 'EXTRA_PAY' ? item.amount : '-'}
-                  </td>
-                  <td className="px-5 py-3 text-right">
+                    {line.kind === 'EXTRA_PAY' ? (
+                      <span className="ops-code text-[13px] font-bold text-slate-800">{money(line.amount)}</span>
+                    ) : null}
                     <button
                       type="button"
                       aria-label="Remove line"
-                      onClick={() => setLines((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      onClick={() => setLines((current) => current.filter((_, position) => position !== index))}
+                      className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
                     >
-                      <FiTrash2 />
+                      <FiTrash2 size={14} />
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!lines.length && <div className="p-10 text-center text-sm text-slate-400">No items in this submission.</div>}
-        </div>
-      </section>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="px-6 py-12 text-center">
+                <MdQrCodeScanner className="mx-auto mb-2 text-2xl text-slate-300" />
+                <p className="text-sm font-semibold text-slate-600">Nothing scanned yet</p>
+                <p className="mt-1 text-xs text-slate-400">Lines stay here until you post them.</p>
+              </div>
+            )}
+          </div>
 
-      <section className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="font-black text-slate-900">Recent submissions</h2>
-          <span className="rounded-md bg-slate-100 px-3 py-1 font-mono text-xs font-bold text-slate-600">
-            {scanHistory.length}
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Submission</th>
-                <th className="px-5 py-3">Employee</th>
-                <th className="px-5 py-3">Code</th>
-                <th className="px-5 py-3 text-right">Lines</th>
-                <th className="px-5 py-3 text-right">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {scanHistory.map((item, index) => (
-                <tr key={`${item.no}-${index}`} className="hover:bg-slate-50">
-                  <td className="px-5 py-3 font-mono font-black text-slate-950">
-                    <FiCheckCircle className="mr-2 inline text-emerald-500" />
-                    {item.no}
-                  </td>
-                  <td className="px-5 py-3 font-semibold text-slate-700">{item.employee}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-slate-500">{item.code}</td>
-                  <td className="px-5 py-3 text-right font-mono text-xs text-slate-500">{item.count}</td>
-                  <td className="px-5 py-3 text-right font-mono text-xs text-slate-500">{item.time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!scanHistory.length && <div className="p-10 text-center text-sm text-slate-400">No submissions yet.</div>}
-        </div>
-      </section>
+          <div className="space-y-3 border-t border-slate-200 bg-slate-50/70 p-3">
+            {summary.receipts > 0 ? (
+              <label className="flex cursor-pointer items-start gap-2 text-[13px] font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={qcConfirmed}
+                  onChange={(event) => setQcConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                />
+                <span>
+                  QC passed on {summary.receipts} piece{summary.receipts === 1 ? '' : 's'}
+                  <span className="block text-[11px] font-normal text-slate-400">
+                    Ticking this records who cleared them.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Note for this submission (optional)"
+              className="input-ui"
+              aria-label="Submission note"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                post.mutate({
+                  producedBy: producerId,
+                  note,
+                  qcConfirmed: summary.receipts > 0 ? qcConfirmed : false,
+                  lines
+                })
+              }
+              disabled={Boolean(blocked) || post.isLoading}
+              className="btn-brand h-10 w-full"
+            >
+              <FiCheck size={15} /> {post.isLoading ? 'Posting…' : 'Post submission'}
+            </button>
+            {blocked ? <p className="text-center text-xs font-semibold text-slate-500">{blocked}</p> : null}
+          </div>
+        </Section>
+      </div>
     </div>
   );
 }

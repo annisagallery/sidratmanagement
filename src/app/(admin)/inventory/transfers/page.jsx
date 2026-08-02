@@ -1,4 +1,5 @@
-import InventoryWorkspace from 'src/components/_admin/inventory/InventoryWorkspace';
+import TransferList from 'src/components/_admin/inventory/TransferList';
+
 export default function TransfersPage() {
-  return <InventoryWorkspace initialView="Transfers" />;
+  return <TransferList />;
 }
