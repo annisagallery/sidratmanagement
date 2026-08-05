@@ -418,8 +418,12 @@ export const updateVariationPresale = async ({ slug, variationId, enabled }) => 
   const { data } = await http.patch(`/admin/products/${slug}/variations/${variationId}/presale`, { enabled });
   return data;
 };
-export const getProductBom = async ({ slug, variationId = null }) => {
-  const { data } = await http.get(`/admin/products/${slug}/bom`, { params: variationId ? { variationId } : {} });
+// Returns the whole sheet — base lines, every variation's own lines, and the
+// resulting per-variation costing. Not scoped to one variation: the editor has
+// to show the base and a variation at the same time to make it obvious that
+// the base is not a thing you switch away from.
+export const getProductBom = async ({ slug }) => {
+  const { data } = await http.get(`/admin/products/${slug}/bom`);
   return data;
 };
 export const saveProductBom = async ({ slug, variationId = null, lines }) => {

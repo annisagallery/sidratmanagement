@@ -83,8 +83,10 @@ export const navParents = [
     tabs: [
       { label: 'Products', href: '/products', icon: FaShirt },
       { label: 'Categories', href: '/categories', icon: TbCategory },
-      { label: 'Attributes', href: '/attributes', icon: TbAdjustments },
-      { label: 'Inventory Limits', href: '/attributes/inventory-limits', icon: FiSliders }
+      { label: 'Attributes', href: '/attributes', icon: TbAdjustments }
+      // Inventory Limits removed: a presale ceiling is no longer typed in by
+      // hand. It is derived from each product's bill of materials, which is
+      // edited per product at /products/[slug]/bom.
     ]
   },
   {
@@ -228,8 +230,8 @@ export const navGroups = [
     items: [
       { key: 'products', label: 'Products', href: '/products', icon: FaShirt, subject: 'Product' },
       { key: 'categories', label: 'Categories', href: '/categories', icon: TbCategory, subject: 'Category' },
-      { key: 'attributes', label: 'Attributes', href: '/attributes', icon: TbAdjustments, subject: 'Attribute' },
-      { key: 'presale-settings', label: 'Presale Settings', href: '/attributes/inventory-limits', icon: FiSliders, subject: 'Attribute' }
+      { key: 'attributes', label: 'Attributes', href: '/attributes', icon: TbAdjustments, subject: 'Attribute' }
+      // Presale Settings removed — see the note in the Products tab list above.
     ]
   },
   {
