@@ -21,6 +21,7 @@ import {
   MdDescription,
   MdInventory2,
   MdPhotoLibrary,
+  MdReceiptLong,
   MdSearch,
   MdStorefront,
   MdVisibility,
@@ -29,6 +30,7 @@ import {
 import { FaRegStar } from 'react-icons/fa6';
 import { FiStar } from 'react-icons/fi';
 import RichTextEditor from 'src/components/richTextEditor';
+import ProductBom from 'src/components/_admin/products/productBom';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -602,11 +604,17 @@ function LivePreview({
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
+// Deliberate order at the tail: Options, then Presale, then Materials.
+// Each depends on the one before it — you cannot say which variations may be
+// presold until the variations exist, and the presale ceiling is calculated
+// from the materials, so the sheet that produces it comes last.
 const STEPS = [
   { label: 'Product details', description: 'Identity and pricing', icon: MdInventory2 },
   { label: 'Content & SEO', description: 'Copy and search', icon: MdDescription },
   { label: 'Media', description: 'Gallery and size chart', icon: MdPhotoLibrary },
-  { label: 'Options', description: 'Attributes and variations', icon: MdTune }
+  { label: 'Options', description: 'Attributes and variations', icon: MdTune },
+  { label: 'Presale', description: 'Sell beyond finished stock', icon: MdShoppingCart },
+  { label: 'Materials', description: 'Bill of materials and cost', icon: MdReceiptLong }
 ];
 
 const PRODUCT_STATUSES = [
@@ -923,7 +931,7 @@ export default function ProductForm({ currentProduct }) {
       {/* ═══════ LEFT: FORM ═══════ */}
       <div className="flex-1 min-w-0">
         {/* Step tabs */}
-        <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-4">
+        <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6">
           {STEPS.map((item, i) => {
             const Icon = item.icon;
             return (
@@ -1649,6 +1657,147 @@ export default function ProductForm({ currentProduct }) {
           </div>
         )}
 
+        {/* ── STEP 4: PRESALE ── */}
+        {step === 4 && (
+          <div className="card-ui space-y-5 p-5 sm:p-6">
+            <SectionTitle
+              icon={MdShoppingCart}
+              description="Choose which options may be sold beyond the finished units in stock."
+            >
+              Presale
+            </SectionTitle>
+
+            {/* How many can be presold is no longer a number anyone types — it
+                comes from the bill of materials on the next step. This screen
+                only decides which options are eligible at all. */}
+            <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+              <MdInfo size={19} className="mt-0.5 shrink-0 text-slate-400" />
+              <p className="text-[13px] leading-6 text-slate-600">
+                Presale lets an option sell when no finished unit is on the shelf. <strong>How many</strong> can be sold
+                is calculated from the materials on the next step and what is in the material store — it is not a number
+                you set here. An option with no bill of materials is treated as made to order and is not capped.
+                {!productionEnabled && (
+                  <span className="mt-1 block font-semibold text-amber-700">
+                    Production is switched off for this product, so presale will not apply until you enable it on the
+                    Product details step.
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {enabledVariations.length === 0 ? (
+              <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+                <MdTune size={28} className="mx-auto mb-3 text-slate-300" />
+                <p className="text-sm font-semibold text-slate-600">No options yet</p>
+                <p className="mx-auto mt-1 max-w-sm text-xs text-slate-400">
+                  Add variation attributes on the Options step, then come back to choose which of them can be presold.
+                </p>
+                <button type="button" className="btn-ghost mt-4" onClick={() => setStep(3)}>
+                  <MdChevronLeft size={16} /> Back to options
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-slate-700">
+                    {enabledVariations.filter((v) => v.overSale).length} of {enabledVariations.length} option
+                    {enabledVariations.length === 1 ? '' : 's'} can be presold
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-ghost !min-h-9 text-xs"
+                      onClick={() => setVariations((prev) => prev.map((v) => (v.enabled === false ? v : { ...v, overSale: true })))}
+                    >
+                      Enable all
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost !min-h-9 text-xs"
+                      onClick={() => setVariations((prev) => prev.map((v) => (v.enabled === false ? v : { ...v, overSale: false })))}
+                    >
+                      Disable all
+                    </button>
+                  </div>
+                </div>
+
+                {/* Compact grid rather than a table: this is one boolean per
+                    option, and a full table row per variation buries it. */}
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {variations.map((variation, index) => {
+                    if (variation.enabled === false) return null;
+                    const label =
+                      (variation.attributes || []).map((a) => a.valueName).filter(Boolean).join(' / ') ||
+                      `Option ${index + 1}`;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(variation.overSale)}
+                        onClick={() => updateVar(index, 'overSale', !variation.overSale)}
+                        className={`flex items-center gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                          variation.overSale
+                            ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+                            : 'border-slate-200 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <span
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+                            variation.overSale ? 'bg-[var(--brand)]' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
+                              variation.overSale ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold text-slate-800">{label}</span>
+                          <span className="block text-[11px] text-slate-500">
+                            {variation.overSale ? 'Can be presold' : 'Finished stock only'}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── STEP 5: MATERIALS (BOM) ── */}
+        {step === 5 && (
+          <div className="space-y-5">
+            <div className="card-ui p-5 sm:p-6">
+              <SectionTitle
+                icon={MdReceiptLong}
+                description="What one finished unit consumes, and what it costs to make."
+              >
+                Materials
+              </SectionTitle>
+            </div>
+
+            {isEdit && currentProduct?.slug ? (
+              // Saved on its own endpoint, per scope, with its own buttons —
+              // deliberately not folded into this form's submit, so saving a
+              // description cannot quietly rewrite a costing sheet.
+              <ProductBom slug={currentProduct.slug} embedded />
+            ) : (
+              <div className="card-ui px-6 py-14 text-center">
+                <MdReceiptLong size={30} className="mx-auto mb-3 text-slate-300" />
+                <p className="text-sm font-semibold text-slate-700">Create the product first</p>
+                <p className="mx-auto mt-1.5 max-w-md text-xs leading-5 text-slate-500">
+                  A bill of materials attaches to a saved product and its options. Finish creating this product, then
+                  reopen it to add materials.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="card-ui mt-5 flex items-center justify-between gap-3 p-4">
           <button
@@ -1670,33 +1819,42 @@ export default function ProductForm({ currentProduct }) {
               />
             ))}
           </div>
-          {step < STEPS.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              className="btn-brand min-h-11 px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
-            >
-              Next <MdChevronRight size={18} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving}
-              className="btn-brand min-h-11 min-w-40 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <MdAutorenew className="animate-spin" size={16} />
-                  Saving…
-                </span>
-              ) : isEdit ? (
-                'Save changes'
-              ) : (
-                'Create product'
-              )}
-            </button>
-          )}
+          {/* The Materials step saves through its own endpoint, per scope, so
+              it must not be the only place this button appears — otherwise the
+              product's own save would sit behind a step that does not use it.
+              Save is always reachable; Next is secondary once it is. */}
+          <div className="flex items-center gap-2">
+            {step < STEPS.length - 1 && (
+              <button
+                type="button"
+                onClick={() => setStep((s) => s + 1)}
+                className={`min-h-11 px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                  step >= 3 ? 'btn-ghost' : 'btn-brand'
+                }`}
+              >
+                Next <MdChevronRight size={18} />
+              </button>
+            )}
+            {(step >= 3 || step === STEPS.length - 1) && (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={saving}
+                className="btn-brand min-h-11 min-w-40 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              >
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <MdAutorenew className="animate-spin" size={16} />
+                    Saving…
+                  </span>
+                ) : isEdit ? (
+                  'Save changes'
+                ) : (
+                  'Create product'
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

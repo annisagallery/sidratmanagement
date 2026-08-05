@@ -279,7 +279,14 @@ function CostSummary({ scope, title }) {
   );
 }
 
-export default function ProductBom({ slug }) {
+/**
+ * @param {object} props
+ * @param {string} props.slug
+ * @param {boolean} [props.embedded] rendered as a step inside the product form
+ *   rather than as its own page: drops the page chrome and the sidebar, since
+ *   the form already supplies both.
+ */
+export default function ProductBom({ slug, embedded = false }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -368,15 +375,17 @@ export default function ProductBom({ slug }) {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={`${bom?.product?.name || 'Product'} materials`}
-        subtitle="What one finished unit consumes, and what it costs to make"
-        icon={MdReceiptLong}
-      >
-        <button className="btn-ghost min-h-11" onClick={() => router.push(`/products/${slug}`)}>
-          <MdArrowBack size={18} /> Product details
-        </button>
-      </PageHeader>
+      {!embedded && (
+        <PageHeader
+          title={`${bom?.product?.name || 'Product'} materials`}
+          subtitle="What one finished unit consumes, and what it costs to make"
+          icon={MdReceiptLong}
+        >
+          <button className="btn-ghost min-h-11" onClick={() => router.push(`/products/${slug}`)}>
+            <MdArrowBack size={18} /> Product details
+          </button>
+        </PageHeader>
+      )}
 
       {!bom?.base?.lines?.length && (
         <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -388,7 +397,9 @@ export default function ProductBom({ slug }) {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      {/* Embedded, the product form already owns a right-hand column, so the
+          costing panel stacks underneath instead of competing for width. */}
+      <div className={embedded ? 'space-y-5' : 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]'}>
         <div className="space-y-5">
           <ScopePanel
             title="Base materials"
@@ -469,7 +480,13 @@ export default function ProductBom({ slug }) {
           )}
         </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+        <aside
+          className={
+            embedded
+              ? 'grid gap-4 sm:grid-cols-2'
+              : 'space-y-4 xl:sticky xl:top-5 xl:self-start'
+          }
+        >
           <CostSummary scope={bom?.base} title="Base unit cost" />
           {activeVariation && (
             <CostSummary scope={activeVariation} title={`${activeVariation.label} unit cost`} />

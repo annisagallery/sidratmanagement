@@ -163,14 +163,6 @@ export default function ViewProduct({ slug }) {
     onError: (error) => alertError(error, { title: "Couldn't delete that product" })
   });
 
-  const presaleMutation = useMutation(api.updateVariationPresale, {
-    onSuccess: () => {
-      qc.invalidateQueries(['product-admin', slug]);
-      qc.invalidateQueries(['admin-products']);
-    },
-    onError: (error) => alertError(error, { title: "Couldn't update presale" })
-  });
-
   function handleDelete() {
     Swal.fire({
       title: `Delete "${product?.name}"?`,
@@ -815,29 +807,19 @@ export default function ViewProduct({ slug }) {
                             <span className="text-gray-300">—</span>
                           )}
                         </td>
+                        {/* Read-only here. Presale eligibility is set on the
+                            product's Presale step, next to the options it
+                            applies to and before the materials that decide how
+                            many units it allows — editing it from a stock view
+                            divorced it from both. */}
                         <td className="px-2 py-1.5 text-center">
-                          <button
-                            type="button"
-                            disabled={presaleMutation.isLoading}
-                            onClick={() =>
-                              presaleMutation.mutate({
-                                slug,
-                                variationId: row.variation?.id,
-                                enabled: !row.variation?.overSale
-                              })
-                            }
-                            className={`relative inline-flex h-5 w-9 items-center rounded-md transition disabled:opacity-50 ${
-                              row.variation?.overSale ? 'bg-amber-500' : 'bg-gray-200'
-                            }`}
-                            aria-label={`${row.variation?.overSale ? 'Disable' : 'Enable'} presale`}
-                            aria-pressed={Boolean(row.variation?.overSale)}
-                          >
-                            <span
-                              className={`h-3.5 w-3.5 rounded-md bg-white shadow transition-transform ${
-                                row.variation?.overSale ? 'translate-x-5' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
+                          {row.variation?.overSale ? (
+                            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                              Presale
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
                       </tr>
                     );
