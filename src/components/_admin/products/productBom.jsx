@@ -6,22 +6,23 @@
  * Structured around one rule that has to be legible at a glance: the base BOM
  * applies to every variation, always. It is not a scope you switch away from.
  *
- * The previous screen had a single "product option" dropdown and one table.
+ * The original screen had a single "product option" dropdown and one table.
  * Choosing a variation loaded the *merged* list — base lines included — and
  * saving wrote all of it back as that variation's own rows. The base was
  * silently copied in, and from then on editing the base no longer reached that
  * variation. Nothing on screen said so.
  *
- * So: base and variations are edited separately and saved separately. A
- * variation panel shows only what that variation adds, with the inherited base
- * rows listed read-only above it so the total is never a mystery.
+ * So scopes are picked from tiles rather than a dropdown: the base tile is
+ * always visible next to the variations, which is the point — you are not
+ * switching away from it, you are adding to it. One configurator below edits
+ * whichever tile is selected, and each scope saves on its own.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next-nprogress-bar';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import {
-  MdAdd, MdArrowBack, MdDeleteOutline, MdInfoOutline, MdLayers,
+  MdAdd, MdArrowBack, MdCheck, MdDeleteOutline, MdLayers,
   MdReceiptLong, MdSave, MdTune, MdWarningAmber,
 } from 'react-icons/md';
 
@@ -29,12 +30,14 @@ import * as api from 'src/services';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import { alertError, toastSuccess } from 'src/utils/swal';
 
+const BASE = '__base__';
+
 const qty = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 1000) / 1000;
 const money = (value) =>
-  `BDT ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `৳${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const unitLabel = (material) =>
-  material?.unitMode === 'roll_meter' ? 'metres' : material?.unit?.name || 'units';
+  material?.unitMode === 'roll_meter' ? 'm' : material?.unit?.name || 'units';
 
 /** Stored row -> editable row. Kept separate so `dirty` comparisons are cheap. */
 const toDraft = (line) => ({
@@ -52,73 +55,68 @@ const serialise = (rows) =>
       .map((row) => [row.accessoryId, Number(row.quantity), Number(row.wastagePercent || 0), row.overridesBase, row.note]),
   );
 
-function MaterialRows({ rows, materials, usedIds, onChange, onRemove, baseAccessoryIds }) {
-  return rows.map((row, index) => {
-    const material = materials.find((item) => item.id === row.accessoryId);
-    const perUnit = qty(Number(row.quantity || 0) * (1 + Number(row.wastagePercent || 0) / 100));
-    const alsoInBase = baseAccessoryIds?.has(row.accessoryId);
-
-    return (
-      <div
-        key={`${row.accessoryId}-${index}`}
-        className="grid gap-3 border-t border-slate-100 px-5 py-4 lg:grid-cols-[minmax(200px,1.5fr)_110px_100px_120px_40px] lg:items-start"
+/**
+ * A scope tile. Same shape as the Presale step's option switches so the two
+ * screens read as one flow.
+ */
+function ScopeTile({ active, primary, title, subtitle, count, cost, dirty, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-start gap-2.5 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+        active
+          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+          : 'border-slate-200 bg-white hover:bg-slate-50'
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+          active ? 'bg-[var(--brand)] text-white' : 'bg-slate-100 text-slate-500'
+        }`}
       >
-        <div>
+        {primary ? <MdLayers size={15} /> : <MdTune size={15} />}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[13px] font-semibold text-slate-800">{title}</span>
+          {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title="Unsaved changes" />}
+        </span>
+        <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+          {subtitle ?? `${count} material${count === 1 ? '' : 's'}`}
+        </span>
+        {cost != null && (
+          <span className="mt-1 block text-[11px] font-bold tabular-nums text-slate-700">{money(cost)}</span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** One editable material line, full width. */
+function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, onRemove }) {
+  const material = materials.find((item) => item.id === row.accessoryId);
+  const perUnit = qty(Number(row.quantity || 0) * (1 + Number(row.wastagePercent || 0) / 100));
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_96px_84px_auto_36px] lg:items-end">
+        <label className="min-w-0">
+          <span className="section-label mb-1 block">Material</span>
           <select
             className="select-ui w-full font-semibold"
             value={row.accessoryId}
             onChange={(event) => onChange(index, { accessoryId: event.target.value })}
           >
             {materials.map((item) => (
-              <option
-                key={item.id}
-                value={item.id}
-                disabled={item.id !== row.accessoryId && usedIds.has(item.id)}
-              >
+              <option key={item.id} value={item.id} disabled={item.id !== row.accessoryId && usedIds.has(item.id)}>
                 {item.name} · {item.code}
               </option>
             ))}
           </select>
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">
-              {unitLabel(material)}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 font-semibold ${
-                material?.isRepurchasable ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {material?.isRepurchasable ? 'Can be repurchased' : 'Cannot be repurchased'}
-            </span>
-          </div>
-
-          {alsoInBase && (
-            <label className="mt-2 flex items-start gap-2 rounded-md bg-indigo-50 px-2.5 py-2 text-[11px] text-indigo-900">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={row.overridesBase}
-                onChange={(event) => onChange(index, { overridesBase: event.target.checked })}
-              />
-              <span>
-                <strong>Replace</strong> the base amount instead of adding to it.
-                <span className="block text-indigo-700">
-                  {row.overridesBase
-                    ? 'This variation ignores the base line for this material.'
-                    : 'This amount is added on top of the base line.'}
-                </span>
-              </span>
-            </label>
-          )}
-
-          <input
-            className="input-ui mt-2"
-            placeholder="Process note, e.g. cut before issue"
-            value={row.note}
-            onChange={(event) => onChange(index, { note: event.target.value })}
-          />
-        </div>
+        </label>
 
         <label>
           <span className="section-label mb-1 block">Per unit</span>
@@ -145,133 +143,85 @@ function MaterialRows({ rows, materials, usedIds, onChange, onRemove, baseAccess
           />
         </label>
 
-        <div>
-          <span className="section-label mb-1 block">Consumes</span>
-          <p className="text-sm font-bold text-slate-800">
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <span className="section-label block">Consumes</span>
+          <span className="text-sm font-bold tabular-nums text-slate-800">
             {perUnit} {unitLabel(material)}
-          </p>
-          <p className="text-[11px] text-slate-400">per finished unit</p>
+          </span>
         </div>
 
         <button
           type="button"
-          className="btn-icon mt-4 text-red-600"
+          className="btn-icon justify-self-end text-red-600"
           aria-label={`Remove ${material?.name || 'material'}`}
           onClick={() => onRemove(index)}
         >
-          <MdDeleteOutline size={19} />
+          <MdDeleteOutline size={18} />
         </button>
       </div>
-    );
-  });
-}
 
-/** One saveable scope: the base, or a single variation. */
-function ScopePanel({
-  title,
-  subtitle,
-  icon: Icon,
-  rows,
-  setRows,
-  materials,
-  baseAccessoryIds,
-  onSave,
-  isSaving,
-  dirty,
-  children,
-}) {
-  const usedIds = useMemo(() => new Set(rows.map((row) => row.accessoryId)), [rows]);
-
-  const update = (index, patch) =>
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
-  const remove = (index) => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
-  const add = () => {
-    const next = materials.find((item) => !usedIds.has(item.id));
-    if (!next) return;
-    setRows((current) => [
-      ...current,
-      { accessoryId: next.id, quantity: 1, wastagePercent: 0, overridesBase: false, note: '' },
-    ]);
-  };
-
-  return (
-    <section className="card-ui overflow-hidden">
-      <div className="flex flex-col gap-3 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 rounded-md bg-white p-2 text-slate-700 ring-1 ring-slate-200">
-            <Icon size={19} />
-          </span>
-          <div>
-            <h2 className="text-base font-bold text-slate-900">{title}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="btn-brand min-h-10 shrink-0"
-          onClick={onSave}
-          disabled={isSaving || !dirty}
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            material?.isRepurchasable ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'
+          }`}
         >
-          <MdSave size={17} /> {isSaving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-        </button>
+          {material?.isRepurchasable ? 'Can be repurchased' : 'Blocks orders when short'}
+        </span>
+
+        {alsoInBase && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={row.overridesBase}
+            onClick={() => onChange(index, { overridesBase: !row.overridesBase })}
+            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold transition ${
+              row.overridesBase ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+            }`}
+          >
+            {row.overridesBase && <MdCheck size={12} />}
+            {row.overridesBase ? 'Replaces base amount' : 'Adds to base'}
+          </button>
+        )}
+
+        <input
+          className="input-ui !h-8 min-w-0 flex-1 text-[12px]"
+          placeholder="Process note"
+          value={row.note}
+          onChange={(event) => onChange(index, { note: event.target.value })}
+        />
       </div>
-
-      {children}
-
-      {!rows.length && (
-        <div className="border-t border-slate-100 px-6 py-10 text-center">
-          <p className="text-sm font-semibold text-slate-600">No materials here yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-[13px] text-slate-400">
-            Add a line to record what one finished unit consumes.
-          </p>
-        </div>
-      )}
-
-      <MaterialRows
-        rows={rows}
-        materials={materials}
-        usedIds={usedIds}
-        baseAccessoryIds={baseAccessoryIds}
-        onChange={update}
-        onRemove={remove}
-      />
-
-      <div className="border-t border-slate-200 bg-slate-50 px-5 py-3">
-        <button type="button" className="btn-ghost" onClick={add} disabled={materials.length === usedIds.size}>
-          <MdAdd size={17} /> Add material
-        </button>
-      </div>
-    </section>
+    </div>
   );
 }
 
-function CostSummary({ scope, title }) {
+/** Compact horizontal costing strip for the selected scope. */
+function CostStrip({ scope }) {
   if (!scope) return null;
+  const materialCost = scope.materialCost ?? scope.effective?.materialCost ?? 0;
+  const complete = scope.costComplete ?? scope.effective?.costComplete;
   const profit = Number(scope.estimatedProfit || 0);
+
+  const cells = [
+    ['Materials', money(materialCost), 'text-slate-800'],
+    ['Production', money(scope.labourCost), 'text-slate-800'],
+    ['Unit cost', money(scope.estimatedTotalCost), 'text-slate-900'],
+    ['Selling price', money(scope.sellingPrice), 'text-slate-800'],
+    ['Profit', money(profit), profit >= 0 ? 'text-emerald-700' : 'text-red-700'],
+  ];
+
   return (
     <div className="card-ui overflow-hidden">
-      <div className="bg-slate-900 px-5 py-4 text-white">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{title}</p>
-        <p className="mt-1.5 text-2xl font-bold tracking-tight">{money(scope.estimatedTotalCost)}</p>
-      </div>
-      <dl className="divide-y divide-slate-100 px-5">
-        {[
-          ['Materials', money(scope.materialCost ?? scope.effective?.materialCost)],
-          ['Production rate', money(scope.labourCost)],
-          ['Selling price', money(scope.sellingPrice)],
-        ].map(([label, value]) => (
-          <div key={label} className="flex justify-between py-2.5 text-[13px]">
-            <dt className="text-slate-500">{label}</dt>
-            <dd className="font-semibold text-slate-800">{value}</dd>
+      <div className="grid grid-cols-2 divide-slate-100 sm:grid-cols-3 lg:grid-cols-5 lg:divide-x">
+        {cells.map(([label, value, tone]) => (
+          <div key={label} className="px-4 py-3">
+            <p className="section-label">{label}</p>
+            <p className={`mt-0.5 text-base font-bold tabular-nums ${tone}`}>{value}</p>
           </div>
         ))}
-        <div className="flex justify-between py-2.5 text-[13px]">
-          <dt className="text-slate-500">Estimated profit</dt>
-          <dd className={`font-bold ${profit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{money(profit)}</dd>
-        </div>
-      </dl>
-      {(scope.costComplete ?? scope.effective?.costComplete) === false && (
-        <p className="border-t border-amber-200 bg-amber-50 px-5 py-2.5 text-[11px] font-semibold text-amber-800">
+      </div>
+      {complete === false && (
+        <p className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] font-semibold text-amber-800">
           Some materials have no purchase cost yet, so this estimate is incomplete.
         </p>
       )}
@@ -279,20 +229,13 @@ function CostSummary({ scope, title }) {
   );
 }
 
-/**
- * @param {object} props
- * @param {string} props.slug
- * @param {boolean} [props.embedded] rendered as a step inside the product form
- *   rather than as its own page: drops the page chrome and the sidebar, since
- *   the form already supplies both.
- */
 export default function ProductBom({ slug, embedded = false }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
   const [baseRows, setBaseRows] = useState([]);
   const [variationRows, setVariationRows] = useState({});
-  const [activeVariationId, setActiveVariationId] = useState('');
+  const [scope, setScope] = useState(BASE);
   const [saved, setSaved] = useState({ base: '[]', variations: {} });
 
   const bomQuery = useQuery(['product-bom', slug], () => api.getProductBom({ slug }), {
@@ -318,8 +261,8 @@ export default function ProductBom({ slug, embedded = false }) {
   const variations = useMemo(() => bom?.variations || [], [bom]);
 
   useEffect(() => {
-    if (!activeVariationId && variations.length) setActiveVariationId(variations[0].id);
-  }, [variations, activeVariationId]);
+    if (scope !== BASE && !variations.some((variation) => variation.id === scope)) setScope(BASE);
+  }, [variations, scope]);
 
   const saveMutation = useMutation(api.saveProductBom, {
     onSuccess: (response, sent) => {
@@ -331,25 +274,45 @@ export default function ProductBom({ slug, embedded = false }) {
     onError: (error) => alertError(error, { title: 'Could not save materials' }),
   });
 
-  const baseAccessoryIds = useMemo(() => new Set(baseRows.map((row) => row.accessoryId)), [baseRows]);
-  const activeVariation = variations.find((variation) => variation.id === activeVariationId) || null;
-  const activeRows = variationRows[activeVariationId] || [];
-
-  const baseDirty = serialise(baseRows) !== saved.base;
-  const activeDirty = activeVariationId
-    ? serialise(activeRows) !== (saved.variations[activeVariationId] ?? '[]')
-    : false;
-
-  const setActiveRows = (updater) =>
+  const isBase = scope === BASE;
+  const activeVariation = isBase ? null : variations.find((variation) => variation.id === scope) || null;
+  const rows = isBase ? baseRows : variationRows[scope] || [];
+  const setRows = (updater) => {
+    if (isBase) {
+      setBaseRows(updater);
+      return;
+    }
     setVariationRows((current) => ({
       ...current,
-      [activeVariationId]: typeof updater === 'function' ? updater(current[activeVariationId] || []) : updater,
+      [scope]: typeof updater === 'function' ? updater(current[scope] || []) : updater,
     }));
+  };
 
-  const save = (variationId, rows) =>
+  const baseAccessoryIds = useMemo(() => new Set(baseRows.map((row) => row.accessoryId)), [baseRows]);
+  const usedIds = useMemo(() => new Set(rows.map((row) => row.accessoryId)), [rows]);
+
+  const dirtyFor = (key) =>
+    key === BASE
+      ? serialise(baseRows) !== saved.base
+      : serialise(variationRows[key] || []) !== (saved.variations[key] ?? '[]');
+  const dirty = dirtyFor(scope);
+
+  const update = (index, patch) =>
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  const remove = (index) => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  const add = () => {
+    const next = materials.find((item) => !usedIds.has(item.id));
+    if (!next) return;
+    setRows((current) => [
+      ...current,
+      { accessoryId: next.id, quantity: 1, wastagePercent: 0, overridesBase: false, note: '' },
+    ]);
+  };
+
+  const save = () =>
     saveMutation.mutate({
       slug,
-      variationId: variationId || null,
+      variationId: isBase ? null : scope,
       lines: rows.map((row) => ({
         accessoryId: row.accessoryId,
         quantity: Number(row.quantity),
@@ -371,10 +334,12 @@ export default function ProductBom({ slug, embedded = false }) {
     );
   }
 
-  const inheritedForActive = (activeVariation?.effective?.lines || []).filter((line) => line.inheritsBase);
+  const activeScope = isBase ? bom?.base : activeVariation;
+  const inherited = (activeVariation?.effective?.lines || []).filter((line) => line.inheritsBase);
+  const blockedBy = activeScope?.blockedBy || activeScope?.effective?.blockedBy || [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {!embedded && (
         <PageHeader
           title={`${bom?.product?.name || 'Product'} materials`}
@@ -387,138 +352,108 @@ export default function ProductBom({ slug, embedded = false }) {
         </PageHeader>
       )}
 
-      {!bom?.base?.lines?.length && (
-        <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
-          <MdInfoOutline size={20} className="mt-0.5 shrink-0 text-slate-400" />
-          <p className="text-[13px] text-slate-600">
-            This product has no bill of materials. Orders will still go through — they simply carry no material
-            reservation and no material cost until you add one.
-          </p>
-        </div>
-      )}
+      {/* Scope tiles. The base sits alongside the variations rather than above
+          them, because it is not a mode you leave — every variation total
+          already includes it. */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <ScopeTile
+          primary
+          active={isBase}
+          title="Base — all options"
+          subtitle={`${baseRows.length} material${baseRows.length === 1 ? '' : 's'} · applies to every option`}
+          cost={bom?.base?.estimatedTotalCost}
+          dirty={dirtyFor(BASE)}
+          onClick={() => setScope(BASE)}
+        />
+        {variations.map((variation) => {
+          const own = (variationRows[variation.id] || []).length;
+          return (
+            <ScopeTile
+              key={variation.id}
+              active={scope === variation.id}
+              title={variation.label}
+              subtitle={own ? `${own} extra material${own === 1 ? '' : 's'}` : 'Base only'}
+              cost={variation.estimatedTotalCost}
+              dirty={dirtyFor(variation.id)}
+              onClick={() => setScope(variation.id)}
+            />
+          );
+        })}
+      </div>
 
-      {/* Embedded, the product form already owns a right-hand column, so the
-          costing panel stacks underneath instead of competing for width. */}
-      <div className={embedded ? 'space-y-5' : 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]'}>
-        <div className="space-y-5">
-          <ScopePanel
-            title="Base materials"
-            subtitle="Applies to every variation of this product, always."
-            icon={MdLayers}
-            rows={baseRows}
-            setRows={setBaseRows}
-            materials={materials}
-            onSave={() => save(null, baseRows)}
-            isSaving={saveMutation.isLoading && !saveMutation.variables?.variationId}
-            dirty={baseDirty}
-          />
+      <CostStrip scope={activeScope} />
 
-          {variations.length > 0 && (
-            <ScopePanel
-              title="Variation extras"
-              subtitle={
-                activeVariation
-                  ? `Only for ${activeVariation.label}. Added on top of the base.`
-                  : 'Pick a variation to add materials only it needs.'
-              }
-              icon={MdTune}
-              rows={activeRows}
-              setRows={setActiveRows}
-              materials={materials}
-              baseAccessoryIds={baseAccessoryIds}
-              onSave={() => save(activeVariationId, activeRows)}
-              isSaving={saveMutation.isLoading && Boolean(saveMutation.variables?.variationId)}
-              dirty={activeDirty}
-            >
-              <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-5 py-3">
-                {variations.map((variation) => {
-                  const count = (variationRows[variation.id] || []).length;
-                  const active = variation.id === activeVariationId;
-                  return (
-                    <button
-                      key={variation.id}
-                      type="button"
-                      onClick={() => setActiveVariationId(variation.id)}
-                      className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
-                        active
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {variation.label}
-                      {count > 0 && (
-                        <span
-                          className={`ml-1.5 rounded px-1 text-[10px] ${
-                            active ? 'bg-white/20' : 'bg-white text-slate-500'
-                          }`}
-                        >
-                          +{count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {inheritedForActive.length > 0 && (
-                <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
-                  <p className="section-label mb-2">Inherited from base — edit above</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {inheritedForActive.map((line) => (
-                      <span
-                        key={line.accessoryId}
-                        className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200"
-                      >
-                        {line.accessory?.name} · {qty(line.perUnitQuantity)} {unitLabel(line.accessory)}
-                        {line.overridesBase && <span className="ml-1 text-indigo-600">replaced</span>}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </ScopePanel>
-          )}
+      {/* Configurator for the selected tile. */}
+      <section className="card-ui overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-slate-900">
+              {isBase ? 'Base materials' : `${activeVariation?.label} — extras`}
+            </p>
+            <p className="text-[12px] text-slate-500">
+              {isBase
+                ? 'Used by every option of this product.'
+                : 'Added on top of the base for this option only.'}
+            </p>
+          </div>
+          <button type="button" className="btn-brand !min-h-9" onClick={save} disabled={saveMutation.isLoading || !dirty}>
+            <MdSave size={16} /> {saveMutation.isLoading ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+          </button>
         </div>
 
-        <aside
-          className={
-            embedded
-              ? 'grid gap-4 sm:grid-cols-2'
-              : 'space-y-4 xl:sticky xl:top-5 xl:self-start'
-          }
-        >
-          <CostSummary scope={bom?.base} title="Base unit cost" />
-          {activeVariation && (
-            <CostSummary scope={activeVariation} title={`${activeVariation.label} unit cost`} />
-          )}
+        {!isBase && inherited.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 bg-white px-4 py-2.5">
+            <span className="section-label">From base</span>
+            {inherited.map((line) => (
+              <span
+                key={line.accessoryId}
+                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+              >
+                {line.accessory?.name} · {qty(line.perUnitQuantity)} {unitLabel(line.accessory)}
+                {line.overridesBase && <span className="ml-1 text-indigo-600">replaced</span>}
+              </span>
+            ))}
+          </div>
+        )}
 
-          {activeVariation?.effective?.blockedBy?.length > 0 && (
-            <div className="card-ui border-l-4 border-l-red-500 p-4">
-              <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-800">
-                <MdWarningAmber size={16} /> Short on material
-              </p>
-              <ul className="mt-2 space-y-1 text-[12px] text-slate-600">
-                {activeVariation.effective.blockedBy.map((line) => (
-                  <li key={line.accessoryId}>
-                    {line.accessory?.name}: short {qty(line.shortageQuantity)}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[11px] text-slate-500">
-                These cannot be repurchased, so an order needing them is refused rather than queued.
+        <div className="space-y-2 p-3">
+          {!rows.length && (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-600">
+                {isBase ? 'No base materials yet' : 'Nothing extra for this option'}
               </p>
             </div>
           )}
 
-          <div className="card-ui p-4 text-[13px] text-slate-600">
-            <p className="font-bold text-slate-800">How orders use this</p>
-            <p className="mt-1.5 leading-6">
-              Finished stock is reserved first. Remaining units reserve materials from this sheet. Repurchasable
-              shortages wait for stock-in; non-repurchasable shortages stop the order.
-            </p>
-          </div>
-        </aside>
-      </div>
+          {rows.map((row, index) => (
+            <MaterialCard
+              key={`${row.accessoryId}-${index}`}
+              row={row}
+              index={index}
+              materials={materials}
+              usedIds={usedIds}
+              alsoInBase={!isBase && baseAccessoryIds.has(row.accessoryId)}
+              onChange={update}
+              onRemove={remove}
+            />
+          ))}
+
+          <button type="button" className="btn-ghost w-full" onClick={add} disabled={materials.length === usedIds.size}>
+            <MdAdd size={17} /> Add material
+          </button>
+        </div>
+      </section>
+
+      {blockedBy.length > 0 && (
+        <div className="card-ui border-l-4 border-l-red-500 p-4">
+          <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-800">
+            <MdWarningAmber size={16} /> Short on material
+          </p>
+          <p className="mt-1 text-[12px] text-slate-600">
+            {blockedBy.map((line) => `${line.accessory?.name}: short ${qty(line.shortageQuantity)}`).join(' · ')}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

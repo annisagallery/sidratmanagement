@@ -927,7 +927,14 @@ export default function ProductForm({ currentProduct }) {
   const disabledCount = variations.length - enabledVariations.length;
 
   return (
-    <div className="product-form grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+    // The Materials step drops the live preview and runs full width: a costing
+    // sheet with a scope tile per option needs the room, and a storefront card
+    // tells you nothing about a bill of materials.
+    <div
+      className={`product-form grid items-start gap-5 ${
+        step === 5 ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'
+      }`}
+    >
       {/* ═══════ LEFT: FORM ═══════ */}
       <div className="flex-1 min-w-0">
         {/* Step tabs */}
@@ -961,9 +968,6 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 0: BASIC INFO ── */}
         {step === 0 && (
           <div className="card-ui space-y-5 p-5 sm:p-6">
-            <SectionTitle icon={MdInventory2} description="Set the product identity, pricing, status, and operational controls.">
-              Product details
-            </SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <FL>Product Name *</FL>
@@ -982,7 +986,6 @@ export default function ProductForm({ currentProduct }) {
                   onChange={(e) => setSlug(e.target.value)}
                   placeholder="auto-generated"
                 />
-                <p className="text-xs text-gray-400 mt-1">Auto-generated from name.</p>
               </div>
               <div>
                 <FL>Category *</FL>
@@ -1020,7 +1023,6 @@ export default function ProductForm({ currentProduct }) {
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="0"
                 />
-                <p className="text-xs text-gray-400 mt-1">Default price for all variations unless overridden.</p>
               </div>
               <div>
                 <FL>Sale Price (৳)</FL>
@@ -1032,7 +1034,6 @@ export default function ProductForm({ currentProduct }) {
                   onChange={(e) => setPriceSale(e.target.value)}
                   placeholder="Leave blank if no discount"
                 />
-                <p className="text-xs text-gray-400 mt-1">Default sale price for all variations unless overridden.</p>
               </div>
               <div>
                 <FL>Production Rate (৳)</FL>
@@ -1052,9 +1053,6 @@ export default function ProductForm({ currentProduct }) {
                   value={currentProduct?.code ? String(currentProduct.code).padStart(4, '0') : 'Assigned when saved'}
                   readOnly
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  The system assigns this permanent code. Unit labels use Production–Product–Option.
-                </p>
               </div>
               <div className="md:col-span-2">
                 <FL>Legacy Product Codes</FL>
@@ -1064,9 +1062,6 @@ export default function ProductForm({ currentProduct }) {
                   onChange={(e) => setLegacyBarcodes(e.target.value)}
                   placeholder="Separate multiple barcodes with commas"
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  Previous POS or supplier codes remain scannable. Separate multiple codes with commas.
-                </p>
               </div>
               <button
                 type="button"
@@ -1119,9 +1114,6 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 1: DESCRIPTION ── */}
         {step === 1 && (
           <div className="card-ui space-y-5 p-5 sm:p-6">
-            <SectionTitle icon={MdDescription} description="Write storefront copy and control how the product appears in search.">
-              Content & SEO
-            </SectionTitle>
             <div>
               <FL>Short Description</FL>
               <textarea
@@ -1178,9 +1170,6 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 2: IMAGES ── */}
         {step === 2 && (
           <div className="card-ui space-y-6 p-5 sm:p-6">
-            <SectionTitle icon={MdPhotoLibrary} description="Build the product gallery and attach an optional size chart.">
-              Product media
-            </SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="md:col-span-2">
                 <FL>
@@ -1198,7 +1187,6 @@ export default function ProductForm({ currentProduct }) {
                   Size Chart <span className="text-xs text-gray-400 font-normal ml-1">(separate)</span>
                 </FL>
                 <SizeChartUploader value={sizeChart} onChange={setSizeChart} />
-                <p className="text-xs text-gray-400 mt-2">Not part of the gallery. Shown as a popup button.</p>
               </div>
             </div>
           </div>
@@ -1207,16 +1195,11 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 3: ATTRIBUTES & VARIATIONS ── */}
         {step === 3 && (
           <div className="card-ui space-y-6 p-5 sm:p-6">
-            <SectionTitle icon={MdTune} description="Choose selectable values and configure each sellable combination.">
-              Options & variations
-            </SectionTitle>
-
             {/* Attribute selector */}
             <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/50 p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-bold text-slate-800">Product attributes</p>
-                  <p className="mt-1 text-xs text-slate-500">Choose descriptive options or values that generate variations.</p>
                 </div>
                 <div className="relative" ref={attrMenuRef}>
                   <button
@@ -1660,38 +1643,21 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 4: PRESALE ── */}
         {step === 4 && (
           <div className="card-ui space-y-5 p-5 sm:p-6">
-            <SectionTitle
-              icon={MdShoppingCart}
-              description="Choose which options may be sold beyond the finished units in stock."
-            >
-              Presale
-            </SectionTitle>
-
-            {/* How many can be presold is no longer a number anyone types — it
-                comes from the bill of materials on the next step. This screen
-                only decides which options are eligible at all. */}
-            <div className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
-              <MdInfo size={19} className="mt-0.5 shrink-0 text-slate-400" />
-              <p className="text-[13px] leading-6 text-slate-600">
-                Presale lets an option sell when no finished unit is on the shelf. <strong>How many</strong> can be sold
-                is calculated from the materials on the next step and what is in the material store — it is not a number
-                you set here. An option with no bill of materials is treated as made to order and is not capped.
-                {!productionEnabled && (
-                  <span className="mt-1 block font-semibold text-amber-700">
-                    Production is switched off for this product, so presale will not apply until you enable it on the
-                    Product details step.
-                  </span>
-                )}
-              </p>
-            </div>
+            {/* The only warning that changes what happens: with production
+                off, presale is inert no matter what is switched on here. */}
+            {!productionEnabled && (
+              <div className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-3">
+                <MdInfo size={17} className="mt-0.5 shrink-0 text-amber-600" />
+                <p className="text-[13px] text-amber-900">
+                  Production is off for this product, so presale will not apply until you enable it on Product details.
+                </p>
+              </div>
+            )}
 
             {enabledVariations.length === 0 ? (
               <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <MdTune size={28} className="mx-auto mb-3 text-slate-300" />
                 <p className="text-sm font-semibold text-slate-600">No options yet</p>
-                <p className="mx-auto mt-1 max-w-sm text-xs text-slate-400">
-                  Add variation attributes on the Options step, then come back to choose which of them can be presold.
-                </p>
                 <button type="button" className="btn-ghost mt-4" onClick={() => setStep(3)}>
                   <MdChevronLeft size={16} /> Back to options
                 </button>
@@ -1771,15 +1737,6 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 5: MATERIALS (BOM) ── */}
         {step === 5 && (
           <div className="space-y-5">
-            <div className="card-ui p-5 sm:p-6">
-              <SectionTitle
-                icon={MdReceiptLong}
-                description="What one finished unit consumes, and what it costs to make."
-              >
-                Materials
-              </SectionTitle>
-            </div>
-
             {isEdit && currentProduct?.slug ? (
               // Saved on its own endpoint, per scope, with its own buttons —
               // deliberately not folded into this form's submit, so saving a
@@ -1790,8 +1747,7 @@ export default function ProductForm({ currentProduct }) {
                 <MdReceiptLong size={30} className="mx-auto mb-3 text-slate-300" />
                 <p className="text-sm font-semibold text-slate-700">Create the product first</p>
                 <p className="mx-auto mt-1.5 max-w-md text-xs leading-5 text-slate-500">
-                  A bill of materials attaches to a saved product and its options. Finish creating this product, then
-                  reopen it to add materials.
+                  A bill of materials attaches to a saved product and its options.
                 </p>
               </div>
             )}
@@ -1859,6 +1815,7 @@ export default function ProductForm({ currentProduct }) {
       </div>
 
       {/* ═══════ RIGHT: LIVE PREVIEW ═══════ */}
+      {step !== 5 && (
       <LivePreview
         name={name}
         slug={slug}
@@ -1877,23 +1834,13 @@ export default function ProductForm({ currentProduct }) {
         metaDescription={metaDescription}
         isVisible={isVisible}
       />
+      )}
     </div>
   );
 }
 
-function SectionTitle({ children, description, icon: Icon }) {
-  return (
-    <div className="-mx-5 -mt-5 flex items-start gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:-mx-6 sm:-mt-6 sm:px-6">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-        <Icon size={20} aria-hidden="true" />
-      </span>
-      <div>
-        <h2 className="text-sm font-bold text-slate-900">{children}</h2>
-        <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-      </div>
-    </div>
-  );
-}
+// SectionTitle removed: the step tabs above already name every step and
+// describe it, so a matching heading inside each card said it twice.
 function FL({ children }) {
   return <label className="mb-2 block text-xs font-semibold text-slate-700">{children}</label>;
 }
