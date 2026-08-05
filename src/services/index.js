@@ -418,6 +418,18 @@ export const updateVariationPresale = async ({ slug, variationId, enabled }) => 
   const { data } = await http.patch(`/admin/products/${slug}/variations/${variationId}/presale`, { enabled });
   return data;
 };
+export const getProductBom = async ({ slug, variationId = null }) => {
+  const { data } = await http.get(`/admin/products/${slug}/bom`, { params: variationId ? { variationId } : {} });
+  return data;
+};
+export const saveProductBom = async ({ slug, variationId = null, lines }) => {
+  const { data } = await http.put(`/admin/products/${slug}/bom`, { variationId, lines });
+  return data;
+};
+export const getBomMaterials = async () => {
+  const { data } = await http.get('/admin/accessories', { params: { all: true } });
+  return data;
+};
 export const deleteProductByAdmin = async (slug) => {
   const { data: response } = await http.delete(`/admin/products/${slug}`);
   return response;

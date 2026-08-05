@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery } from 'react-query';
-import { MdArrowBack, MdAutorenew, MdInventory2, MdOpenInNew } from 'react-icons/md';
+import { MdArrowBack, MdAutorenew, MdInventory2, MdOpenInNew, MdReceiptLong } from 'react-icons/md';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
 import ProductForm from 'src/components/forms/product';
@@ -24,6 +24,11 @@ export default function EditProduct({ slug }) {
         subtitle={product ? `/${product.slug}` : isLoading ? 'Loading product details...' : 'The requested product could not be loaded.'}
         icon={MdInventory2}
       >
+        {product && (
+          <button type="button" onClick={() => router.push(`/products/${product.slug}/bom`)} className="btn-ghost min-h-11">
+            <MdReceiptLong size={17} /> Materials & costing
+          </button>
+        )}
         {product && (
           <button
             type="button"
