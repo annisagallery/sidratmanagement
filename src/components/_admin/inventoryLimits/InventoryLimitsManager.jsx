@@ -4,6 +4,7 @@ import DataTable from 'src/components/_admin/ui/DataTable';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
+import { confirmDelete } from 'src/utils/swal';
 import {
   createInventoryLimitByAdmin,
   deleteInventoryLimitByAdmin,
@@ -120,15 +121,11 @@ export default function InventoryLimitsManager() {
   };
 
   const remove = async (limit) => {
-    const r = await Swal.fire({
-      title: 'Delete inventory limit?',
-      text: groupName(limit.attributes),
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Delete'
+    const confirmed = await confirmDelete({
+      subject: groupName(limit.attributes),
+      text: 'Presale for this attribute group goes back to being uncapped.'
     });
-    if (!r.isConfirmed) return;
+    if (!confirmed) return;
     await deleteInventoryLimitByAdmin(limit.id);
     await load();
   };

@@ -18,10 +18,15 @@ import {
   MdStarOutline,
   MdShoppingCart,
   MdFlashOn,
+  MdDescription,
+  MdInventory2,
+  MdPhotoLibrary,
+  MdSearch,
+  MdStorefront,
   MdVisibility,
   MdVisibilityOff
 } from 'react-icons/md';
-import { FaRegStar, FaStar } from 'react-icons/fa6';
+import { FaRegStar } from 'react-icons/fa6';
 import { FiStar } from 'react-icons/fi';
 import RichTextEditor from 'src/components/richTextEditor';
 
@@ -55,7 +60,7 @@ function cartesian(arrays) {
   return first.flatMap((item) => tail.map((combo) => [item, ...combo]));
 }
 
-function buildVariations(attrSelections, existingVars, basePrice) {
+function buildVariations(attrSelections, existingVars, _basePrice) {
   const entries = Object.values(attrSelections).filter((e) => e.forVariation && e.values.length > 0);
 
   // No variation-driving attributes → show one default row so admin can set stock/oversale
@@ -139,28 +144,32 @@ function SizeChartUploader({ value, onChange }) {
   return (
     <div>
       {value?.path ? (
-        <div className="relative h-40 border rounded-md overflow-hidden group bg-gray-50 flex items-center justify-center">
+        <div className="relative h-48 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <Image src={value.path} alt="size chart" fill className="object-contain" />
+          <Image src={value.path} alt="Size chart preview" fill sizes="280px" className="object-contain p-2" />
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="absolute top-2 right-2 bg-red-500 text-white rounded-md p-1 opacity-0 group-hover:opacity-100 transition shadow"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-slate-950/70 text-white transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            aria-label="Remove size chart"
           >
-            <MdClose size={14} />
+            <MdClose size={19} />
           </button>
         </div>
       ) : (
-        <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition bg-gray-50">
+        <label className="flex h-48 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
           {uploading ? (
-            <MdAutorenew className="animate-spin text-blue-400" size={28} />
+            <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={28} />
           ) : (
             <>
-              <MdImage size={28} className="text-gray-300" />
-              <span className="text-xs text-gray-400 mt-2">Upload size chart</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-[var(--brand-strong)] shadow-sm">
+                <MdImage size={22} />
+              </span>
+              <span className="mt-3 text-sm font-bold text-slate-700">Upload size chart</span>
+              <span className="mt-1 text-xs text-slate-500">Optional guide shown on the product page</span>
             </>
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handle} disabled={uploading} />
+          <input type="file" accept="image/*" className="sr-only" onChange={handle} disabled={uploading} />
         </label>
       )}
     </div>
@@ -202,76 +211,79 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
   return (
     <div>
       {pool.length === 0 ? (
-        <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition bg-gray-50">
+        <label className="flex h-56 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
           {uploading ? (
-            <MdAutorenew className="animate-spin text-blue-400" size={32} />
+            <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={32} />
           ) : (
             <>
-              <MdImage size={36} className="text-gray-300" />
-              <span className="text-sm text-gray-400 mt-2 font-medium">Upload product images</span>
-              <span className="text-xs text-gray-400 mt-1">Select multiple files at once</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-md bg-white text-[var(--brand-strong)] shadow-sm">
+                <MdPhotoLibrary size={24} />
+              </span>
+              <span className="mt-4 text-sm font-bold text-slate-700">Upload product images</span>
+              <span className="mt-1 text-xs text-slate-500">Select multiple square or portrait images at once</span>
             </>
           )}
-          <input type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} disabled={uploading} />
+          <input type="file" accept="image/*" multiple className="sr-only" onChange={handleFiles} disabled={uploading} />
         </label>
       ) : (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
             {pool.map((img) => {
               const isFeatured = img.id === featuredId;
               return (
                 <div
                   key={img.id}
-                  className={`relative aspect-square rounded-md overflow-hidden border-2 group transition-all ${isFeatured ? 'border-yellow-400 shadow-md' : 'border-gray-200'}`}
+                    className={`group relative aspect-square overflow-hidden rounded-md border-2 transition-all ${isFeatured ? 'border-[var(--brand)] shadow-sm' : 'border-slate-200'}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <Image src={img.path} alt="" fill className="object-cover" />
+                  <Image src={img.path} alt={img.originalName || 'Product image'} fill sizes="180px" className="object-cover" />
                   {isFeatured && (
-                    <div className="absolute bottom-0 inset-x-0 bg-yellow-400/90 text-yellow-900 text-[10px] font-semibold text-center py-0.5">
-                      FEATURED
+                    <div className="absolute inset-x-0 bottom-0 bg-[var(--brand)] py-1 text-center text-[10px] font-bold uppercase tracking-wide text-white">
+                      Featured image
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-start justify-between p-1.5">
+                  <div className="absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-slate-950/60 to-transparent p-1.5">
                     <button
                       type="button"
                       onClick={() => setFeaturedId(img.id)}
-                      className={`p-1 rounded-md transition ${isFeatured ? 'text-yellow-400' : 'text-white hover:text-yellow-300'}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${isFeatured ? 'bg-white text-[var(--brand-strong)]' : 'bg-slate-950/40 text-white hover:bg-white hover:text-[var(--brand-strong)]'}`}
+                      aria-label={isFeatured ? 'Featured product image' : 'Set as featured image'}
                     >
                       {isFeatured ? <MdStar size={18} /> : <MdStarOutline size={18} />}
                     </button>
                     <button
                       type="button"
                       onClick={() => removeFromPool(img.id)}
-                      className="p-1 rounded-md text-white hover:text-red-300 transition"
+                      className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950/40 text-white transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                      aria-label="Remove product image"
                     >
-                      <MdClose size={16} />
+                      <MdClose size={18} />
                     </button>
                   </div>
                 </div>
               );
             })}
-            <label className="aspect-square border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition">
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
               {uploading ? (
-                <MdAutorenew className="animate-spin text-blue-400" size={22} />
+                <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={22} />
               ) : (
                 <>
-                  <MdAdd size={22} className="text-gray-400" />
-                  <span className="text-[10px] text-gray-400 mt-1">Add more</span>
+                  <MdAdd size={22} className="text-[var(--brand-strong)]" />
+                  <span className="mt-1 text-xs font-semibold text-slate-600">Add images</span>
                 </>
               )}
               <input
                 type="file"
                 accept="image/*"
                 multiple
-                className="hidden"
+                className="sr-only"
                 onChange={handleFiles}
                 disabled={uploading}
               />
             </label>
           </div>
-          <p className="text-xs text-gray-400">
-            Click ★ on any image to set it as featured. Images can be assigned to individual variations in the next
-            step.
+          <p className="flex items-center gap-1.5 text-xs leading-5 text-slate-500">
+            <MdStarOutline size={15} aria-hidden="true" /> Choose one featured image. Gallery images can also be assigned to variations.
           </p>
         </div>
       )}
@@ -295,9 +307,9 @@ function LivePreview({
   sizeChart,
   attrSelections,
   variations,
-  saving,
-  onSave,
-  isEdit
+  metaTitle,
+  metaDescription,
+  isVisible
 }) {
   const [previewAttr, setPreviewAttr] = useState({});
   const [carouselIdx, setCarouselIdx] = useState(0);
@@ -330,16 +342,17 @@ function LivePreview({
   })();
 
   return (
-    <div className="w-80 shrink-0 hidden xl:block">
-      <div className="sticky top-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2">Live Preview</p>
-
-        <div className="bg-white border rounded-md overflow-hidden shadow-sm">
+    <aside className="space-y-4 xl:sticky xl:top-6" aria-label="Product previews">
+      <section className="card-ui overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+          <MdStorefront size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Storefront preview</p>
+        </div>
           {/* Image carousel */}
           <div className="relative bg-gray-50 aspect-square overflow-hidden">
             {displayImg?.path ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <Image src={displayImg.path} alt="" fill className="object-contain" />
+               <Image src={displayImg.path} alt={name || 'Product preview'} fill sizes="320px" className="object-contain" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-200">
                 <MdImage size={56} />
@@ -352,31 +365,20 @@ function LivePreview({
                 <button
                   type="button"
                   onClick={() => setCarouselIdx((i) => (i - 1 + images.length) % images.length)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-md p-1 shadow transition"
+                   className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                   aria-label="Previous preview image"
                 >
                   <MdChevronLeft size={18} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setCarouselIdx((i) => (i + 1) % images.length)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-md p-1 shadow transition"
+                   className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                   aria-label="Next preview image"
                 >
                   <MdChevronRight size={18} />
                 </button>
               </>
-            )}
-            {/* Thumbnail dots */}
-            {images.length > 1 && (
-              <div className="absolute bottom-2 inset-x-0 flex justify-center gap-1">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setCarouselIdx(i)}
-                    className={`rounded-md transition-all ${i === carouselIdx ? 'w-4 h-1.5 bg-[var(--brand)]' : 'w-1.5 h-1.5 bg-gray-400'}`}
-                  />
-                ))}
-              </div>
             )}
             {/* Thumbnail strip */}
             {images.length > 1 && (
@@ -386,10 +388,11 @@ function LivePreview({
                     key={i}
                     type="button"
                     onClick={() => setCarouselIdx(i)}
-                    className={`shrink-0 w-10 h-10 rounded-md border-2 overflow-hidden transition ${i === carouselIdx ? 'border-blue-500' : 'border-transparent'}`}
+                    aria-label={`Show preview image ${i + 1}`}
+                    className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-md border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${i === carouselIdx ? 'border-[var(--brand)]' : 'border-transparent'}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <Image src={img.path} alt="" fill className="object-cover" />
+                    <Image src={img.path} alt="" fill sizes="44px" className="object-cover" />
                   </button>
                 ))}
               </div>
@@ -398,8 +401,8 @@ function LivePreview({
             <div className="absolute top-2 left-2 flex flex-col gap-1">
               <StatusBadge status={status} />
               {isFeatured && (
-                <span className="text-[10px] bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-md font-semibold">
-                  ⭐ Featured
+                <span className="inline-flex items-center gap-1 rounded-md bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-950">
+                  <FiStar size={10} aria-hidden="true" /> Featured
                 </span>
               )}
               {priceSale && (
@@ -470,7 +473,8 @@ function LivePreview({
                                 }))
                               }
                               title={v.value}
-                              className={`w-6 h-6 rounded-md border-2 transition ${isSel ? 'border-blue-600 scale-110' : 'border-white shadow'}`}
+                              aria-label={`${isSel ? 'Deselect' : 'Select'} ${v.value}`}
+                              className={`h-10 w-10 rounded-md border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isSel ? 'border-[var(--brand)] ring-2 ring-[var(--brand-ring)]' : 'border-white shadow'}`}
                               style={{ backgroundColor: v.colorHex }}
                             />
                           ) : (
@@ -483,7 +487,8 @@ function LivePreview({
                                   [e.attr.id]: isSel ? null : { id: v.id, value: v.value }
                                 }))
                               }
-                              className={`px-2.5 py-1 rounded-md border text-xs transition ${isSel ? 'bg-blue-700 text-white border-blue-700' : 'bg-gray-50 text-gray-700 border-gray-300 hover:border-blue-400'}`}
+                              aria-pressed={isSel}
+                              className={`min-h-9 rounded-md border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isSel ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-[var(--brand)]'}`}
                             >
                               {v.value}
                             </button>
@@ -527,11 +532,11 @@ function LivePreview({
             <div className="flex items-center gap-2 border-t pt-2">
               <span className="text-xs text-gray-500">Qty:</span>
               <div className="flex items-center border rounded-md overflow-hidden text-xs">
-                <button type="button" className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 transition">
+                <button type="button" className="flex h-10 w-10 items-center justify-center bg-slate-50 transition hover:bg-slate-100" aria-label="Decrease preview quantity">
                   –
                 </button>
-                <span className="px-3 py-1 border-x">1</span>
-                <button type="button" className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 transition">
+                <span className="flex h-10 min-w-10 items-center justify-center border-x">1</span>
+                <button type="button" className="flex h-10 w-10 items-center justify-center bg-slate-50 transition hover:bg-slate-100" aria-label="Increase preview quantity">
                   +
                 </button>
               </div>
@@ -547,7 +552,7 @@ function LivePreview({
               <button
                 type="button"
                 onClick={() => Swal.fire({ imageUrl: sizeChart.path, imageAlt: 'Size Chart', padding: '10px' })}
-                className="w-full py-1.5 bg-info text-white text-xs font-medium rounded-md"
+                className="min-h-10 w-full rounded-md bg-info text-xs font-semibold text-white"
               >
                 Size Chart
               </button>
@@ -557,46 +562,83 @@ function LivePreview({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 py-2 bg-black text-white text-xs font-semibold rounded-md hover:bg-gray-800 transition"
+                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-black text-xs font-semibold text-white transition hover:bg-gray-800"
               >
                 <MdShoppingCart size={14} /> Add to Cart
               </button>
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 py-2 bg-green-500 text-white text-xs font-semibold rounded-md hover:bg-green-600 transition"
+                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-emerald-600 text-xs font-semibold text-white transition hover:bg-emerald-700"
               >
                 <MdFlashOn size={14} /> Buy Now
               </button>
             </div>
 
-            {/* Save button */}
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={saving}
-              className="w-full py-2.5 bg-[var(--brand)] text-white rounded-md text-sm font-semibold hover:brightness-95 disabled:opacity-50 transition flex items-center justify-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <MdAutorenew className="animate-spin" size={15} />
-                  Saving…
-                </>
-              ) : isEdit ? (
-                'Update Product'
-              ) : (
-                'Create Product'
-              )}
-            </button>
+          </div>
+      </section>
+
+      <section className="card-ui overflow-hidden" aria-label="Search result preview">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+          <MdSearch size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Search preview</p>
+        </div>
+        <div className="p-4">
+          <p className="break-words text-base font-semibold text-blue-800">
+            {metaTitle.trim() || name.trim() || 'Product search title'}
+          </p>
+          <p className="mt-1 break-all text-xs text-emerald-700">/product/{slug || 'product-slug'}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {metaDescription.trim() || shortDescription.trim() || 'Add a concise search description to preview how this product may appear.'}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
+            {isVisible ? <MdVisibility size={16} className="text-emerald-700" /> : <MdVisibilityOff size={16} />}
+            {isVisible ? 'Eligible for storefront discovery' : 'Hidden from storefront listings'}
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </aside>
   );
 }
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
-const STEPS = ['Basic Info', 'Description', 'Images', 'Attributes & Variations'];
+const STEPS = [
+  { label: 'Product details', description: 'Identity and pricing', icon: MdInventory2 },
+  { label: 'Content & SEO', description: 'Copy and search', icon: MdDescription },
+  { label: 'Media', description: 'Gallery and size chart', icon: MdPhotoLibrary },
+  { label: 'Options', description: 'Attributes and variations', icon: MdTune }
+];
+
+const PRODUCT_STATUSES = [
+  { value: 'draft', label: 'Draft', help: 'Keep working before publishing.' },
+  { value: 'active', label: 'Active', help: 'Available for normal use and sales.' },
+  { value: 'inactive', label: 'Inactive', help: 'Retained but unavailable for new sales.' }
+];
+
+function ProductStatusPicker({ value, onChange }) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-xs font-semibold text-slate-700">Product status</legend>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {PRODUCT_STATUSES.map((option) => {
+          const selected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(option.value)}
+              className={`min-h-[68px] rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${selected ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+            >
+              <StatusBadge status={option.value} />
+              <span className="mt-2 block text-xs leading-5 text-slate-500">{option.help}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 export default function ProductForm({ currentProduct }) {
   const router = useRouter();
@@ -635,6 +677,7 @@ export default function ProductForm({ currentProduct }) {
   // Attributes
   const [attrSelections, setAttrSelections] = useState({});
   const [showAttrMenu, setShowAttrMenu] = useState(false);
+  const [expandedAttrValues, setExpandedAttrValues] = useState({});
 
   // Variations
   const [variations, setVariations] = useState([]);
@@ -719,6 +762,7 @@ export default function ProductForm({ currentProduct }) {
       };
     }
     setAttrSelections(sel);
+    setExpandedAttrValues({});
 
     setVariations(
       (p.variations || []).map((v) => ({
@@ -744,6 +788,7 @@ export default function ProductForm({ currentProduct }) {
 
   const addAttr = (attr) => {
     setAttrSelections((prev) => ({ ...prev, [attr.id]: { attr, values: [], forVariation: true } }));
+    setExpandedAttrValues((prev) => ({ ...prev, [attr.id]: true }));
     setShowAttrMenu(false);
   };
 
@@ -753,6 +798,11 @@ export default function ProductForm({ currentProduct }) {
       delete c[attrId];
       return c;
     });
+    setExpandedAttrValues((prev) => {
+      const next = { ...prev };
+      delete next[attrId];
+      return next;
+    });
   };
 
   const toggleValue = useCallback((attr, val) => {
@@ -760,11 +810,6 @@ export default function ProductForm({ currentProduct }) {
       const cur = prev[attr.id] || { attr, values: [], forVariation: false };
       const has = cur.values.some((v) => v.id === val.id);
       const next = has ? cur.values.filter((v) => v.id !== val.id) : [...cur.values, val];
-      if (!next.length) {
-        const c = { ...prev };
-        delete c[attr.id];
-        return c;
-      }
       return { ...prev, [attr.id]: { ...cur, attr, values: next } };
     });
   }, []);
@@ -831,18 +876,6 @@ export default function ProductForm({ currentProduct }) {
       return;
     }
 
-    console.log(
-      '[handleSubmit] attrSelections:',
-      JSON.stringify(
-        Object.values(attrSelections).map((s) => ({
-          attr: s.attr.name,
-          forVariation: s.forVariation,
-          values: s.values.map((v) => v.value)
-        }))
-      )
-    );
-    console.log('[handleSubmit] variations state (raw):', JSON.stringify(variations));
-
     save({
       name,
       slug,
@@ -867,20 +900,16 @@ export default function ProductForm({ currentProduct }) {
         .filter((e) => e.values.length > 0)
         .map((e) => ({ attribute: e.attr.id, attributeName: e.attr.name, values: e.values.map((v) => v.id) })),
       customizableFields: [],
-      variations: (() => {
-        const payload = variations
-          .filter((v) => v.enabled !== false)
-          .map((v) => ({
-            attributes: v.attributes,
-            regularPrice: v.customPrice ? (v.regularPrice ?? null) : null,
-            salePrice: v.customPrice ? v.salePrice : null,
-            overSale: v.overSale,
-            ...splitLegacyCodes(v.legacyCodes),
-            image: v.imageId || null
-          }));
-        console.log('[handleSubmit] variations payload to backend:', JSON.stringify(payload));
-        return payload;
-      })()
+      variations: variations
+        .filter((v) => v.enabled !== false)
+        .map((v) => ({
+          attributes: v.attributes,
+          regularPrice: v.customPrice ? (v.regularPrice ?? null) : null,
+          salePrice: v.customPrice ? v.salePrice : null,
+          overSale: v.overSale,
+          ...splitLegacyCodes(v.legacyCodes),
+          image: v.imageId || null
+        }))
     });
   };
 
@@ -890,32 +919,43 @@ export default function ProductForm({ currentProduct }) {
   const disabledCount = variations.length - enabledVariations.length;
 
   return (
-    <div className="flex gap-6 items-start">
+    <div className="product-form grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       {/* ═══════ LEFT: FORM ═══════ */}
       <div className="flex-1 min-w-0">
         {/* Step tabs */}
-        <div className="flex border-b mb-6 overflow-x-auto">
-          {STEPS.map((s, i) => (
+        <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-4">
+          {STEPS.map((item, i) => {
+            const Icon = item.icon;
+            return (
             <button
               key={i}
               type="button"
               onClick={() => setStep(i)}
-              className={`flex items-center gap-2 whitespace-nowrap px-5 py-3 text-sm font-medium border-b-2 transition-colors ${step === i ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              aria-current={step === i ? 'step' : undefined}
+              className={`flex min-h-[72px] items-start gap-2 rounded-md border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${step === i ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-950' : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-800'}`}
             >
               <span
-                className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${step === i ? 'bg-[var(--brand)] text-white' : 'bg-gray-200 text-gray-500'}`}
+                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${step === i ? 'bg-[var(--brand)] text-white' : 'bg-slate-100 text-slate-500'}`}
               >
-                {i + 1}
+                <Icon size={18} aria-hidden="true" />
               </span>
-              {s}
+              <span className="min-w-0">
+                <span className="block text-xs font-bold sm:text-sm">{item.label}</span>
+                <span className="mt-0.5 hidden text-[11px] font-normal leading-4 text-slate-500 lg:block">
+                  {item.description}
+                </span>
+              </span>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── STEP 0: BASIC INFO ── */}
         {step === 0 && (
-          <div className="space-y-5">
-            <SectionTitle>Basic Information</SectionTitle>
+          <div className="card-ui space-y-5 p-5 sm:p-6">
+            <SectionTitle icon={MdInventory2} description="Set the product identity, pricing, status, and operational controls.">
+              Product details
+            </SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <FL>Product Name *</FL>
@@ -947,23 +987,19 @@ export default function ProductForm({ currentProduct }) {
                   ))}
                 </select>
               </div>
-              <div>
-                <FL>Status</FL>
-                <select className="input-field" value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+              <div className="md:col-span-2">
+                <ProductStatusPicker value={status} onChange={setStatus} />
               </div>
               <div>
                 <FL>Featured</FL>
                 <button
                   type="button"
                   onClick={() => setIsFeatured((f) => !f)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-md border text-sm font-medium transition-all w-full ${isFeatured ? 'bg-yellow-400 border-yellow-500 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-yellow-300'}`}
+                  aria-pressed={isFeatured}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isFeatured ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white text-slate-600 hover:border-amber-300 hover:bg-amber-50'}`}
                 >
                   <FiStar size={16} />
-                  {isFeatured ? 'Featured ✓' : 'Mark as Featured'}
+                  {isFeatured ? 'Featured product' : 'Mark as featured'}
                 </button>
               </div>
               <div>
@@ -1024,31 +1060,49 @@ export default function ProductForm({ currentProduct }) {
                   Previous POS or supplier codes remain scannable. Separate multiple codes with commas.
                 </p>
               </div>
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input type="checkbox" checked={trackInventory} onChange={(e) => setTrackInventory(e.target.checked)} />
-                Track branch inventory
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={productionEnabled}
-                  onChange={(e) => setProductionEnabled(e.target.checked)}
-                />
-                Can be produced
-              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={trackInventory}
+                onClick={() => setTrackInventory((value) => !value)}
+                className={`flex min-h-[76px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${trackInventory ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
+              >
+                <MdInventory2 size={20} className="mt-0.5 shrink-0 text-[var(--brand-strong)]" />
+                <span>
+                  <span className="block text-sm font-bold">Track branch inventory</span>
+                  <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">Maintain stock separately for each branch.</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={productionEnabled}
+                onClick={() => setProductionEnabled((value) => !value)}
+                className={`flex min-h-[76px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${productionEnabled ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
+              >
+                <MdTune size={20} className="mt-0.5 shrink-0 text-[var(--brand-strong)]" />
+                <span>
+                  <span className="block text-sm font-bold">Production enabled</span>
+                  <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">Allow this item to enter the production workflow.</span>
+                </span>
+              </button>
               <div className="md:col-span-2">
                 <FL>Ecommerce Visibility</FL>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={isVisible}
                   onClick={() => setIsVisible((v) => !v)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-md border text-sm font-medium transition-all w-full max-w-xs ${isVisible ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-100 border-gray-300 text-gray-500'}`}
+                  className={`flex min-h-[76px] w-full items-start gap-3 rounded-md border p-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isVisible ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
                 >
-                  {isVisible ? <MdVisibility size={16} /> : <MdVisibilityOff size={16} />}
-                  {isVisible ? 'Visible on store' : 'Hidden from store'}
+                  {isVisible ? <MdVisibility size={20} className="shrink-0 text-emerald-700" /> : <MdVisibilityOff size={20} className="shrink-0" />}
+                  <span>
+                    <span className="block font-bold">{isVisible ? 'Visible on ecommerce' : 'Hidden from ecommerce'}</span>
+                    <span className="mt-1 block text-xs font-normal leading-5 opacity-80">
+                      {isVisible ? 'Customers can discover this product in listings and search.' : 'The direct page remains available, but the product is hidden from listings.'}
+                    </span>
+                  </span>
                 </button>
-                <p className="text-xs text-gray-400 mt-1">
-                  Hidden products are still accessible by direct URL but won&apos;t appear in listings.
-                </p>
               </div>
             </div>
           </div>
@@ -1056,8 +1110,10 @@ export default function ProductForm({ currentProduct }) {
 
         {/* ── STEP 1: DESCRIPTION ── */}
         {step === 1 && (
-          <div className="space-y-5">
-            <SectionTitle>Description & SEO</SectionTitle>
+          <div className="card-ui space-y-5 p-5 sm:p-6">
+            <SectionTitle icon={MdDescription} description="Write storefront copy and control how the product appears in search.">
+              Content & SEO
+            </SectionTitle>
             <div>
               <FL>Short Description</FL>
               <textarea
@@ -1079,7 +1135,12 @@ export default function ProductForm({ currentProduct }) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <FL>Meta Title</FL>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label className="text-xs font-semibold text-slate-700">Search title</label>
+                  <span className={`text-xs tabular-nums ${metaTitle.length > 60 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                    {metaTitle.length}/60
+                  </span>
+                </div>
                 <input
                   className="input-field"
                   value={metaTitle}
@@ -1088,9 +1149,15 @@ export default function ProductForm({ currentProduct }) {
                 />
               </div>
               <div>
-                <FL>Meta Description</FL>
-                <input
-                  className="input-field"
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label className="text-xs font-semibold text-slate-700">Search description</label>
+                  <span className={`text-xs tabular-nums ${metaDescription.length > 160 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                    {metaDescription.length}/160
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  className="input-field resize-y leading-6"
                   value={metaDescription}
                   onChange={(e) => setMetaDescription(e.target.value)}
                   placeholder="SEO meta description"
@@ -1102,8 +1169,10 @@ export default function ProductForm({ currentProduct }) {
 
         {/* ── STEP 2: IMAGES ── */}
         {step === 2 && (
-          <div className="space-y-6">
-            <SectionTitle>Product Images</SectionTitle>
+          <div className="card-ui space-y-6 p-5 sm:p-6">
+            <SectionTitle icon={MdPhotoLibrary} description="Build the product gallery and attach an optional size chart.">
+              Product media
+            </SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="md:col-span-2">
                 <FL>
@@ -1129,24 +1198,29 @@ export default function ProductForm({ currentProduct }) {
 
         {/* ── STEP 3: ATTRIBUTES & VARIATIONS ── */}
         {step === 3 && (
-          <div className="space-y-6">
-            <SectionTitle>Attributes & Variations</SectionTitle>
+          <div className="card-ui space-y-6 p-5 sm:p-6">
+            <SectionTitle icon={MdTune} description="Choose selectable values and configure each sellable combination.">
+              Options & variations
+            </SectionTitle>
 
             {/* Attribute selector */}
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/50 p-4 sm:p-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-700">Product Attributes</p>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Product attributes</p>
+                  <p className="mt-1 text-xs text-slate-500">Choose descriptive options or values that generate variations.</p>
+                </div>
                 <div className="relative" ref={attrMenuRef}>
                   <button
                     type="button"
                     onClick={() => setShowAttrMenu((s) => !s)}
                     disabled={unselectedAttrs.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40"
+                    className="btn-ghost min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
                   >
-                    <MdAdd size={16} /> Add Attribute
+                    <MdAdd size={17} /> Add attribute
                   </button>
                   {showAttrMenu && (
-                    <div className="absolute right-0 top-full mt-1 z-30 bg-white border rounded-md shadow-lg py-1 min-w-[200px] max-h-64 overflow-y-auto">
+                    <div className="absolute right-0 top-full z-30 mt-2 max-h-72 min-w-[220px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-xl">
                       {unselectedAttrs.length === 0 ? (
                         <p className="px-4 py-2.5 text-xs text-gray-400 italic">All attributes added</p>
                       ) : (
@@ -1155,7 +1229,7 @@ export default function ProductForm({ currentProduct }) {
                             key={attr.id}
                             type="button"
                             onClick={() => addAttr(attr)}
-                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between"
+                            className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
                           >
                             {attr.name}
                             <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md ml-2">
@@ -1170,16 +1244,22 @@ export default function ProductForm({ currentProduct }) {
               </div>
 
               {Object.keys(attrSelections).length === 0 ? (
-                <div className="text-center py-8 border-2 border-dashed rounded-md text-gray-400 text-sm">
-                  Click <b>Add Attribute</b> to select attributes for this product
+                <div className="rounded-md border-2 border-dashed border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
+                  <MdTune size={28} className="mx-auto mb-3 text-slate-300" aria-hidden="true" />
+                  Add an attribute to configure product information or sellable variations.
                 </div>
               ) : (
                 Object.values(attrSelections).map((sel) => {
                   const hasValues = sel.values.length > 0;
+                  const isValuePickerOpen = !isEdit || expandedAttrValues[sel.attr.id] === true;
+                  const availableValues = (sel.attr.values || []).filter(
+                    (val) => val.active !== false || sel.values.some((value) => value.id === val.id)
+                  );
+                  const visibleValues = isValuePickerOpen ? availableValues : sel.values;
                   return (
                     <div
                       key={sel.attr.id}
-                      className={`border rounded-md transition-colors ${hasValues ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-white'}`}
+                      className={`rounded-md border bg-white transition-colors ${hasValues ? 'border-[var(--brand-ring)]' : 'border-slate-200'}`}
                     >
                       <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
                         <div className="flex items-center gap-2">
@@ -1188,7 +1268,7 @@ export default function ProductForm({ currentProduct }) {
                             {sel.attr.type}
                           </span>
                           {hasValues && (
-                            <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-md">
+                            <span className="rounded-md bg-[var(--brand-soft)] px-1.5 py-0.5 text-[10px] text-[var(--brand-strong)]">
                               {sel.values.length} selected
                             </span>
                           )}
@@ -1215,41 +1295,70 @@ export default function ProductForm({ currentProduct }) {
                           <button
                             type="button"
                             onClick={() => removeAttr(sel.attr.id)}
-                            className="p-1 text-gray-400 hover:text-red-500 transition"
+                            className="flex h-10 w-10 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                            aria-label={`Remove ${sel.attr.name} attribute`}
                           >
                             <MdClose size={16} />
                           </button>
                         </div>
                       </div>
-                      <div className="px-4 py-3 flex flex-wrap gap-2">
-                        {(sel.attr.values || []).filter(
-                          (val) => val.active !== false || sel.values.some((v) => v.id === val.id)
-                        ).length === 0 ? (
-                          <span className="text-xs text-gray-400 italic">No values defined for this attribute</span>
-                        ) : (
-                          (sel.attr.values || [])
-                            .filter((val) => val.active !== false || sel.values.some((v) => v.id === val.id))
-                            .map((val) => {
-                              const selected = sel.values.some((v) => v.id === val.id);
+                      <div className="px-4 py-3">
+                        {isEdit && (
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs text-gray-500">
+                              {isValuePickerOpen
+                                ? 'Choose the values used by this product.'
+                                : hasValues
+                                  ? 'Showing selected values only.'
+                                  : 'No values selected.'}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedAttrValues((prev) => ({
+                                  ...prev,
+                                  [sel.attr.id]: !isValuePickerOpen
+                                }))
+                              }
+                              className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:border-[var(--brand)] hover:text-[var(--brand-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                            >
+                              {isValuePickerOpen ? 'Done' : 'Change values'}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2">
+                          {visibleValues.length === 0 ? (
+                            <span className="text-xs italic text-gray-400">
+                              {availableValues.length === 0
+                                ? 'No values are defined for this attribute.'
+                                : 'Click Change values to choose from the available options.'}
+                            </span>
+                          ) : (
+                            visibleValues.map((val) => {
+                              const selected = sel.values.some((value) => value.id === val.id);
                               return (
                                 <button
                                   key={val.id}
                                   type="button"
+                                  aria-pressed={selected}
                                   onClick={() => toggleValue(sel.attr, val)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all ${selected ? 'bg-[var(--brand)] text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'} ${val.active === false ? 'opacity-60' : ''}`}
+                                  className={`flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${selected ? 'border-[var(--brand)] bg-[var(--brand)] text-white shadow-sm' : 'border-gray-300 bg-white text-gray-600 hover:border-[var(--brand)] hover:text-gray-800'} ${val.active === false ? 'opacity-60' : ''}`}
                                 >
                                   {sel.attr.type === 'color' && val.colorHex && (
                                     <span
-                                      className="w-3 h-3 rounded-md border border-white/40 flex-shrink-0"
+                                      className="h-3 w-3 shrink-0 rounded-full border border-white/50"
                                       style={{ backgroundColor: val.colorHex }}
                                     />
                                   )}
                                   {val.value}
                                   {val.active === false ? ' (disabled)' : ''}
+                                  {selected && !isValuePickerOpen && <MdClose size={13} aria-hidden="true" />}
                                 </button>
                               );
                             })
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1259,8 +1368,8 @@ export default function ProductForm({ currentProduct }) {
 
             {/* Variation table */}
             {variations.length > 0 && (
-              <div className="border rounded-md overflow-hidden">
-                <div className="bg-gray-50 px-5 py-3 border-b flex flex-wrap items-center gap-3">
+              <div className="overflow-hidden rounded-md border border-slate-200">
+                <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
                   <p className="text-sm font-semibold text-gray-700 mr-auto">
                     {enabledVariations.length} of {variations.length} Variation{variations.length !== 1 ? 's' : ''}
                     {disabledCount > 0 && (
@@ -1271,27 +1380,26 @@ export default function ProductForm({ currentProduct }) {
                   </p>
                   {/* Bulk fields */}
                   {[
-                    { val: bulkPrice, set: setBulkPrice, apply: applyBulkPrice, label: 'Reg. price', color: 'blue' },
+                    { val: bulkPrice, set: setBulkPrice, apply: applyBulkPrice, label: 'Reg. price' },
                     {
                       val: bulkSalePrice,
                       set: setBulkSalePrice,
                       apply: applyBulkSalePrice,
                       label: 'Sale price',
-                      color: 'orange'
                     }
-                  ].map(({ val, set, apply, label, color }) => (
-                    <div key={label} className="flex items-center gap-1">
+                  ].map(({ val, set, apply, label }) => (
+                    <div key={label} className="flex items-center gap-1.5">
                       <input
                         type="number"
                         value={val}
                         onChange={(e) => set(e.target.value)}
                         placeholder={label}
-                        className="border rounded-md px-2.5 py-1.5 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                        className="h-10 w-28 rounded-md border border-slate-300 bg-white px-2.5 text-xs outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-ring)]"
                       />
                       <button
                         type="button"
                         onClick={apply}
-                        className={`px-3 py-1.5 bg-${color}-500 text-white text-xs rounded-md hover:bg-${color}-600 transition whitespace-nowrap`}
+                        className="h-10 whitespace-nowrap rounded-md bg-[var(--brand)] px-3 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
                       >
                         Set all
                       </button>
@@ -1542,12 +1650,12 @@ export default function ProductForm({ currentProduct }) {
         )}
 
         {/* Navigation */}
-        <div className="flex items-center justify-between mt-8 pt-5 border-t">
+        <div className="card-ui mt-5 flex items-center justify-between gap-3 p-4">
           <button
             type="button"
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="flex items-center gap-1.5 px-5 py-2.5 border rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="btn-ghost min-h-11 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
           >
             <MdChevronLeft size={18} /> Previous
           </button>
@@ -1557,7 +1665,8 @@ export default function ProductForm({ currentProduct }) {
                 key={i}
                 type="button"
                 onClick={() => setStep(i)}
-                className={`rounded-md transition-all ${i === step ? 'w-5 h-2 bg-[var(--brand)]' : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'}`}
+                aria-label={`Go to ${STEPS[i].label}`}
+                className={`h-3 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${i === step ? 'w-6 bg-[var(--brand)]' : 'w-3 bg-slate-300 hover:bg-slate-400'}`}
               />
             ))}
           </div>
@@ -1565,7 +1674,7 @@ export default function ProductForm({ currentProduct }) {
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-[var(--brand)] text-white rounded-md text-sm font-medium hover:brightness-95 transition"
+              className="btn-brand min-h-11 px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
             >
               Next <MdChevronRight size={18} />
             </button>
@@ -1574,7 +1683,7 @@ export default function ProductForm({ currentProduct }) {
               type="button"
               onClick={handleSubmit}
               disabled={saving}
-              className="px-7 py-2.5 bg-green-600 text-white rounded-md text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+              className="btn-brand min-h-11 min-w-40 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
             >
               {saving ? (
                 <span className="flex items-center gap-2">
@@ -1582,9 +1691,9 @@ export default function ProductForm({ currentProduct }) {
                   Saving…
                 </span>
               ) : isEdit ? (
-                'Update Product'
+                'Save changes'
               ) : (
-                'Create Product'
+                'Create product'
               )}
             </button>
           )}
@@ -1606,19 +1715,29 @@ export default function ProductForm({ currentProduct }) {
         sizeChart={sizeChart}
         attrSelections={attrSelections}
         variations={variations}
-        saving={saving}
-        onSave={handleSubmit}
-        isEdit={isEdit}
+        metaTitle={metaTitle}
+        metaDescription={metaDescription}
+        isVisible={isVisible}
       />
     </div>
   );
 }
 
-function SectionTitle({ children }) {
-  return <h2 className="text-xl font-bold text-gray-800 mb-1">{children}</h2>;
+function SectionTitle({ children, description, icon: Icon }) {
+  return (
+    <div className="-mx-5 -mt-5 flex items-start gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:-mx-6 sm:-mt-6 sm:px-6">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+        <Icon size={20} aria-hidden="true" />
+      </span>
+      <div>
+        <h2 className="text-sm font-bold text-slate-900">{children}</h2>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+      </div>
+    </div>
+  );
 }
 function FL({ children }) {
-  return <label className="block text-sm font-medium text-gray-700 mb-1.5">{children}</label>;
+  return <label className="mb-2 block text-xs font-semibold text-slate-700">{children}</label>;
 }
 function StatusBadge({ status }) {
   const m = {

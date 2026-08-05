@@ -1,11 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
-import Swal from 'sweetalert2';
 import Image from 'next/image';
-import { MdAdd, MdEdit, MdInbox, MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import { MdAdd, MdDelete, MdEdit, MdInbox, MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import * as api from 'src/services';
+import { alertError, confirmAction, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -32,6 +32,7 @@ function StatusBadge({ status }) {
 
 export default function CategoryList() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
@@ -61,9 +62,67 @@ export default function CategoryList() {
     () => api.getCategoriesByAdmin(params),
     {
       keepPreviousData: true,
-      onError: (err) => Swal.fire(err?.response?.data?.message || 'Error', '', 'error')
+      onError: (error) => alertError(error, { title: "Couldn't load categories" })
     }
   );
+
+  const refreshCategories = () => qc.invalidateQueries(['admin-categories']);
+
+  const applyToCategory = (payload) => (category) =>
+    api.updateCategoryByAdmin({ currentSlug: category.slug, ...payload });
+
+  const bulkActions = [
+    {
+      label: 'Show in shop',
+      icon: MdVisibility,
+      tone: 'success',
+      action: 'Published',
+      unit: 'categories',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Show ${rows.length} categor${rows.length === 1 ? 'y' : 'ies'} in the shop?`,
+          text: 'They become browsable on the storefront and appear in navigation.',
+          confirmText: 'Show'
+        }),
+      perform: applyToCategory({ status: 'active', isVisibleInEcom: true }),
+      onSettled: refreshCategories
+    },
+    {
+      label: 'Hide from shop',
+      icon: MdVisibilityOff,
+      tone: 'warning',
+      action: 'Hidden',
+      unit: 'categories',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Hide ${rows.length} categor${rows.length === 1 ? 'y' : 'ies'}?`,
+          text: 'Shoppers stop seeing them. Products inside keep their own status.',
+          confirmText: 'Hide'
+        }),
+      perform: applyToCategory({ isVisibleInEcom: false }),
+      onSettled: refreshCategories
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'categories',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'categories',
+          subject: rows.length === 1 ? rows[0].name : undefined,
+          items: rows.map((category) => category.name),
+          text: 'Products keep existing but lose this category and drop out of its listings.'
+        }),
+      perform: (category) => api.deleteCategoryByAdmin(category.slug),
+      rowLabel: (category) => category.name,
+      onSettled: refreshCategories
+    }
+  ];
 
   const categories = data?.data || [];
   const total = data?.total || 0;
@@ -188,6 +247,10 @@ export default function CategoryList() {
         columns={columns}
         data={categories}
         sort={sort}
+        rowKey={(category) => category.slug}
+        selectionLabel="categories"
+        exportFileName="categories-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No categories found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="categories" />}

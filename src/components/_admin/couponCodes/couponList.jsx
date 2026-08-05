@@ -2,9 +2,9 @@
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import Link from 'next/link';
 import * as api from 'src/services';
+import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -20,7 +20,9 @@ import {
   MdPeople,
   MdDiscount,
   MdShoppingCart,
-  MdLink
+  MdLink,
+  MdBlock,
+  MdCheckCircle
 } from 'react-icons/md';
 import { fDate } from 'src/utils/formatTime';
 
@@ -339,23 +341,80 @@ export default function CouponList() {
 
   const { mutate: deleteMut } = useMutation(api.deleteCouponCodeByAdmin, {
     onSuccess: () => {
-      Swal.fire({ title: 'Coupon deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Coupon deleted');
       qc.invalidateQueries('admin-coupons');
     },
-    onError: (err) => Swal.fire('Error', err.response?.data?.message || 'Failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't delete that coupon" })
   });
 
-  const handleDelete = async (c) => {
-    const r = await Swal.fire({
-      title: `Delete "${c.code}"?`,
-      text: 'This cannot be undone.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
+  const handleDelete = async (coupon) => {
+    const confirmed = await confirmDelete({
+      subject: coupon.code,
+      text: 'Shoppers who try the code get "not valid". Orders that already used it keep their discount.'
     });
-    if (r.isConfirmed) deleteMut(c.id);
+    if (confirmed) deleteMut(coupon.id);
   };
+
+  const refreshCoupons = () => qc.invalidateQueries('admin-coupons');
+
+  const setCouponStatus = (couponStatus) => (coupon) =>
+    api.updateCouponCodeByAdmin({ currentId: coupon.id, status: couponStatus });
+
+  const bulkActions = [
+    {
+      label: 'Enable',
+      icon: MdCheckCircle,
+      tone: 'success',
+      action: 'Enabled',
+      unit: 'coupons',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Enable ${rows.length} coupon${rows.length === 1 ? '' : 's'}?`,
+          text: 'Shoppers can redeem them at checkout, subject to each coupon’s own limits and dates.',
+          confirmText: 'Enable'
+        }),
+      perform: setCouponStatus('active'),
+      rowLabel: (coupon) => coupon.code,
+      onSettled: refreshCoupons
+    },
+    {
+      label: 'Disable',
+      icon: MdBlock,
+      tone: 'warning',
+      action: 'Disabled',
+      unit: 'coupons',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Disable ${rows.length} coupon${rows.length === 1 ? '' : 's'}?`,
+          text: 'The codes stop working at checkout right away. Nothing already redeemed is affected.',
+          items: rows.map((coupon) => coupon.code),
+          confirmText: 'Disable'
+        }),
+      perform: setCouponStatus('inactive'),
+      rowLabel: (coupon) => coupon.code,
+      onSettled: refreshCoupons
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'coupons',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'coupons',
+          subject: rows.length === 1 ? rows[0].code : undefined,
+          items: rows.map((coupon) => coupon.code),
+          text: 'Orders that already used these codes keep their discount.'
+        }),
+      perform: (coupon) => api.deleteCouponCodeByAdmin(coupon.id),
+      rowLabel: (coupon) => coupon.code,
+      onSettled: refreshCoupons
+    }
+  ];
 
   const coupons = data?.data || [];
   const total = data?.total || 0;
@@ -531,6 +590,9 @@ export default function CouponList() {
         columns={columns}
         data={coupons}
         sort={sort}
+        selectionLabel="coupons"
+        exportFileName="coupons-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No coupons found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="coupons" />}

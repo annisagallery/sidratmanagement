@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { confirmDelete } from 'src/utils/swal';
 import { FiCopy, FiEye, FiEyeOff, FiPlus, FiStar, FiTrash2 } from 'react-icons/fi';
 import { MdOutlineLocalShipping } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -210,15 +211,14 @@ export default function CourierAccountsManager() {
     onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
   });
 
-  const handleDelete = (account) =>
-    Swal.fire({
-      title: `Remove "${account.name}"?`,
-      text: 'Existing shipments keep their history; you just can’t send with it anymore.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#EF4444',
-      confirmButtonText: 'Remove'
-    }).then((r) => r.isConfirmed && remove.mutate(account.id));
+  const handleDelete = async (account) => {
+    const confirmed = await confirmDelete({
+      subject: account.name,
+      text: 'Existing shipments keep their history; you just can’t book new ones with it.',
+      confirmText: 'Remove'
+    });
+    if (confirmed) remove.mutate(account.id);
+  };
 
   const checkBalance = async (account) => {
     setBalances((p) => ({ ...p, [account.id]: '…' }));

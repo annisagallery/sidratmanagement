@@ -1,12 +1,12 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
-import { useQuery } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
-import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { alertError, alertInfo, confirmAction } from 'src/utils/swal';
 import { FiExternalLink, FiPackage } from 'react-icons/fi';
-import { MdInbox } from 'react-icons/md';
+import { MdInbox, MdInventory } from 'react-icons/md';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
 import { StatusBadge, StatusSelect } from 'src/components/_admin/shared/StatusBadge';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -39,8 +39,13 @@ function TagChips({ tags = [] }) {
 
 const fmtDate = (d) => (d ? fDate(d) : '—');
 
+// Only these two states can take a piece off the shelf; anything already bound
+// to a unit or sitting in a batch is left alone.
+const STOCK_ASSIGNABLE = new Set(['processing', 'production-needed']);
+
 export default function OrderItemsList() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
@@ -59,12 +64,51 @@ export default function OrderItemsList() {
 
   const { data, isLoading, isFetching } = useQuery(['admin-order-items', params], () => api.getOrderItemsByAdmin(params), {
     keepPreviousData: true,
-    onError: (err) => Swal.fire(err?.response?.data?.message || 'Something went wrong!', '', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't load order items" })
   });
 
   const items = data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.count || 1;
+
+  const itemLabel = (item) => `#${item.order?.orderNo} · ${item.product?.name || 'Unknown product'}`;
+
+  const bulkActions = [
+    {
+      label: 'Reserve ready stock',
+      icon: MdInventory,
+      tone: 'success',
+      action: 'Reserved stock for',
+      unit: 'items',
+      hint: 'Take a finished piece from HQ stock for each item that still needs one',
+      confirm: (rows) => {
+        const eligible = rows.filter((item) => STOCK_ASSIGNABLE.has(item.status));
+        if (!eligible.length) {
+          alertInfo(
+            'Nothing to reserve',
+            'These items are already bound to a piece, in production, or part of a batch.'
+          );
+          return false;
+        }
+        return confirmAction({
+          tone: 'success',
+          title: `Reserve stock for ${eligible.length} item${eligible.length === 1 ? '' : 's'}?`,
+          text: 'Each item takes the oldest matching piece in HQ stock. Items with no matching stock are reported back.',
+          items: eligible.map(itemLabel),
+          confirmText: 'Reserve'
+        });
+      },
+      perform: async (item) => {
+        if (!STOCK_ASSIGNABLE.has(item.status)) return;
+        await api.assignProductionNeedToStock(item.id);
+      },
+      rowLabel: itemLabel,
+      onSettled: () => {
+        qc.invalidateQueries(['admin-order-items']);
+        qc.invalidateQueries(['production-needs']);
+      }
+    }
+  ];
 
   const toggleDelivery = () => {
     setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
@@ -210,6 +254,9 @@ export default function OrderItemsList() {
         columns={columns}
         data={items}
         sort={sort}
+        selectionLabel="items"
+        exportFileName="order-items-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No order items found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="items" />}

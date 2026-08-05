@@ -2,10 +2,20 @@
 import { useState } from 'react';
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import Image from 'next/image';
-import { MdAdd, MdEdit, MdDelete, MdOpenInNew, MdVisibility, MdImage, MdInbox } from 'react-icons/md';
+import {
+  MdAdd,
+  MdEdit,
+  MdDelete,
+  MdOpenInNew,
+  MdVisibility,
+  MdImage,
+  MdInbox,
+  MdVisibilityOff,
+  MdPublish
+} from 'react-icons/md';
 import * as api from 'src/services';
+import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -73,25 +83,78 @@ export default function ProductList() {
   const categories = catData?.data || [];
 
   const { mutate: deleteProduct } = useMutation(api.deleteProductByAdmin, {
-    onSuccess: () => {
-      Swal.fire({ title: 'Deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
+    onSuccess: (_data, slug) => {
+      toastSuccess('Product deleted', `${slug} moved to the recycle bin.`);
       qc.invalidateQueries(['admin-products']);
     },
-    onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Delete failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't delete that product" })
   });
 
-  const handleDelete = (product) => {
-    Swal.fire({
-      title: `Delete "${product.name}"?`,
-      text: 'This will soft-delete the product and all its variations.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
-    }).then((r) => {
-      if (r.isConfirmed) deleteProduct(product.slug);
+  const handleDelete = async (product) => {
+    const confirmed = await confirmDelete({
+      subject: product.name,
+      text: 'The product and all of its variations stop appearing on the storefront.'
     });
+    if (confirmed) deleteProduct(product.slug);
   };
+
+  const refreshProducts = () => qc.invalidateQueries(['admin-products']);
+
+  const setProductStatus = (nextStatus) => (product) =>
+    api.updateProductByAdmin({ currentSlug: product.slug, status: nextStatus });
+
+  const bulkActions = [
+    {
+      label: 'Publish',
+      icon: MdPublish,
+      tone: 'success',
+      action: 'Published',
+      unit: 'products',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Publish ${rows.length} product${rows.length === 1 ? '' : 's'}?`,
+          text: 'They become visible and orderable on the storefront straight away.',
+          confirmText: 'Publish'
+        }),
+      perform: setProductStatus('active'),
+      onSettled: refreshProducts
+    },
+    {
+      label: 'Unpublish',
+      icon: MdVisibilityOff,
+      tone: 'warning',
+      action: 'Unpublished',
+      unit: 'products',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Unpublish ${rows.length} product${rows.length === 1 ? '' : 's'}?`,
+          text: 'They disappear from the storefront. Existing orders are untouched.',
+          confirmText: 'Unpublish'
+        }),
+      perform: setProductStatus('inactive'),
+      onSettled: refreshProducts
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'products',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'products',
+          subject: rows.length === 1 ? rows[0].name : undefined,
+          items: rows.map((product) => product.name),
+          text: 'Each product and all of its variations stop appearing on the storefront.'
+        }),
+      perform: (product) => api.deleteProductByAdmin(product.slug),
+      rowLabel: (product) => product.name,
+      onSettled: refreshProducts
+    }
+  ];
 
   const products = data?.data || [];
   const total = data?.total || 0;
@@ -274,6 +337,10 @@ export default function ProductList() {
         columns={columns}
         data={products}
         sort={sort}
+        rowKey={(product) => product.slug}
+        selectionLabel="products"
+        exportFileName="products-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No products found" hint="Try changing your search or filters" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="products" />}

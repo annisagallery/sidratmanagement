@@ -7,10 +7,16 @@
  * world: what it is, which piece it is (barcode), what state that piece is in,
  * and what it cost. Supply state is joined from the bound production unit by
  * `<SupplyBadge>` rather than trusted from the order row.
+ *
+ * Item state is reported here, never edited. A piece moves when something
+ * physical happens to it — received into stock, scanned on the production line,
+ * scanned into a pack, shipped — and each of those paths does its own inventory
+ * bookkeeping. A hand-typed status change skipped all of it, so the row and the
+ * shelf could disagree with nothing to say which was right.
  */
 
 import Image from 'next/image';
-import { FiAlertTriangle, FiArrowRight, FiPackage } from 'react-icons/fi';
+import { FiAlertTriangle, FiPackage } from 'react-icons/fi';
 
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import SupplyBadge from 'src/components/_admin/orders/SupplyBadge';
@@ -19,34 +25,9 @@ import { Pill, Section, money, oid } from './parts';
 
 const itemName = (item) => item.pid?.name || item.productSnapshot?.name || 'Unknown product';
 
-export default function ItemsCard({
-  order,
-  itemStatuses = [],
-  onAdvanceItem,
-  advancing = false,
-  onComplain,
-  canComplain = false,
-  packedOrder = false
-}) {
+export default function ItemsCard({ order, onComplain, canComplain = false }) {
   const items = order.items || [];
   const itemsTotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
-
-  /**
-   * The next step an operator may push a line to by hand. Terminal and
-   * supply-owned states are not hand-editable — those move when a piece is
-   * received, scanned or shipped.
-   */
-  function nextStatus(current) {
-    if (['pending', 'production-needed', 'reserved', 'ready', 'packed', 'delivered', 'returned', 'cancelled'].includes(current)) {
-      return null;
-    }
-    const workflow = itemStatuses.filter(
-      (entry) =>
-        entry.isActive !== false &&
-        !['reserved', 'packed', 'delivered', 'returned', 'return', 'cancelled'].includes(entry.value)
-    );
-    return workflow[workflow.findIndex((entry) => entry.value === current) + 1] || null;
-  }
 
   return (
     <Section
@@ -67,7 +48,6 @@ export default function ItemsCard({
         </thead>
         <tbody>
           {items.map((item, index) => {
-            const next = nextStatus(item.status);
             const barcode = item.packingBarcode || item.assignedUnit?.barcode;
             const quantity = Number(item.quantity) || 1;
 
@@ -120,16 +100,6 @@ export default function ItemsCard({
                   <div className="flex flex-col items-start gap-1">
                     <SupplyBadge item={item} />
                     {barcode ? <Code className="text-slate-500">{barcode}</Code> : null}
-                    {next && !packedOrder ? (
-                      <button
-                        type="button"
-                        disabled={advancing}
-                        onClick={() => onAdvanceItem(oid(item), next.value)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--brand-strong)] transition hover:underline disabled:opacity-40"
-                      >
-                        Move to {next.label} <FiArrowRight size={11} />
-                      </button>
-                    ) : null}
                   </div>
                 </td>
 

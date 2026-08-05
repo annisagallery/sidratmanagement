@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { alertError, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 
 const PRESET_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280'];
@@ -103,20 +104,18 @@ export default function OrderTagsManager() {
 
   const remove = useMutation(api.deleteOrderTagByAdmin, {
     onSuccess: () => qc.invalidateQueries(['orderTags']),
-    onError: (e) => Swal.fire(e?.response?.data?.message || 'Error', '', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't delete that tag" })
   });
 
   const toggleActive = (tag) => update.mutate({ id: tag.id, isActive: !tag.isActive });
 
-  const handleDelete = (id) =>
-    Swal.fire({
-      title: 'Delete this tag?',
-      text: 'This cannot be undone.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#EF4444',
-      confirmButtonText: 'Delete'
-    }).then((r) => r.isConfirmed && remove.mutate(id));
+  const handleDelete = async (tag) => {
+    const confirmed = await confirmDelete({
+      subject: tag.name,
+      text: 'The tag comes off every order carrying it. Those orders are otherwise untouched.'
+    });
+    if (confirmed) remove.mutate(tag.id);
+  };
 
   return (
     <div className="space-y-4">
@@ -189,7 +188,7 @@ export default function OrderTagsManager() {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(tag.id)}
+                            onClick={() => handleDelete(tag)}
                             className="text-xs text-red-500 hover:underline"
                           >
                             Delete

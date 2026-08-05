@@ -2,11 +2,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { toast } from 'react-toastify';
-import Swal from 'sweetalert2';
 import { MdAdd, MdCheck, MdClose, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import { BsCreditCard2Front } from 'react-icons/bs';
 
 import * as api from 'src/services';
+import { confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import BranchSelect from './BranchSelect';
@@ -87,14 +87,12 @@ export default function BranchPaymentMethods() {
   };
 
   const remove = async (method) => {
-    const confirmed = await Swal.fire({
-      title: `Remove ${method.name}?`,
-      text: 'It disappears from that branch\'s checkout immediately.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Remove'
+    const confirmed = await confirmDelete({
+      subject: method.name,
+      text: "It disappears from that branch's checkout immediately.",
+      confirmText: 'Remove'
     });
-    if (confirmed.isConfirmed) deleteMutation.mutate({ branchId, id: method.id });
+    if (confirmed) deleteMutation.mutate({ branchId, id: method.id });
   };
 
   return (

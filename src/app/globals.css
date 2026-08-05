@@ -113,6 +113,15 @@ input[type='number'] {
            transition placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2
            focus:ring-blue-400;
   }
+
+  .product-form .input-field {
+    @apply min-h-11 border-slate-300 text-base text-slate-900 placeholder-slate-400 sm:text-sm;
+  }
+
+  .product-form .input-field:focus {
+    border-color: var(--brand);
+    --tw-ring-color: var(--brand-ring);
+  }
 }
 
 /* ------------------------------------------------------------------ */

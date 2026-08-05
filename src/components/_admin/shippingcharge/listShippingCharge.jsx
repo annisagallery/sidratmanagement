@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
-import Swal from 'sweetalert2';
 import * as api from 'src/services';
-import { MdAdd, MdEdit, MdDelete, MdLocalShipping, MdInbox } from 'react-icons/md';
+import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
+import { MdAdd, MdEdit, MdDelete, MdLocalShipping, MdInbox, MdBlock, MdCheckCircle } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -59,7 +59,7 @@ export default function ShippingChargeList() {
     () => api.getAllShippingCharges(params),
     {
       keepPreviousData: true,
-      onError: (err) => Swal.fire(err?.response?.data?.message || 'Error', '', 'error')
+      onError: (error) => alertError(error, { title: "Couldn't load shipping charges" })
     }
   );
 
@@ -69,36 +69,91 @@ export default function ShippingChargeList() {
     () => (isFree ? api.disableFreeShipping() : api.enableFreeShipping()),
     {
       onSuccess: () => {
-        Swal.fire({
-          title: `Free shipping ${isFree ? 'disabled' : 'enabled'}!`,
-          icon: 'success',
-          timer: 1200,
-          showConfirmButton: false
-        });
+        toastSuccess(
+          `Free shipping ${isFree ? 'disabled' : 'enabled'}`,
+          isFree ? 'Checkout charges the rates below again.' : 'Every order now ships at no charge.'
+        );
         refetch();
       },
-      onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error')
+      onError: (error) => alertError(error, { title: "Couldn't change free shipping" })
     }
   );
 
-  const handleDelete = async (id) => {
-    const r = await Swal.fire({
-      title: 'Delete charge?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
+  const areaOf = (charge) => `${charge.district || 'ALL'} · ${charge.upazila || 'ALL'}`;
+
+  const handleDelete = async (charge) => {
+    const confirmed = await confirmDelete({
+      subject: areaOf(charge),
+      text: 'Checkout falls back to the default rate for this area.'
     });
-    if (r.isConfirmed) {
-      try {
-        await api.deleteShippingChargeByAdmin(id);
-        Swal.fire({ title: 'Deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
-        refetch();
-      } catch (err) {
-        Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error');
-      }
+    if (!confirmed) return;
+    try {
+      await api.deleteShippingChargeByAdmin(charge.id);
+      toastSuccess('Shipping charge deleted');
+      refetch();
+    } catch (error) {
+      alertError(error, { title: "Couldn't delete that charge" });
     }
   };
+
+  const setChargeStatus = (chargeStatus) => (charge) =>
+    api.updateShippingChargeByAdmin({ id: charge.id, status: chargeStatus });
+
+  const bulkActions = [
+    {
+      label: 'Activate',
+      icon: MdCheckCircle,
+      tone: 'success',
+      action: 'Activated',
+      unit: 'charges',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Activate ${rows.length} shipping charge${rows.length === 1 ? '' : 's'}?`,
+          text: 'Checkout starts quoting these rates for their areas.',
+          confirmText: 'Activate'
+        }),
+      perform: setChargeStatus('active'),
+      rowLabel: areaOf,
+      onSettled: refetch
+    },
+    {
+      label: 'Deactivate',
+      icon: MdBlock,
+      tone: 'warning',
+      action: 'Deactivated',
+      unit: 'charges',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Deactivate ${rows.length} shipping charge${rows.length === 1 ? '' : 's'}?`,
+          text: 'Checkout falls back to the default rate for these areas.',
+          items: rows.map(areaOf),
+          confirmText: 'Deactivate'
+        }),
+      perform: setChargeStatus('inactive'),
+      rowLabel: areaOf,
+      onSettled: refetch
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'charges',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'charges',
+          subject: rows.length === 1 ? areaOf(rows[0]) : undefined,
+          items: rows.map(areaOf),
+          text: 'Checkout falls back to the default rate for these areas.'
+        }),
+      perform: (charge) => api.deleteShippingChargeByAdmin(charge.id),
+      rowLabel: areaOf,
+      onSettled: refetch
+    }
+  ];
 
   const charges = data?.data || [];
   const total = data?.total || 0;
@@ -147,7 +202,7 @@ export default function ShippingChargeList() {
             <MdEdit size={17} />
           </button>
           <button
-            onClick={() => handleDelete(c.id)}
+            onClick={() => handleDelete(c)}
             className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
             title="Delete"
           >
@@ -214,6 +269,9 @@ export default function ShippingChargeList() {
         columns={columns}
         data={charges}
         sort={sort}
+        selectionLabel="charges"
+        exportFileName="shipping-charges-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={
           <EmptyState

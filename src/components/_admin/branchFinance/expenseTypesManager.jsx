@@ -2,11 +2,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { toast } from 'react-toastify';
-import Swal from 'sweetalert2';
 import { MdAdd, MdCheck, MdClose, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import { FiTag } from 'react-icons/fi';
 
 import * as api from 'src/services';
+import { confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import DataTable from 'src/components/_admin/ui/DataTable';
 
@@ -72,14 +72,12 @@ export default function ExpenseTypesManager() {
   };
 
   const remove = async (type) => {
-    const confirmed = await Swal.fire({
-      title: `Remove ${type.name}?`,
+    const confirmed = await confirmDelete({
+      subject: type.name,
       text: 'Branches can no longer pick it. Existing expenses keep the name.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Remove'
+      confirmText: 'Remove'
     });
-    if (confirmed.isConfirmed) deleteMutation.mutate(type.id);
+    if (confirmed) deleteMutation.mutate(type.id);
   };
 
   return (

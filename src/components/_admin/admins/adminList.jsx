@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
-import { MdToggleOn, MdToggleOff, MdInbox } from 'react-icons/md';
+import { MdToggleOn, MdToggleOff, MdInbox, MdBlock, MdCheckCircle, MdBadge } from 'react-icons/md';
 import * as api from 'src/services';
+import { alertError, alertInfo, confirmAction, promptSelect, toastSuccess } from 'src/utils/swal';
 import { usePermissions } from 'src/context/PermissionsContext';
 import { fDate } from 'src/utils/formatTime';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -88,17 +88,21 @@ export default function AdminList() {
     staleTime: 5 * 60_000
   });
   const roles = (rolesData?.data || []).filter((r) => r.isActive);
+  // Branch-scoped roles need a branch chosen per person, so they stay out of the
+  // bulk picker; super-admin is never handed out in a batch.
+  const bulkRoles = roles.filter((role) => !role.requiresBranch && role.slug !== 'super-admin');
+  let pendingRoleSlug = null;
 
   const { mutate: assignRole } = useMutation(
     ({ slug, userId, branch }) => api.assignRoleByAdmin(slug, { userId, ...(branch ? { branch } : {}) }),
     {
       onSuccess: (res) => {
-        Swal.fire({ title: res?.message || 'Role updated!', icon: 'success', timer: 1400, showConfirmButton: false });
+        toastSuccess(res?.message || 'Role updated');
         qc.invalidateQueries(['admin-admins']);
         qc.invalidateQueries(['admin-users']);
       },
-      onError: (err) => {
-        Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error');
+      onError: (error) => {
+        alertError(error, { title: "Couldn't update that role" });
         qc.invalidateQueries(['admin-admins']);
       }
     }
@@ -106,24 +110,100 @@ export default function AdminList() {
 
   const { mutate: updateStatus } = useMutation(api.updateUserStatusByAdmin, {
     onSuccess: () => {
-      Swal.fire({ title: 'Status updated!', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Status updated');
       qc.invalidateQueries(['admin-admins']);
     },
-    onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't change that status" })
   });
 
-  const handleChangeStatus = async (userId) => {
-    const r = await Swal.fire({
-      title: 'Change Status',
-      text: "Change this admin's status?",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, change it!'
+  const handleChangeStatus = async (staff) => {
+    const suspending = staff.status === 'active';
+    const confirmed = await confirmAction({
+      tone: suspending ? 'warning' : 'success',
+      title: suspending ? 'Suspend this staff account?' : 'Restore this staff account?',
+      subject: `${staff.name}${staff.email ? ` · ${staff.email}` : ''}`,
+      text: suspending
+        ? 'They are signed out of every panel and cannot sign back in until restored.'
+        : 'They can sign in again with the permissions their role grants.',
+      confirmText: suspending ? 'Suspend' : 'Restore'
     });
-    if (r.isConfirmed) updateStatus(userId);
+    if (confirmed) updateStatus(staff.id);
   };
+
+  // The endpoint toggles rather than sets, so skip rows already in the target state.
+  const setAccountStatus = (target) => async (staff) => {
+    if (staff.status === target) return;
+    await api.updateUserStatusByAdmin(staff.id);
+  };
+
+  const refreshAdmins = () => qc.invalidateQueries(['admin-admins']);
+
+  const bulkActions = [
+    {
+      label: 'Suspend',
+      icon: MdBlock,
+      tone: 'warning',
+      action: 'Suspended',
+      unit: 'staff accounts',
+      hint: 'Sign these accounts out of every panel and block sign-in',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Suspend ${rows.length} staff account${rows.length === 1 ? '' : 's'}?`,
+          text: 'They lose access to every panel immediately. Their records and history stay intact.',
+          items: rows.filter((staff) => staff.status === 'active').map((staff) => `${staff.name} · ${staff.role || 'staff'}`),
+          confirmText: 'Suspend'
+        }),
+      perform: setAccountStatus('inactive'),
+      rowLabel: (staff) => staff.name || staff.email,
+      onSettled: refreshAdmins
+    },
+    {
+      label: 'Restore',
+      icon: MdCheckCircle,
+      tone: 'success',
+      action: 'Restored',
+      unit: 'staff accounts',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Restore ${rows.length} staff account${rows.length === 1 ? '' : 's'}?`,
+          text: 'They can sign in again with the permissions their role grants.',
+          confirmText: 'Restore'
+        }),
+      perform: setAccountStatus('active'),
+      rowLabel: (staff) => staff.name || staff.email,
+      onSettled: refreshAdmins
+    },
+    {
+      label: 'Assign role',
+      icon: MdBadge,
+      tone: 'neutral',
+      action: 'Reassigned',
+      unit: 'staff accounts',
+      hint: 'Give every selected account the same role',
+      disabled: () => !canAssignRoles || bulkRoles.length === 0,
+      confirm: async (rows) => {
+        pendingRoleSlug = await promptSelect({
+          title: `Assign a role to ${rows.length} account${rows.length === 1 ? '' : 's'}`,
+          text: 'Branch-scoped roles are skipped here — assign those one at a time so each gets the right branch.',
+          options: bulkRoles.map((role) => ({ value: role.slug, label: role.name })),
+          placeholder: 'Choose a role',
+          confirmText: 'Assign'
+        });
+        return Boolean(pendingRoleSlug);
+      },
+      perform: async (staff) => {
+        if (staff.roleSlug === pendingRoleSlug) return;
+        await api.assignRoleByAdmin(pendingRoleSlug, { userId: staff.id });
+      },
+      rowLabel: (staff) => staff.name || staff.email,
+      onSettled: () => {
+        refreshAdmins();
+        qc.invalidateQueries(['admin-users']);
+      }
+    }
+  ];
 
   // Assign a role from the row's dropdown; branch-scoped roles need a branch,
   // and choosing "Customer" demotes the account back to the Customers list.
@@ -136,37 +216,34 @@ export default function AdminList() {
       try {
         const res = await api.adminGetBranches();
         branches = (res?.data || []).filter((b) => b.isActive !== false);
-      } catch {
-        return Swal.fire('Error', 'Could not load branches.', 'error');
+      } catch (error) {
+        return alertError(error, { title: "Couldn't load branches" });
       }
-      if (!branches.length) return Swal.fire('No branches', 'Create an active branch first.', 'info');
-      const options = Object.fromEntries(branches.map((b) => [b.id, `${b.name}${b.code ? ` (${b.code})` : ''}`]));
-      const { isConfirmed, value: branch } = await Swal.fire({
-        title: 'Select branch',
-        text: `"${targetRole.name}" is branch-scoped — ${u.name} will only work within this branch.`,
-        input: 'select',
-        inputOptions: options,
-        inputPlaceholder: 'Select branch',
-        showCancelButton: true,
-        confirmButtonText: 'Assign',
-        preConfirm: (v) => {
-          if (!v) Swal.showValidationMessage('Select a branch.');
-          return v;
-        }
+      if (!branches.length) return alertInfo('No branches yet', 'Create an active branch before assigning this role.');
+
+      const branch = await promptSelect({
+        title: 'Which branch?',
+        text: `"${targetRole.name}" is branch-scoped — ${u.name} will only work within the branch you pick.`,
+        options: branches.map((entry) => ({
+          value: entry.id,
+          label: `${entry.name}${entry.code ? ` (${entry.code})` : ''}`
+        })),
+        placeholder: 'Choose a branch',
+        confirmText: 'Assign',
+        requiredMessage: 'Pick a branch to continue.'
       });
-      if (!isConfirmed || !branch) return qc.invalidateQueries(['admin-admins']);
+      if (!branch) return qc.invalidateQueries(['admin-admins']);
       payload.branch = branch;
     }
 
     if (slug === 'user') {
-      const r = await Swal.fire({
+      const confirmed = await confirmAction({
+        tone: 'warning',
         title: `Demote ${u.name}?`,
-        text: 'They become a normal customer and lose all staff access.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Demote'
+        text: 'They become a normal customer and lose access to every staff panel.',
+        confirmText: 'Demote'
       });
-      if (!r.isConfirmed) return qc.invalidateQueries(['admin-admins']);
+      if (!confirmed) return qc.invalidateQueries(['admin-admins']);
     }
 
     if (slug !== currentSlug) assignRole({ slug, userId: payload.userId, branch: payload.branch });
@@ -252,7 +329,7 @@ export default function AdminList() {
       render: (u) => (
         <div className="flex items-center justify-end gap-1">
           <button
-            onClick={() => handleChangeStatus(u.id)}
+            onClick={() => handleChangeStatus(u)}
             className="rounded-md p-2 transition hover:bg-slate-100"
             style={{ color: 'var(--brand-strong)' }}
             title="Toggle Status"
@@ -303,6 +380,9 @@ export default function AdminList() {
         columns={columns}
         data={admins}
         sort={sort}
+        selectionLabel="staff accounts"
+        exportFileName="staff-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No admins found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="admins" />}

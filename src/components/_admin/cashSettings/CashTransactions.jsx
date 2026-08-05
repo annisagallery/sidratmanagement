@@ -133,6 +133,8 @@ export default function CashTransactions() {
       <DataTable
         columns={columns}
         data={transactions}
+        selectionLabel="transactions"
+        exportFileName="coin-transactions-selection.csv"
         isLoading={isLoading}
         empty={<EmptyState title="No transactions found" icon={MdSwapHoriz} />}
         footer={<Pagination page={page} totalPages={pages} onPage={setPage} total={total} unit="transactions" />}

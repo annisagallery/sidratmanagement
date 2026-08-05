@@ -1,375 +1,570 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
+import { alertError, confirmDelete } from 'src/utils/swal';
 import {
-  getAllAttributesWithValues,
-  createAttributeByAdmin,
-  updateAttributeByAdmin,
-  deleteAttributeByAdmin,
-  createAttributeValueByAdmin,
-  updateAttributeValueByAdmin,
-  deleteAttributeValueByAdmin
-} from 'src/services';
-import { MdAdd, MdEdit, MdDelete, MdCheck, MdClose } from 'react-icons/md';
+  MdAdd,
+  MdCheck,
+  MdChevronRight,
+  MdClose,
+  MdDelete,
+  MdEdit,
+  MdImage,
+  MdPalette,
+  MdSearch,
+  MdTextFields
+} from 'react-icons/md';
 import { TbAdjustments } from 'react-icons/tb';
+import {
+  createAttributeByAdmin,
+  createAttributeValueByAdmin,
+  deleteAttributeByAdmin,
+  deleteAttributeValueByAdmin,
+  getAllAttributesWithValues,
+  updateAttributeByAdmin,
+  updateAttributeValueByAdmin
+} from 'src/services';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
-import DataTable from 'src/components/_admin/ui/DataTable';
 
 const TYPE_META = {
-  text: { label: 'Text', cls: 'bg-gray-100 text-gray-600' },
-  color: { label: 'Color', cls: 'bg-pink-50 text-pink-700' },
-  image: { label: 'Image', cls: 'bg-blue-50 text-blue-700' }
+  text: {
+    label: 'Text',
+    description: 'Names, sizes, materials and other written options',
+    icon: MdTextFields,
+    badge: 'bg-slate-100 text-slate-700'
+  },
+  color: {
+    label: 'Color',
+    description: 'Colour options shown with a visual swatch',
+    icon: MdPalette,
+    badge: 'bg-rose-50 text-rose-700'
+  },
+  image: {
+    label: 'Image',
+    description: 'Pattern or finish options represented by an image',
+    icon: MdImage,
+    badge: 'bg-sky-50 text-sky-700'
+  }
 };
+
+const inputClass =
+  'min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-ring)]';
 
 function TypePicker({ value, onChange }) {
   return (
-    <div className="flex gap-1.5">
-      {Object.entries(TYPE_META).map(([k, v]) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => onChange(k)}
-          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition ${
-            value === k
-              ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-strong)]'
-              : 'border-gray-200 text-gray-500 hover:border-gray-300'
-          }`}
-        >
-          {v.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Value chip: read-only with Edit button; pencil switches to inline editor ──
-function ValueChip({ val, attrType, onDelete, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ value: val.value, colorHex: val.colorHex || '', active: val.active !== false });
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef();
-
-  const startEdit = () => {
-    setDraft({ value: val.value, colorHex: val.colorHex || '', active: val.active !== false });
-    setEditing(true);
-  };
-  const cancel = () => setEditing(false);
-
-  const save = async () => {
-    if (!draft.value.trim()) return;
-    setSaving(true);
-    await onSave({ value: draft.value, colorHex: draft.colorHex || null, active: draft.active });
-    setSaving(false);
-    setEditing(false);
-  };
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1.5 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)]/40 px-2 py-1">
-        {attrType === 'color' && (
-          <input
-            type="color"
-            value={draft.colorHex || '#000000'}
-            onChange={(e) => setDraft((p) => ({ ...p, colorHex: e.target.value }))}
-            className="w-6 h-6 rounded-md border-0 cursor-pointer p-0 flex-shrink-0"
-            title="Pick color"
-          />
-        )}
-        <input
-          ref={inputRef}
-          value={draft.value}
-          onChange={(e) => setDraft((p) => ({ ...p, value: e.target.value }))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') cancel();
-          }}
-          className="w-24 bg-transparent text-sm text-gray-800 outline-none"
-          placeholder="Value"
-        />
-        <label className="flex items-center gap-1 text-[11px] text-gray-500" title="Inactive values are hidden from new products">
-          <input
-            type="checkbox"
-            checked={draft.active}
-            onChange={(e) => setDraft((p) => ({ ...p, active: e.target.checked }))}
-            className="accent-[var(--brand)]"
-          />
-          Active
-        </label>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="p-1 text-green-600 hover:bg-green-50 rounded-md transition disabled:opacity-50"
-          title="Save"
-        >
-          <MdCheck size={14} />
-        </button>
-        <button onClick={cancel} className="p-1 text-gray-400 hover:bg-gray-100 rounded-md transition" title="Cancel">
-          <MdClose size={14} />
-        </button>
+    <fieldset>
+      <legend className="mb-2 text-xs font-semibold text-slate-700">Display type</legend>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {Object.entries(TYPE_META).map(([key, meta]) => {
+          const Icon = meta.icon;
+          const selected = value === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(key)}
+              className={`flex min-h-12 items-center gap-2 rounded-md border px-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                selected
+                  ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-strong)]'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <Icon size={19} aria-hidden="true" />
+              {meta.label}
+              {selected && <MdCheck className="ml-auto" size={18} aria-hidden="true" />}
+            </button>
+          );
+        })}
       </div>
-    );
-  }
-
-  return (
-    <div
-      className={`group flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 shadow-sm transition hover:border-gray-300 ${
-        val.active === false ? 'opacity-60 border-gray-200' : 'border-gray-200'
-      }`}
-    >
-      {attrType === 'color' && val.colorHex && (
-        <span
-          className="w-3.5 h-3.5 rounded-md border border-gray-200 flex-shrink-0"
-          style={{ backgroundColor: val.colorHex }}
-        />
-      )}
-      <span className="text-sm text-gray-700">{val.value}</span>
-      {val.active === false && <span className="text-[10px] font-semibold text-gray-400">off</span>}
-      <button
-        onClick={startEdit}
-        className="text-gray-300 group-hover:text-[var(--brand-strong)] transition flex-shrink-0"
-        title={`Edit ${val.value}`}
-      >
-        <MdEdit size={13} />
-      </button>
-      <button
-        onClick={onDelete}
-        className="text-gray-300 group-hover:text-red-400 hover:text-red-600 transition flex-shrink-0"
-        title={`Delete ${val.value}`}
-      >
-        <MdClose size={13} />
-      </button>
-    </div>
+    </fieldset>
   );
 }
 
-// ── "+ Add" chip: expands into a small inline form ────────────────────────────
-function AddValueChip({ attrType, onAdd }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ value: '', colorHex: '' });
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef();
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
-  const add = async () => {
-    if (!form.value.trim()) {
-      inputRef.current?.focus();
-      return;
-    }
-    setSaving(true);
-    const ok = await onAdd({ value: form.value, colorHex: form.colorHex || null });
-    setSaving(false);
-    if (ok) {
-      setForm((p) => ({ value: '', colorHex: p.colorHex }));
-      inputRef.current?.focus();
-    }
-  };
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1 rounded-md border border-dashed border-gray-300 px-2.5 py-1 text-sm text-gray-400 transition hover:border-[var(--brand)] hover:text-[var(--brand-strong)]"
-      >
-        <MdAdd size={14} /> Add
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)]/40 px-2 py-1">
-      {attrType === 'color' && (
-        <input
-          type="color"
-          value={form.colorHex || '#000000'}
-          onChange={(e) => setForm((p) => ({ ...p, colorHex: e.target.value }))}
-          className="w-6 h-6 rounded-md border-0 cursor-pointer p-0 flex-shrink-0"
-          title="Pick color"
-        />
-      )}
-      <input
-        ref={inputRef}
-        value={form.value}
-        onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') add();
-          if (e.key === 'Escape') setOpen(false);
-        }}
-        placeholder={attrType === 'color' ? 'e.g. Black' : attrType === 'image' ? 'e.g. Pattern A' : 'e.g. Small'}
-        className="w-24 bg-transparent text-sm text-gray-800 outline-none"
-      />
-      <button
-        onClick={add}
-        disabled={saving}
-        className="p-1 text-green-600 hover:bg-green-50 rounded-md transition disabled:opacity-50"
-        title="Add value (Enter)"
-      >
-        <MdCheck size={14} />
-      </button>
-      <button onClick={() => setOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-md transition" title="Close">
-        <MdClose size={14} />
-      </button>
-    </div>
-  );
-}
-
-// ── New attribute form panel (shown from the header button) ───────────────────
 function NewAttributeForm({ onCreate, onCancel, saving }) {
   const [form, setForm] = useState({ name: '', type: 'text' });
-  const inputRef = useRef();
+  const inputRef = useRef(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const submit = (e) => {
-    e.preventDefault();
+  const submit = (event) => {
+    event.preventDefault();
     if (!form.name.trim()) {
       inputRef.current?.focus();
       return;
     }
-    onCreate(form);
+    onCreate({ ...form, name: form.name.trim() });
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3 bg-gray-50 border border-gray-200 rounded-md p-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-52 flex-1">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Attribute name *</label>
+    <form onSubmit={submit} className="card-ui overflow-hidden" aria-labelledby="new-attribute-title">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <h2 id="new-attribute-title" className="text-sm font-bold text-slate-900">
+          Create an attribute
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          Add the group first. You can add its individual values from the workspace below.
+        </p>
+      </div>
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.2fr)_auto] lg:items-end">
+        <div>
+          <label htmlFor="new-attribute-name" className="mb-2 block text-xs font-semibold text-slate-700">
+            Attribute name <span className="text-red-600">*</span>
+          </label>
           <input
+            id="new-attribute-name"
             ref={inputRef}
             value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="e.g. Color, Size, Fabric"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder="e.g. Size or Fabric"
+            className={inputClass}
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
-          <TypePicker value={form.type} onChange={(type) => setForm((p) => ({ ...p, type }))} />
-        </div>
-        <div className="flex gap-2">
-          <button type="submit" disabled={saving} className="btn-brand">
-            {saving ? 'Creating…' : 'Create Attribute'}
-          </button>
-          <button type="button" onClick={onCancel} className="btn-ghost">
+        <TypePicker value={form.type} onChange={(type) => setForm((current) => ({ ...current, type }))} />
+        <div className="flex gap-2 lg:justify-end">
+          <button type="button" onClick={onCancel} className="btn-ghost min-h-11">
             Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-brand min-h-11 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? 'Creating...' : 'Create attribute'}
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-400">You can add its values right in the list below after creating.</p>
     </form>
   );
 }
 
-// ── One attribute row: read-only until Edit is clicked ────────────────────────
-function AttributeRow({ attr, onSave, onDelete, onAddVal, onSaveVal, onDeleteVal }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: attr.name, type: attr.type });
+function AttributePreview({ attr }) {
+  const values = (attr.values || []).filter((value) => value.active !== false);
+
+  if (attr.type === 'color' && values.some((value) => value.colorHex)) {
+    return (
+      <span className="flex -space-x-1" aria-hidden="true">
+        {values.slice(0, 4).map((value) => (
+          <span
+            key={value.id}
+            className="h-5 w-5 rounded-full border-2 border-white shadow-sm"
+            style={{ backgroundColor: value.colorHex || '#e2e8f0' }}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  const MetaIcon = (TYPE_META[attr.type] || TYPE_META.text).icon;
+  return (
+    <span className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-500" aria-hidden="true">
+      <MetaIcon size={17} />
+    </span>
+  );
+}
+
+function AttributeRail({ attributes, selectedId, onSelect, query, onQueryChange }) {
+  return (
+    <aside className="card-ui overflow-hidden" aria-label="Attribute list">
+      <div className="border-b border-slate-200 p-3">
+        <label htmlFor="attribute-search" className="sr-only">
+          Search attributes
+        </label>
+        <div className="relative">
+          <MdSearch
+            size={19}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <input
+            id="attribute-search"
+            type="search"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search attributes"
+            className={`${inputClass} pl-10`}
+          />
+        </div>
+      </div>
+
+      <div className="divide-y divide-slate-100">
+        {attributes.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <MdSearch size={24} className="mx-auto text-slate-300" aria-hidden="true" />
+            <p className="mt-2 text-sm font-medium text-slate-600">No matching attributes</p>
+            <p className="mt-1 text-xs text-slate-400">Try a different search term.</p>
+          </div>
+        ) : (
+          attributes.map((attr) => {
+            const active = attr.id === selectedId;
+            const valueCount = (attr.values || []).length;
+            return (
+              <button
+                key={attr.id}
+                type="button"
+                onClick={() => onSelect(attr.id)}
+                aria-current={active ? 'true' : undefined}
+                className={`group flex min-h-[72px] w-full items-center gap-3 px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--brand-ring)] ${
+                  active ? 'bg-[var(--brand-soft)]' : 'bg-white hover:bg-slate-50'
+                }`}
+              >
+                <span
+                  className={`h-10 w-1 shrink-0 rounded-full transition ${active ? 'bg-[var(--brand)]' : 'bg-slate-200 group-hover:bg-slate-300'}`}
+                  aria-hidden="true"
+                />
+                <AttributePreview attr={attr} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-sm font-bold ${active ? 'text-slate-950' : 'text-slate-700'}`}>
+                    {attr.name}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    {valueCount} value{valueCount === 1 ? '' : 's'} · {(TYPE_META[attr.type] || TYPE_META.text).label}
+                  </span>
+                </span>
+                <MdChevronRight
+                  size={20}
+                  className={active ? 'text-[var(--brand-strong)]' : 'text-slate-300'}
+                  aria-hidden="true"
+                />
+              </button>
+            );
+          })
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function AddValueForm({ attrType, onAdd, onCancel }) {
+  const [form, setForm] = useState({ value: '', colorHex: attrType === 'color' ? '#0f172a' : '' });
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
 
-  const sortedValues = [...(attr.values || [])].sort((a, b) => a.value.localeCompare(b.value));
-  const meta = TYPE_META[attr.type] || TYPE_META.text;
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
-  const startEdit = () => {
-    setForm({ name: attr.name, type: attr.type });
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.value.trim()) {
+      inputRef.current?.focus();
+      return;
+    }
+    setSaving(true);
+    const ok = await onAdd({ value: form.value.trim(), colorHex: form.colorHex || null });
+    setSaving(false);
+    if (ok) onCancel();
+  };
+
+  return (
+    <form onSubmit={submit} className="mb-4 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] p-4">
+      <div className="grid gap-3 sm:grid-cols-[auto_minmax(180px,1fr)_auto] sm:items-end">
+        {attrType === 'color' && (
+          <div>
+            <label htmlFor="new-value-colour" className="mb-2 block text-xs font-semibold text-slate-700">
+              Colour
+            </label>
+            <input
+              id="new-value-colour"
+              type="color"
+              value={form.colorHex || '#0f172a'}
+              onChange={(event) => setForm((current) => ({ ...current, colorHex: event.target.value }))}
+              className="h-11 w-14 cursor-pointer rounded-md border border-slate-300 bg-white p-1"
+            />
+          </div>
+        )}
+        <div>
+          <label htmlFor="new-attribute-value" className="mb-2 block text-xs font-semibold text-slate-700">
+            Value name <span className="text-red-600">*</span>
+          </label>
+          <input
+            id="new-attribute-value"
+            ref={inputRef}
+            value={form.value}
+            onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))}
+            placeholder={attrType === 'color' ? 'e.g. Midnight blue' : attrType === 'image' ? 'e.g. Floral print' : 'e.g. Large'}
+            className={inputClass}
+          />
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="btn-ghost min-h-11">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-brand min-h-11 disabled:cursor-not-allowed disabled:opacity-50">
+            {saving ? 'Adding...' : 'Add value'}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function ValueCard({ value, attrType, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({
+    value: value.value,
+    colorHex: value.colorHex || '',
+    active: value.active !== false
+  });
+
+  const startEditing = () => {
+    setDraft({ value: value.value, colorHex: value.colorHex || '', active: value.active !== false });
     setEditing(true);
   };
 
   const save = async () => {
-    if (!form.name.trim()) return;
+    if (!draft.value.trim()) return;
     setSaving(true);
-    const ok = await onSave(form);
+    const ok = await onSave({ ...draft, value: draft.value.trim(), colorHex: draft.colorHex || null });
     setSaving(false);
-    if (ok) setEditing(false);
+    if (ok !== false) setEditing(false);
   };
 
   if (editing) {
     return (
-      <tr className="bg-[var(--brand-soft)]/30 border-b border-[var(--brand-ring)]">
-        <td className="px-4 py-2.5">
-          <input
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-            className="border rounded-md px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
-            placeholder="Attribute name"
-          />
-        </td>
-        <td className="px-4 py-2.5">
-          <TypePicker value={form.type} onChange={(type) => setForm((p) => ({ ...p, type }))} />
-        </td>
-        <td className="px-4 py-2.5 text-sm text-gray-400">{sortedValues.length} value{sortedValues.length !== 1 ? 's' : ''}</td>
-        <td className="px-4 py-2.5">
-          <div className="flex items-center justify-end gap-1">
-            <button onClick={save} disabled={saving} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition disabled:opacity-50" title="Save">
-              <MdCheck size={15} />
+      <div className="rounded-md border border-[var(--brand)] bg-[var(--brand-soft)] p-3 shadow-sm">
+        <div className="flex gap-2">
+          {attrType === 'color' && (
+            <input
+              type="color"
+              aria-label={`Colour for ${value.value}`}
+              value={draft.colorHex || '#0f172a'}
+              onChange={(event) => setDraft((current) => ({ ...current, colorHex: event.target.value }))}
+              className="h-11 w-12 shrink-0 cursor-pointer rounded-md border border-slate-300 bg-white p-1"
+            />
+          )}
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Value name</span>
+            <input
+              autoFocus
+              value={draft.value}
+              onChange={(event) => setDraft((current) => ({ ...current, value: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') save();
+                if (event.key === 'Escape') setEditing(false);
+              }}
+              className={inputClass}
+            />
+          </label>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+            <input
+              type="checkbox"
+              checked={draft.active}
+              onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
+              className="h-4 w-4 accent-[var(--brand)]"
+            />
+            Available for products
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="flex h-11 w-11 items-center justify-center rounded-md text-slate-500 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              aria-label={`Cancel editing ${value.value}`}
+            >
+              <MdClose size={19} />
             </button>
-            <button onClick={() => setEditing(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition" title="Cancel">
-              <MdClose size={15} />
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="flex h-11 w-11 items-center justify-center rounded-md bg-[var(--brand)] text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:opacity-50"
+              aria-label={`Save ${value.value}`}
+            >
+              <MdCheck size={19} />
             </button>
           </div>
-        </td>
-      </tr>
+        </div>
+      </div>
     );
   }
 
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50/50 align-top">
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className="text-sm font-semibold text-gray-800">{attr.name}</span>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span>
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {sortedValues.map((val) => (
-            <ValueChip
-              key={val.id}
-              val={val}
-              attrType={attr.type}
-              onDelete={() => onDeleteVal(val)}
-              onSave={(draft) => onSaveVal(val.id, draft)}
-            />
-          ))}
-          <AddValueChip attrType={attr.type} onAdd={onAddVal} />
+    <div className={`group rounded-md border bg-white p-3 transition hover:border-slate-300 hover:shadow-sm ${value.active === false ? 'border-slate-200 bg-slate-50' : 'border-slate-200'}`}>
+      <div className="flex items-start gap-3">
+        {attrType === 'color' && (
+          <span
+            className="h-10 w-10 shrink-0 rounded-md border border-slate-200 shadow-inner"
+            style={{ backgroundColor: value.colorHex || '#e2e8f0' }}
+            aria-label={value.colorHex ? `Colour ${value.colorHex}` : 'No colour selected'}
+          />
+        )}
+        {attrType !== 'color' && (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-500" aria-hidden="true">
+            {attrType === 'image' ? <MdImage size={19} /> : <MdTextFields size={19} />}
+          </span>
+        )}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="truncate text-sm font-bold text-slate-800">{value.value}</p>
+          <p className={`mt-1 text-xs font-medium ${value.active === false ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {value.active === false ? 'Unavailable' : 'Available'}
+          </p>
         </div>
-      </td>
-      <td className="px-4 py-3 whitespace-nowrap">
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex shrink-0 gap-1">
           <button
-            onClick={startEdit}
-            className="px-2 py-1 text-xs text-[var(--brand-strong)] hover:bg-[var(--brand-soft)] rounded-md transition"
-            title={`Edit ${attr.name}`}
+            type="button"
+            onClick={startEditing}
+            className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+            aria-label={`Edit ${value.value}`}
           >
-            <MdEdit size={13} className="inline -mt-0.5 mr-0.5" /> Edit
+            <MdEdit size={18} />
           </button>
           <button
+            type="button"
             onClick={onDelete}
-            className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition"
-            title={`Delete ${attr.name}`}
+            className="flex h-10 w-10 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+            aria-label={`Delete ${value.value}`}
           >
-            <MdDelete size={14} />
+            <MdDelete size={18} />
           </button>
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function AttributeWorkspace({ attr, onSave, onDelete, onAddValue, onSaveValue, onDeleteValue }) {
+  const [editing, setEditing] = useState(false);
+  const [addingValue, setAddingValue] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: attr.name, type: attr.type });
+
+  const values = useMemo(
+    () => [...(attr.values || [])].sort((first, second) => first.value.localeCompare(second.value)),
+    [attr.values]
+  );
+  const activeCount = values.filter((value) => value.active !== false).length;
+  const meta = TYPE_META[attr.type] || TYPE_META.text;
+  const MetaIcon = meta.icon;
+
+  const saveAttribute = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const ok = await onSave({ ...form, name: form.name.trim() });
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
+
+  return (
+    <section className="card-ui min-w-0 overflow-hidden" aria-labelledby="attribute-workspace-title">
+      <div className="border-b border-slate-200">
+        <div className="h-1 bg-[var(--brand)]" />
+        <div className="flex flex-wrap items-start gap-4 px-5 py-5 sm:px-6">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+            <MetaIcon size={23} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="attribute-workspace-title" className="text-xl font-bold text-slate-950">
+                {attr.name}
+              </h2>
+              <span className={`rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${meta.badge}`}>
+                {meta.label}
+              </span>
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">{meta.description}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing((current) => !current)}
+              className="btn-ghost min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+            >
+              {editing ? <MdClose size={18} /> : <MdEdit size={18} />}
+              {editing ? 'Close' : 'Edit details'}
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+            >
+              <MdDelete size={18} /> Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="border-b border-slate-200 bg-slate-50 p-5 sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(360px,1.2fr)_auto] lg:items-end">
+            <div>
+              <label htmlFor={`attribute-name-${attr.id}`} className="mb-2 block text-xs font-semibold text-slate-700">
+                Attribute name
+              </label>
+              <input
+                id={`attribute-name-${attr.id}`}
+                value={form.name}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                className={inputClass}
+              />
+            </div>
+            <TypePicker value={form.type} onChange={(type) => setForm((current) => ({ ...current, type }))} />
+            <button
+              type="button"
+              onClick={saveAttribute}
+              disabled={saving}
+              className="btn-brand min-h-11 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save details'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="p-5 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mr-auto">
+            <h3 className="text-base font-bold text-slate-900">Values</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              {values.length} total · {activeCount} available for product selection
+            </p>
+          </div>
+          {!addingValue && (
+            <button type="button" onClick={() => setAddingValue(true)} className="btn-brand min-h-11">
+              <MdAdd size={18} /> Add value
+            </button>
+          )}
+        </div>
+
+        {addingValue && (
+          <AddValueForm attrType={attr.type} onAdd={onAddValue} onCancel={() => setAddingValue(false)} />
+        )}
+
+        {values.length === 0 ? (
+          <div className="rounded-md border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+            <MetaIcon size={30} className="mx-auto text-slate-300" aria-hidden="true" />
+            <p className="mt-3 text-sm font-bold text-slate-700">No values yet</p>
+            <p className="mt-1 text-sm text-slate-500">Add the first option customers or staff can select.</p>
+            {!addingValue && (
+              <button type="button" onClick={() => setAddingValue(true)} className="btn-brand mt-5 min-h-11">
+                <MdAdd size={18} /> Add first value
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            {values.map((value) => (
+              <ValueCard
+                key={value.id}
+                value={value}
+                attrType={attr.type}
+                onSave={(draft) => onSaveValue(value.id, draft)}
+                onDelete={() => onDeleteValue(value)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function AttributesManager() {
   const [attributes, setAttributes] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -377,152 +572,195 @@ export default function AttributesManager() {
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await getAllAttributesWithValues();
-      setAttributes((res.data || []).slice().sort((a, b) => a.name.localeCompare(b.name)));
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+      const response = await getAllAttributesWithValues();
+      const next = (response.data || []).slice().sort((first, second) => first.name.localeCompare(second.name));
+      setAttributes(next);
+      setSelectedId((current) => (next.some((attribute) => attribute.id === current) ? current : next[0]?.id || null));
+      return next;
+    } catch (error) {
+      Swal.fire('Could not load attributes', error?.response?.data?.message || error.message, 'error');
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // This is the component's initial data load; later refreshes are triggered by user actions.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, []);
 
-  // ── Attribute CRUD ──────────────────────────────────────────────────────────
-  const createAttr = async (form) => {
+  const filteredAttributes = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return attributes;
+    return attributes.filter((attribute) =>
+      [attribute.name, attribute.type, ...(attribute.values || []).map((value) => value.value)]
+        .join(' ')
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [attributes, query]);
+
+  const selectedAttribute = attributes.find((attribute) => attribute.id === selectedId) || null;
+  const valueCount = attributes.reduce((total, attribute) => total + (attribute.values || []).length, 0);
+
+  const createAttribute = async (form) => {
     setCreating(true);
     try {
       await createAttributeByAdmin(form);
+      const next = await load(true);
+      const created = next.find(
+        (attribute) => attribute.name.toLowerCase() === form.name.toLowerCase() && attribute.type === form.type
+      );
+      if (created) setSelectedId(created.id);
       setShowForm(false);
-      await load(true);
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+    } catch (error) {
+      Swal.fire('Could not create attribute', error?.response?.data?.message || error.message, 'error');
     } finally {
       setCreating(false);
     }
   };
 
-  const saveAttr = async (attr, form) => {
+  const saveAttribute = async (attr, form) => {
     try {
       await updateAttributeByAdmin({ id: attr.id, ...form });
       await load(true);
       return true;
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+    } catch (error) {
+      Swal.fire('Could not save attribute', error?.response?.data?.message || error.message, 'error');
       return false;
     }
   };
 
-  const delAttr = async (attr) => {
-    const r = await Swal.fire({
-      title: `Delete "${attr.name}"?`,
-      text: 'All its values will also be removed.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
+  const deleteAttribute = async (attr) => {
+    const confirmed = await confirmDelete({
+      subject: attr.name,
+      text: 'Every value under it goes too. Products already using those values keep them on record.',
+      confirmText: 'Delete attribute'
     });
-    if (!r.isConfirmed) return;
+    if (!confirmed) return;
+
     try {
       await deleteAttributeByAdmin(attr.id);
       await load(true);
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+    } catch (error) {
+      alertError(error, { title: "Couldn't delete that attribute" });
     }
   };
 
-  // ── Value CRUD ──────────────────────────────────────────────────────────────
-  const addVal = async (attr, payload) => {
+  const addValue = async (attr, payload) => {
     try {
       await createAttributeValueByAdmin({ attributeId: attr.id, ...payload });
       await load(true);
       return true;
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+    } catch (error) {
+      Swal.fire('Could not add value', error?.response?.data?.message || error.message, 'error');
       return false;
     }
   };
 
-  const saveVal = async (attr, valueId, draft) => {
+  const saveValue = async (attr, valueId, draft) => {
     try {
       await updateAttributeValueByAdmin({ attributeId: attr.id, valueId, ...draft });
       await load(true);
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+      return true;
+    } catch (error) {
+      Swal.fire('Could not save value', error?.response?.data?.message || error.message, 'error');
+      return false;
     }
   };
 
-  const delVal = async (attr, val) => {
-    const r = await Swal.fire({
-      title: `Delete "${val.value}"?`,
+  const deleteValue = async (attr, value) => {
+    const result = await Swal.fire({
+      title: `Delete "${value.value}"?`,
+      text: 'This value will no longer be available on products.',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
+      confirmButtonText: 'Delete value',
+      confirmButtonColor: '#dc2626'
     });
-    if (!r.isConfirmed) return;
+    if (!result.isConfirmed) return;
+
     try {
-      await deleteAttributeValueByAdmin({ attributeId: attr.id, valueId: val.id });
+      await deleteAttributeValueByAdmin({ attributeId: attr.id, valueId: value.id });
       await load(true);
-    } catch (e) {
-      Swal.fire('Error', e?.response?.data?.message || e.message, 'error');
+    } catch (error) {
+      Swal.fire('Could not delete value', error?.response?.data?.message || error.message, 'error');
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
-        title="Attributes"
-        subtitle="Product attributes (Color, Size, etc.) and their values — sorted A–Z"
+        title="Product attributes"
+        subtitle={loading ? 'Loading attribute catalogue...' : `${attributes.length} attributes · ${valueCount} values`}
         icon={TbAdjustments}
       >
         {!showForm && (
-          <button onClick={() => setShowForm(true)} className="btn-brand">
-            <MdAdd size={16} /> New Attribute
+          <button type="button" onClick={() => setShowForm(true)} className="btn-brand min-h-11">
+            <MdAdd size={18} /> New attribute
           </button>
         )}
       </PageHeader>
 
-      {showForm && <NewAttributeForm onCreate={createAttr} onCancel={() => setShowForm(false)} saving={creating} />}
+      {showForm && (
+        <NewAttributeForm onCreate={createAttribute} onCancel={() => setShowForm(false)} saving={creating} />
+      )}
 
       {loading ? (
-        <div className="card-ui p-4 space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-10 bg-gray-100 rounded-md animate-pulse" />
-          ))}
+        <div className="grid gap-4 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+          <div className="card-ui space-y-3 p-4">
+            <div className="h-11 animate-pulse rounded-md bg-slate-100" />
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="h-[72px] animate-pulse rounded-md bg-slate-100" />
+            ))}
+          </div>
+          <div className="card-ui space-y-4 p-6">
+            <div className="h-14 w-2/3 animate-pulse rounded-md bg-slate-100" />
+            <div className="h-11 animate-pulse rounded-md bg-slate-100" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-20 animate-pulse rounded-md bg-slate-100" />
+              ))}
+            </div>
+          </div>
         </div>
       ) : attributes.length === 0 ? (
-        <div className="text-center py-14 text-sm text-gray-500 border border-dashed border-gray-300 rounded-md">
-          <TbAdjustments size={36} className="mx-auto mb-3 opacity-20" />
-          No attributes yet — create your first one above.
+        <div className="card-ui border-2 border-dashed px-6 py-16 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+            <TbAdjustments size={28} aria-hidden="true" />
+          </span>
+          <h2 className="mt-4 text-base font-bold text-slate-800">Build your attribute catalogue</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+            Create groups such as Colour, Size or Fabric, then add the values products can use.
+          </p>
+          {!showForm && (
+            <button type="button" onClick={() => setShowForm(true)} className="btn-brand mt-5 min-h-11">
+              <MdAdd size={18} /> Create first attribute
+            </button>
+          )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-gray-200">
-          <DataTable className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">Attribute</th>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">Type</th>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide w-full">Values</th>
-                <th className="px-4 py-2.5 text-right text-xs text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attributes.map((attr) => (
-                <AttributeRow
-                  key={attr.id}
-                  attr={attr}
-                  onSave={(form) => saveAttr(attr, form)}
-                  onDelete={() => delAttr(attr)}
-                  onAddVal={(payload) => addVal(attr, payload)}
-                  onSaveVal={(valueId, draft) => saveVal(attr, valueId, draft)}
-                  onDeleteVal={(val) => delVal(attr, val)}
-                />
-              ))}
-            </tbody>
-          </DataTable>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+          <AttributeRail
+            attributes={filteredAttributes}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            query={query}
+            onQueryChange={setQuery}
+          />
+          {selectedAttribute && (
+            <AttributeWorkspace
+              key={selectedAttribute.id}
+              attr={selectedAttribute}
+              onSave={(form) => saveAttribute(selectedAttribute, form)}
+              onDelete={() => deleteAttribute(selectedAttribute)}
+              onAddValue={(payload) => addValue(selectedAttribute, payload)}
+              onSaveValue={(valueId, draft) => saveValue(selectedAttribute, valueId, draft)}
+              onDeleteValue={(value) => deleteValue(selectedAttribute, value)}
+            />
+          )}
         </div>
       )}
     </div>

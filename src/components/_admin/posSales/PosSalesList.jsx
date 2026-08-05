@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery } from 'react-query';
 import Swal from 'sweetalert2';
-import { MdChevronRight, MdPointOfSale } from 'react-icons/md';
+import { MdChevronRight, MdPointOfSale, MdReceiptLong } from 'react-icons/md';
 
 import * as api from 'src/services';
+import { printInvoiceSheet } from 'src/utils/printSheets';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -191,6 +192,20 @@ export default function PosSalesList() {
       <DataTable
         columns={columns}
         data={sales}
+        selectionLabel="sales"
+        exportFileName="pos-sales-selection.csv"
+        rowKey={(sale) => sale.orderNo}
+        bulkActions={[
+          {
+            // No label action here: a counter sale leaves with the customer,
+            // so there is nothing to ship and nothing to address.
+            label: 'Print invoices',
+            icon: MdReceiptLong,
+            tone: 'neutral',
+            hint: 'One invoice per A4 page, in a new tab',
+            onClick: printInvoiceSheet
+          }
+        ]}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No POS sales found" icon={MdPointOfSale} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="sales" />}

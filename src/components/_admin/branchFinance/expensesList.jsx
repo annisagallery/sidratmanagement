@@ -2,9 +2,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { toast } from 'react-toastify';
-import { MdClose, MdOutlineReceipt } from 'react-icons/md';
+import { MdCancel, MdCheckCircle, MdClose, MdOutlineReceipt } from 'react-icons/md';
 
 import * as api from 'src/services';
+import { alertInfo, confirmAction, promptText } from 'src/utils/swal';
 import { fCurrency } from 'src/utils/formatNumber';
 import { usePermissions } from 'src/context/PermissionsContext';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -175,6 +176,7 @@ function ExpensePanel({ expenseId, onClose }) {
 }
 
 export default function ExpensesList() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [branch, setBranch] = useState('');
   const [status, setStatus] = useState('pending');
@@ -194,6 +196,75 @@ export default function ExpensesList() {
     keepPreviousData: true
   });
   const expenses = data?.data || [];
+
+  const refreshExpenses = () => queryClient.invalidateQueries(['admin-expenses']);
+  const expenseLabel = (expense) => `${expense.expenseNo} · ${fCurrency(expense.amount)}`;
+  const pendingOnly = (rows) => rows.filter((expense) => expense.status === 'pending');
+
+  // A rejection has to say why — the branch sees the note — so the reason is
+  // collected once for the batch rather than left blank.
+  let rejectionNote = '';
+
+  const bulkActions = [
+    {
+      label: 'Approve',
+      icon: MdCheckCircle,
+      tone: 'success',
+      action: 'Approved',
+      unit: 'expenses',
+      hint: 'Approve every selected expense that is still pending',
+      confirm: (rows) => {
+        const pending = pendingOnly(rows);
+        if (!pending.length) {
+          alertInfo('Nothing to approve', 'None of the selected expenses are still pending review.');
+          return false;
+        }
+        return confirmAction({
+          tone: 'success',
+          title: `Approve ${pending.length} expense${pending.length === 1 ? '' : 's'}?`,
+          text: `Totalling ${fCurrency(pending.reduce((sum, expense) => sum + (expense.amount || 0), 0))}. Approved expenses post to the branch ledger.`,
+          items: pending.map(expenseLabel),
+          confirmText: 'Approve'
+        });
+      },
+      perform: async (expense) => {
+        if (expense.status !== 'pending') return;
+        await api.reviewExpenseByAdmin({ id: expense.id, decision: 'approved', reviewNote: '' });
+      },
+      rowLabel: expenseLabel,
+      onSettled: refreshExpenses
+    },
+    {
+      label: 'Reject',
+      icon: MdCancel,
+      tone: 'danger',
+      action: 'Rejected',
+      unit: 'expenses',
+      confirm: async (rows) => {
+        const pending = pendingOnly(rows);
+        if (!pending.length) {
+          alertInfo('Nothing to reject', 'None of the selected expenses are still pending review.');
+          return false;
+        }
+        rejectionNote = await promptText({
+          tone: 'danger',
+          title: `Reject ${pending.length} expense${pending.length === 1 ? '' : 's'}?`,
+          text: 'The branch sees this note, so say what needs fixing before they resubmit.',
+          label: 'Reason for rejection',
+          placeholder: 'e.g. receipt photo is unreadable',
+          confirmText: 'Reject',
+          requiredMessage: 'Explain the rejection so the branch can act on it.'
+        });
+        return Boolean(rejectionNote);
+      },
+      perform: async (expense) => {
+        if (expense.status !== 'pending') return;
+        await api.reviewExpenseByAdmin({ id: expense.id, decision: 'rejected', reviewNote: rejectionNote });
+      },
+      rowLabel: expenseLabel,
+      onSettled: refreshExpenses
+    }
+  ];
 
   const columns = [
     { key: 'expenseNo', label: 'No', render: (row) => <span className="font-semibold">{row.expenseNo}</span> },
@@ -264,6 +335,9 @@ export default function ExpensesList() {
       <DataTable
         columns={columns}
         data={expenses}
+        selectionLabel="expenses"
+        exportFileName="branch-expenses-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading}
         onRowClick={(row) => setSelectedId(row.id)}
         footer={

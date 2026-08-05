@@ -59,7 +59,6 @@ export default function OrderDetail({ params }) {
   const router = useRouter();
 
   const { statuses: orderStatuses } = useStatuses('order');
-  const { statuses: itemStatuses } = useStatuses('orderItem');
 
   const { data, isLoading, refetch } = useQuery(['admin-order', orderNo], () => api.getOrderByAdmin(orderNo), {
     refetchOnWindowFocus: false
@@ -112,17 +111,6 @@ export default function OrderDetail({ params }) {
     },
     onError: (error) => errorAlert('Cannot pack this order', error, 'Not every piece is ready.')
   });
-
-  const { mutate: advanceItem, isLoading: advancingItem } = useMutation(
-    ({ itemId, status }) => api.updateItemInOrder({ orderNo, itemId, status }),
-    {
-      onSuccess: () => {
-        refetch();
-        toast('Item updated');
-      },
-      onError: (error) => errorAlert('Cannot change this item', error, 'The next production step is required.')
-    }
-  );
 
   const { mutate: removePayment } = useMutation((paymentId) => api.removeOrderPayment({ orderNo, paymentId }), {
     onSuccess: () => {
@@ -273,6 +261,7 @@ export default function OrderDetail({ params }) {
         onPrev={() => order.previousOrder && router.push(`/orders/${order.previousOrder}`)}
         onNext={() => order.nextOrder && router.push(`/orders/${order.nextOrder}`)}
         onPrint={() => window.open(`/invoice/${orderNo}`, '_blank')}
+        onPrintLabel={() => window.open(`/labels?orders=${encodeURIComponent(orderNo)}`, '_blank')}
         onHistory={() => setModal('history')}
       />
 
@@ -379,12 +368,8 @@ export default function OrderDetail({ params }) {
         <div className="space-y-4 lg:order-1 lg:col-span-2">
           <ItemsCard
             order={order}
-            itemStatuses={itemStatuses}
-            onAdvanceItem={(itemId, status) => advanceItem({ itemId, status })}
-            advancing={advancingItem}
             onComplain={setComplaintItem}
             canComplain={COMPLETED_STATUSES.includes(order.status)}
-            packedOrder={order.status === 'packed'}
           />
 
           <PaymentsCard

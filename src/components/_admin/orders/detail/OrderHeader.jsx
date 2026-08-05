@@ -10,7 +10,7 @@
  */
 
 import { format } from 'date-fns';
-import { FiChevronLeft, FiChevronRight, FiClock, FiPrinter } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiClock, FiPrinter, FiTruck } from 'react-icons/fi';
 
 import { StatusBadge } from 'src/components/_admin/shared/StatusBadge';
 import { CopyButton, Pill, money } from './parts';
@@ -38,6 +38,7 @@ export default function OrderHeader({
   onPrev,
   onNext,
   onPrint,
+  onPrintLabel,
   onHistory
 }) {
   const packedCount = packing?.verified || 0;
@@ -77,6 +78,11 @@ export default function OrderHeader({
           <button type="button" onClick={onPrint} className="btn-ghost h-9 !text-xs">
             <FiPrinter size={14} /> Invoice
           </button>
+          {onPrintLabel && (
+            <button type="button" onClick={onPrintLabel} className="btn-ghost h-9 !text-xs">
+              <FiTruck size={14} /> Label
+            </button>
+          )}
           <button type="button" onClick={onHistory} className="btn-ghost h-9 !text-xs">
             <FiClock size={14} /> History
           </button>

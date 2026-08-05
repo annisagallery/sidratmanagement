@@ -1,12 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MdAdd, MdEdit, MdDelete, MdInbox } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdInbox, MdPlayArrow, MdPause } from 'react-icons/md';
 import { FiZap, FiTag, FiSun, FiVolume2 } from 'react-icons/fi';
-import { getCampaignsByAdmin, deleteCampaignByAdmin } from 'src/services';
+import { getCampaignsByAdmin, deleteCampaignByAdmin, updateCampaignByAdmin } from 'src/services';
+import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -81,23 +81,76 @@ export default function CampaignList() {
 
   const { mutate: deleteMut } = useMutation((id) => deleteCampaignByAdmin(id), {
     onSuccess: () => {
-      Swal.fire({ title: 'Campaign deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Campaign deleted');
       qc.invalidateQueries('admin-campaigns');
     },
-    onError: (e) => Swal.fire('Error', e.response?.data?.message || 'Failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't delete that campaign" })
   });
 
-  const handleDelete = async (c) => {
-    const r = await Swal.fire({
-      title: `Delete "${c.name}"?`,
-      text: 'This cannot be undone.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
+  const handleDelete = async (campaign) => {
+    const confirmed = await confirmDelete({
+      subject: campaign.name,
+      text: 'Products in the campaign go back to their regular pricing immediately.'
     });
-    if (r.isConfirmed) deleteMut(c.id);
+    if (confirmed) deleteMut(campaign.id);
   };
+
+  const refreshCampaigns = () => qc.invalidateQueries('admin-campaigns');
+
+  const setCampaignStatus = (status) => (campaign) =>
+    updateCampaignByAdmin({ currentSlug: campaign.slug, status });
+
+  const bulkActions = [
+    {
+      label: 'Activate',
+      icon: MdPlayArrow,
+      tone: 'success',
+      action: 'Activated',
+      unit: 'campaigns',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Activate ${rows.length} campaign${rows.length === 1 ? '' : 's'}?`,
+          text: 'Campaign pricing applies to shoppers straight away, within each campaign’s date range.',
+          confirmText: 'Activate'
+        }),
+      perform: setCampaignStatus('active'),
+      onSettled: refreshCampaigns
+    },
+    {
+      label: 'Pause',
+      icon: MdPause,
+      tone: 'warning',
+      action: 'Paused',
+      unit: 'campaigns',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Pause ${rows.length} campaign${rows.length === 1 ? '' : 's'}?`,
+          text: 'Products revert to regular pricing until the campaign is activated again.',
+          confirmText: 'Pause'
+        }),
+      perform: setCampaignStatus('inactive'),
+      onSettled: refreshCampaigns
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'campaigns',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'campaigns',
+          subject: rows.length === 1 ? rows[0].name : undefined,
+          items: rows.map((campaign) => campaign.name),
+          text: 'Products in these campaigns go back to their regular pricing immediately.'
+        }),
+      perform: (campaign) => deleteCampaignByAdmin(campaign.id),
+      onSettled: refreshCampaigns
+    }
+  ];
 
   const campaigns = data?.data || [];
   const total = data?.total || 0;
@@ -243,6 +296,9 @@ export default function CampaignList() {
         columns={columns}
         data={campaigns}
         sort={sort}
+        selectionLabel="campaigns"
+        exportFileName="campaigns-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No campaigns found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="campaigns" />}

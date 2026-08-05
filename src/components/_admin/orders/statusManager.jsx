@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { confirmDelete } from 'src/utils/swal';
 import { FiPlus, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
 
 const MODELS = [
@@ -97,7 +98,7 @@ function StatusRow({ s, onSave, onDelete }) {
               >
                 Edit
               </button>
-              <button onClick={() => onDelete(s.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition">
+              <button onClick={() => onDelete(s)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition">
                 <FiTrash2 size={13} />
               </button>
             </>
@@ -216,16 +217,12 @@ export default function StatusManager({ model }) {
     onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
   });
 
-  const handleDelete = (id) => {
-    Swal.fire({
-      title: 'Delete status?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Delete',
-      confirmButtonColor: '#ef4444'
-    }).then((r) => {
-      if (r.isConfirmed) deleteStatus(id);
+  const handleDelete = async (status) => {
+    const confirmed = await confirmDelete({
+      subject: status.label || status.value,
+      text: 'Records already sitting in this status keep it, but nothing new can be moved here.'
     });
+    if (confirmed) deleteStatus(status.id);
   };
 
   return (

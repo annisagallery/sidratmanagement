@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
+import { alertError, confirmDelete, toastSuccess } from 'src/utils/swal';
 import * as api from 'src/services';
 import { MdArrowBack, MdEdit, MdDelete, MdOpenInNew } from 'react-icons/md';
 import { FiImage, FiTag, FiList, FiBox, FiPackage, FiX } from 'react-icons/fi';
@@ -155,11 +156,11 @@ export default function ViewProduct({ slug }) {
 
   const { mutate: deleteProduct } = useMutation(() => api.deleteProductByAdmin(slug), {
     onSuccess: () => {
-      Swal.fire({ title: 'Deleted!', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Product deleted', 'It is in the recycle bin if you need it back.');
       qc.invalidateQueries(['admin-products']);
       router.push('/products');
     },
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Delete failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't delete that product" })
   });
 
   const presaleMutation = useMutation(api.updateVariationPresale, {
@@ -167,7 +168,7 @@ export default function ViewProduct({ slug }) {
       qc.invalidateQueries(['product-admin', slug]);
       qc.invalidateQueries(['admin-products']);
     },
-    onError: (e) => Swal.fire('Could not update presale', e?.response?.data?.message || 'Try again.', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't update presale" })
   });
 
   function handleDelete() {

@@ -4,12 +4,23 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next-nprogress-bar';
-import { useQuery } from 'react-query';
-import Swal from 'sweetalert2';
+import { useQuery, useQueryClient } from 'react-query';
 import { BsCartPlus } from 'react-icons/bs';
-import { MdChevronRight, MdInbox } from 'react-icons/md';
+import {
+  MdChevronRight,
+  MdDelete,
+  MdInbox,
+  MdLabel,
+  MdLocalShipping,
+  MdReceiptLong,
+  MdSwapHoriz,
+  MdTableRows,
+  MdViewList
+} from 'react-icons/md';
 
 import * as api from 'src/services';
+import { alertError, confirmDelete, promptSelect } from 'src/utils/swal';
+import { printInvoiceSheet, printLabelSheet } from 'src/utils/printSheets';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -18,6 +29,7 @@ import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { StatusBadge, StatusSelect } from 'src/components/_admin/shared/StatusBadge';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
 import { fDate, fDateTime } from 'src/utils/formatTime';
+import CompactOrdersTable from './CompactOrdersTable';
 
 const PAYMENT_STYLE = {
   paid: 'bg-emerald-100 text-emerald-700',
@@ -80,12 +92,17 @@ export default function OrderList() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [view, setView] = useState('active');
+  const [tableView, setTableView] = useState('summary');
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('estimatedDelivery');
   const [sortOrder, setSortOrder] = useState('asc');
   const limit = 20;
 
+  const qc = useQueryClient();
   const { statuses } = useStatuses('order');
+  const { statuses: itemStatuses } = useStatuses('orderItem');
+  const { data: tagData } = useQuery('admin-order-tags', () => api.getOrderTagsByAdmin(''));
+  const orderTags = tagData?.data || [];
 
   const handleSort = (field) => {
     if (sortBy === field) setSortOrder((order) => (order === 'asc' ? 'desc' : 'asc'));
@@ -104,18 +121,108 @@ export default function OrderList() {
     channel: 'orders',
     ...(search && { search }),
     ...(status ? { status } : { view }),
+    ...(tableView === 'compact' && { includeDetails: 'true' }),
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
   const { data, isLoading, isFetching } = useQuery(['admin-orders', params], () => api.getOrdersByAdmin(params), {
     keepPreviousData: true,
-    onError: (error) => Swal.fire(error?.response?.data?.message || 'Something went wrong!', '', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't load orders" })
   });
 
   const orders = data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.count || 1;
   const sort = { by: sortBy, order: sortOrder, onSort: handleSort };
+
+  const refreshOrders = () => qc.invalidateQueries(['admin-orders']);
+
+  // The chosen status/tag has to survive from the confirm step into the per-row
+  // work, so each action stashes it here rather than re-prompting per order.
+  let pendingStatus = null;
+  let pendingTag = null;
+
+  const bulkActions = [
+    {
+      label: 'Print invoices',
+      icon: MdReceiptLong,
+      tone: 'neutral',
+      hint: 'One invoice per A4 page, in a new tab',
+      onClick: printInvoiceSheet
+    },
+    {
+      label: 'Print labels',
+      icon: MdLocalShipping,
+      tone: 'neutral',
+      hint: 'Shipping labels, several to an A4 sheet, in a new tab',
+      onClick: printLabelSheet
+    },
+    {
+      label: 'Change status',
+      icon: MdSwapHoriz,
+      tone: 'neutral',
+      action: 'Moved',
+      unit: 'orders',
+      hint: 'Move every selected order to the same fulfillment status',
+      confirm: async (rows) => {
+        pendingStatus = await promptSelect({
+          title: `Move ${rows.length} order${rows.length === 1 ? '' : 's'} to…`,
+          text: 'Status changes notify the customer if an SMS template is enabled for the new status.',
+          options: statuses.map((entry) => ({ value: entry.value, label: entry.label })),
+          placeholder: 'Choose a status',
+          confirmText: 'Move orders'
+        });
+        return Boolean(pendingStatus);
+      },
+      perform: (order) => api.updateOrderStatusByAdmin({ orderNo: order.orderNo, status: pendingStatus }),
+      rowLabel: (order) => `#${order.orderNo}`,
+      onSettled: refreshOrders
+    },
+    {
+      label: 'Add tag',
+      icon: MdLabel,
+      tone: 'neutral',
+      action: 'Tagged',
+      unit: 'orders',
+      hint: 'Add one tag to every selected order, keeping tags they already have',
+      disabled: () => orderTags.length === 0,
+      confirm: async (rows) => {
+        pendingTag = await promptSelect({
+          title: `Tag ${rows.length} order${rows.length === 1 ? '' : 's'}`,
+          text: 'The tag is added alongside any tags these orders already carry.',
+          options: orderTags.map((tag) => ({ value: tag.id, label: tag.name })),
+          placeholder: 'Choose a tag',
+          confirmText: 'Add tag'
+        });
+        return Boolean(pendingTag);
+      },
+      perform: (order) => {
+        const existing = (order.tags || []).map((tag) => tag.id ?? tag);
+        if (existing.some((id) => String(id) === String(pendingTag))) return Promise.resolve();
+        return api.updateOrderStatus({ id: order.orderNo, tags: [...existing, pendingTag] });
+      },
+      rowLabel: (order) => `#${order.orderNo}`,
+      onSettled: refreshOrders
+    },
+    {
+      label: 'Delete',
+      icon: MdDelete,
+      tone: 'danger',
+      action: 'Deleted',
+      unit: 'orders',
+      confirm: (rows) =>
+        confirmDelete({
+          count: rows.length,
+          unit: 'orders',
+          subject: rows.length === 1 ? `Order #${rows[0].orderNo}` : undefined,
+          items: rows.map((order) => `#${order.orderNo} — ${order.shippingAddress?.name || 'Guest customer'}`),
+          text: 'Reserved stock is released and the orders leave every report until restored.'
+        }),
+      perform: (order) => api.deleteOrderByAdmin(order.orderNo),
+      rowLabel: (order) => `#${order.orderNo}`,
+      onSettled: refreshOrders
+    }
+  ];
 
   const columns = [
     {
@@ -253,6 +360,36 @@ export default function OrderList() {
           setSortOrder('asc');
           setPage(1);
         }}
+        right={
+          <div className="inline-flex h-9 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Order table view">
+            <button
+              type="button"
+              onClick={() => {
+                setTableView('summary');
+                setPage(1);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
+                tableView === 'summary' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              aria-pressed={tableView === 'summary'}
+            >
+              <MdViewList size={17} /> Summary
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTableView('compact');
+                setPage(1);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
+                tableView === 'compact' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              aria-pressed={tableView === 'compact'}
+            >
+              <MdTableRows size={16} /> Compact details
+            </button>
+          </div>
+        }
       >
         <select
           value={view}
@@ -279,14 +416,32 @@ export default function OrderList() {
         />
       </ListToolbar>
 
-      <DataTable
-        columns={columns}
-        data={orders}
-        sort={sort}
-        isLoading={isLoading || isFetching}
-        empty={<EmptyState title="No orders found" icon={MdInbox} />}
-        footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="orders" />}
-      />
+      {tableView === 'compact' ? (
+        <CompactOrdersTable
+          orders={orders}
+          statuses={statuses}
+          itemStatuses={itemStatuses}
+          isLoading={isLoading || isFetching}
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          onPage={setPage}
+          sort={sort}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={orders}
+          sort={sort}
+          rowKey={(order) => order.orderNo}
+          selectionLabel="orders"
+          exportFileName="orders-selection.csv"
+          bulkActions={bulkActions}
+          isLoading={isLoading || isFetching}
+          empty={<EmptyState title="No orders found" icon={MdInbox} />}
+          footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="orders" />}
+        />
+      )}
     </div>
   );
 }

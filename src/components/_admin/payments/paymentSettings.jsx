@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { confirmDelete } from 'src/utils/swal';
 import { FiCheck, FiX, FiTrash2, FiPlus, FiCopy, FiRefreshCw, FiEye, FiEyeOff } from 'react-icons/fi';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000';
@@ -122,7 +123,7 @@ function TypeRow({ t, onSave, onDelete }) {
               >
                 Edit
               </button>
-              <button onClick={() => onDelete(t.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md">
+              <button onClick={() => onDelete(t)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md">
                 <FiTrash2 size={13} />
               </button>
             </>
@@ -237,16 +238,13 @@ function PaymentTypesSection() {
   const { mutate: update } = useMutation(api.updatePaymentTypeByAdmin, { onSuccess: invalidate });
   const { mutate: del } = useMutation(api.deletePaymentTypeByAdmin, { onSuccess: invalidate });
 
-  const handleDelete = (id) =>
-    Swal.fire({
-      title: 'Delete?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Delete',
-      confirmButtonColor: '#ef4444'
-    }).then((r) => {
-      if (r.isConfirmed) del(id);
+  const handleDelete = async (paymentType) => {
+    const confirmed = await confirmDelete({
+      subject: paymentType.name,
+      text: 'Staff stop seeing it when recording a payment. Payments already recorded against it keep the name.'
     });
+    if (confirmed) del(paymentType.id);
+  };
 
   return (
     <section className="bg-white border border-gray-100 rounded-md p-6 shadow-sm space-y-4">

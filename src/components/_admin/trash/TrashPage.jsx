@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
-import { toast } from 'react-toastify';
 import { FiTrash2, FiRotateCcw } from 'react-icons/fi';
 
 import * as api from 'src/services';
@@ -15,6 +13,7 @@ import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
 import { isSuperAdmin } from 'src/utils/adminRole';
+import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
 
 const fmtDateTime = (date) => (date ? fDateTime(date) : '—');
 
@@ -41,7 +40,7 @@ export default function TrashPage() {
   const { data, isLoading, isFetching } = useQuery(['trash-items', params], () => api.getTrashItems(params), {
     enabled: hasSuperAdminAccess,
     keepPreviousData: true,
-    onError: (error) => Swal.fire(error?.response?.data?.message || 'Something went wrong!', '', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't open the recycle bin" })
   });
 
   const items = data?.data || [];
@@ -50,42 +49,26 @@ export default function TrashPage() {
 
   const restoreMut = useMutation(api.restoreTrashItem, {
     onSuccess: (res) => {
-      toast.success(res?.message || 'Restored');
+      toastSuccess(res?.message || 'Restored');
       qc.invalidateQueries('trash-items');
       qc.invalidateQueries('trash-summary');
     },
-    onError: (error) => Swal.fire(error?.response?.data?.message || 'Restore failed', '', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't restore that item" })
   });
 
   const confirmRestore = async (item) => {
-    const result = await Swal.fire({
-      icon: 'question',
+    const confirmed = await confirmAction({
       title: 'Restore this item?',
-      html:
-        `<b>${item.title}</b><br/><span style="font-size:12px;color:#94a3b8">${item.modelLabel}</span><br/><br/>` +
-        `<span style="font-size:12px">If its delete also hid it (inactive/invisible), it comes back hidden — re-enable it from its own page.</span>`,
-      showCancelButton: true,
-      confirmButtonText: 'Restore'
+      subject: `${item.title} · ${item.modelLabel}`,
+      text: 'If the delete also hid it, it comes back hidden — re-enable it from its own page.',
+      confirmText: 'Restore'
     });
-    if (result.isConfirmed) restoreMut.mutate({ model: item.model, id: item.id });
+    if (confirmed) restoreMut.mutate({ model: item.model, id: item.id });
   };
 
-  const confirmBulkRestore = async (selectedItems) => {
-    const result = await Swal.fire({
-      icon: 'question',
-      title: `Restore ${selectedItems.length} items?`,
-      text: 'Items that were hidden before deletion will remain hidden after restore.',
-      showCancelButton: true,
-      confirmButtonText: `Restore ${selectedItems.length}`
-    });
-    if (!result.isConfirmed) return false;
-    try {
-      await Promise.all(selectedItems.map((item) => restoreMut.mutateAsync({ model: item.model, id: item.id })));
-      toast.success(`${selectedItems.length} items restored`);
-      return true;
-    } catch {
-      return false;
-    }
+  const refreshTrash = () => {
+    qc.invalidateQueries('trash-items');
+    qc.invalidateQueries('trash-summary');
   };
 
   if (!isSuperAdmin) {
@@ -202,10 +185,22 @@ export default function TrashPage() {
         exportFileName="recycle-bin-selection.csv"
         bulkActions={[
           {
-            label: 'Restore selected',
+            label: 'Restore',
             icon: FiRotateCcw,
-            loading: restoreMut.isLoading,
-            onClick: confirmBulkRestore
+            tone: 'success',
+            action: 'Restored',
+            unit: 'items',
+            confirm: (rows) =>
+              confirmAction({
+                tone: 'success',
+                title: `Restore ${rows.length} item${rows.length === 1 ? '' : 's'}?`,
+                text: 'Anything that was hidden before it was deleted stays hidden after the restore.',
+                items: rows.map((item) => `${item.title} · ${item.modelLabel}`),
+                confirmText: 'Restore'
+              }),
+            perform: (item) => api.restoreTrashItem({ model: item.model, id: item.id }),
+            rowLabel: (item) => item.title,
+            onSettled: refreshTrash
           }
         ]}
         isLoading={isLoading || isFetching}

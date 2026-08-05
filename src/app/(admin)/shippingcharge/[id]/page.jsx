@@ -11,9 +11,9 @@ import EditShippingCharge from '@/src/components/_admin/shippingcharge/editShipp
 
 export default function Page({ params }) {
   const { id } = use(params);
-  const { data, isLoading } = useQuery(['admin-size'], () => api.getShippingChargeByAdmin(id), {
+  const { data, isLoading } = useQuery(['admin-shipping-charge', id], () => api.getShippingChargeByAdmin(id), {
     onError: (err) => {
-      Swal.fire(err.response.data.message || 'Something went wrong!', '', 'error');
+      Swal.fire(err?.response?.data?.message || err?.response?.data?.error || 'Something went wrong!', '', 'error');
     }
   });
   return (

@@ -168,6 +168,8 @@ export default function BranchCash() {
           <DataTable
             columns={columns}
             data={entries}
+            selectionLabel="entries"
+            exportFileName="branch-cash-selection.csv"
             isLoading={isLoading}
             footer={<Pagination page={page} totalPages={data?.count || 0} onPage={setPage} total={data?.total} unit="entries" pageSize={limit} />}
           />

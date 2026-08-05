@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import Link from 'next/link';
-import { getUserCashList } from 'src/services';
-import { MdAdd, MdPeople, MdOpenInNew } from 'react-icons/md';
+import { adminAdjustCash, getUserCashList } from 'src/services';
+import { MdAdd, MdPeople, MdOpenInNew, MdAddCircle, MdRemoveCircle } from 'react-icons/md';
+import { alertWarning, promptText } from 'src/utils/swal';
 import CashModal from './_CashModal';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -41,6 +42,72 @@ export default function CashList() {
     qc.invalidateQueries('cash-user-list');
     qc.invalidateQueries('cash-transactions');
   };
+
+  // Amount and reason are collected once and applied to every selected account —
+  // each adjustment still lands as its own ledger entry carrying that reason.
+  let pendingAdjustment = null;
+
+  const collectAdjustment = (type) => async (rows) => {
+    const amount = await promptText({
+      tone: type === 'manual_credit' ? 'success' : 'warning',
+      title: `${type === 'manual_credit' ? 'Give' : 'Take back'} coins from ${rows.length} customer${rows.length === 1 ? '' : 's'}`,
+      text: 'The same amount is applied to each account. A debit never pushes a balance below zero.',
+      label: 'Amount per customer',
+      placeholder: 'e.g. 100',
+      multiline: false,
+      confirmText: 'Next',
+      requiredMessage: 'Enter how many coins to apply.'
+    });
+    if (!amount) return false;
+
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      await alertWarning('That amount is not usable', 'Enter a positive number of coins.');
+      return false;
+    }
+
+    const reason = await promptText({
+      tone: type === 'manual_credit' ? 'success' : 'warning',
+      title: 'Why this adjustment?',
+      text: `${value} coin${value === 1 ? '' : 's'} ${type === 'manual_credit' ? 'to' : 'from'} each of ${rows.length} customer${rows.length === 1 ? '' : 's'}. The reason shows on their coin history.`,
+      label: 'Reason',
+      placeholder: 'e.g. goodwill for the delayed Eid batch',
+      confirmText: type === 'manual_credit' ? 'Give coins' : 'Take coins',
+      requiredMessage: 'Customers see this reason — say what it is for.'
+    });
+    if (!reason) return false;
+
+    pendingAdjustment = { amount: value, type, message: reason };
+    return true;
+  };
+
+  const applyAdjustment = (user) =>
+    adminAdjustCash({ userId: user.id, ...pendingAdjustment });
+
+  const bulkActions = [
+    {
+      label: 'Give coins',
+      icon: MdAddCircle,
+      tone: 'success',
+      action: 'Credited',
+      unit: 'customers',
+      confirm: collectAdjustment('manual_credit'),
+      perform: applyAdjustment,
+      rowLabel: (user) => user.name || user.phone || user.email,
+      onSettled: onDone
+    },
+    {
+      label: 'Take coins',
+      icon: MdRemoveCircle,
+      tone: 'warning',
+      action: 'Debited',
+      unit: 'customers',
+      confirm: collectAdjustment('manual_debit'),
+      perform: applyAdjustment,
+      rowLabel: (user) => user.name || user.phone || user.email,
+      onSettled: onDone
+    }
+  ];
 
   const columns = [
     {
@@ -152,6 +219,9 @@ export default function CashList() {
       <DataTable
         columns={columns}
         data={users}
+        selectionLabel="customers"
+        exportFileName="coin-balances-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading}
         empty={<EmptyState title="No users found" icon={MdPeople} />}
         footer={<Pagination page={page} totalPages={pages} onPage={setPage} total={total} unit="users" />}

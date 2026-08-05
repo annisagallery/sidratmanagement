@@ -1,5 +1,6 @@
 import axios from 'axios';
 import useAdminUserStore from 'src/stores/userStore';
+import { attachPasswordConfirmation } from './confirmDelete';
 
 const apiOrigin = String(process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '');
 const baseURL = typeof window === 'undefined' ? `${apiOrigin}/api` : '/backend-api';
@@ -25,5 +26,9 @@ http.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Deletes are answered with 428 until the operator re-enters their password;
+// this replays them transparently once confirmed.
+attachPasswordConfirmation(http);
 
 export default http;

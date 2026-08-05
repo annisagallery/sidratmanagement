@@ -231,6 +231,8 @@ export default function PaymentList({ initialAddOpen = false }) {
       <DataTable
         columns={columns}
         data={rows}
+        selectionLabel="payments"
+        exportFileName="payments-selection.csv"
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No payments found" icon={MdInbox} />}
         footer={

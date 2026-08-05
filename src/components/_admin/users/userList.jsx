@@ -1,10 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import Link from 'next/link';
-import { MdToggleOn, MdToggleOff, MdOpenInNew, MdInbox, MdBadge } from 'react-icons/md';
+import { MdToggleOn, MdToggleOff, MdOpenInNew, MdInbox, MdBadge, MdBlock, MdCheckCircle } from 'react-icons/md';
 import * as api from 'src/services';
+import { alertError, alertInfo, confirmAction, promptSelect, toastSuccess } from 'src/utils/swal';
 import { usePermissions } from 'src/context/PermissionsContext';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
@@ -92,82 +92,124 @@ export default function UserList() {
 
   const { mutate: updateStatus } = useMutation(api.updateUserStatusByAdmin, {
     onSuccess: () => {
-      Swal.fire({ title: 'Status updated!', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Status updated');
       qc.invalidateQueries(['admin-users']);
     },
-    onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't change that status" })
   });
 
   const { mutate: assignRole } = useMutation(({ slug, payload }) => api.assignRoleByAdmin(slug, payload), {
     onSuccess: (res) => {
-      Swal.fire({ title: res?.message || 'Role assigned!', icon: 'success', timer: 1600, showConfirmButton: false });
+      toastSuccess(res?.message || 'Role assigned');
       qc.invalidateQueries(['admin-users']);
       qc.invalidateQueries(['admin-admins']);
     },
-    onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Failed', 'error')
+    onError: (error) => alertError(error, { title: "Couldn't assign that role" })
   });
 
-  const handleChangeStatus = async (userId) => {
-    const r = await Swal.fire({
-      title: 'Change Status',
-      text: "Change this user's status?",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, change it!'
+  const handleChangeStatus = async (user) => {
+    const deactivating = user.status === 'active';
+    const confirmed = await confirmAction({
+      tone: deactivating ? 'warning' : 'success',
+      title: deactivating ? 'Deactivate this customer?' : 'Reactivate this customer?',
+      subject: `${user.name}${user.phone ? ` · ${user.phone}` : ''}`,
+      text: deactivating
+        ? 'They stay in the system and keep their order history, but cannot sign in or place orders.'
+        : 'They can sign in and place orders again.',
+      confirmText: deactivating ? 'Deactivate' : 'Reactivate'
     });
-    if (r.isConfirmed) updateStatus(userId);
+    if (confirmed) updateStatus(user.id);
   };
+
+  // The endpoint toggles rather than sets, so a bulk run has to skip the rows
+  // that are already where the operator wants them.
+  const setAccountStatus = (target) => async (user) => {
+    if (user.status === target) return;
+    await api.updateUserStatusByAdmin(user.id);
+  };
+
+  const refreshUsers = () => qc.invalidateQueries(['admin-users']);
+
+  const bulkActions = [
+    {
+      label: 'Deactivate',
+      icon: MdBlock,
+      tone: 'warning',
+      action: 'Deactivated',
+      unit: 'customers',
+      hint: 'Block sign-in for the selected customers; already-inactive ones are skipped',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'warning',
+          title: `Deactivate ${rows.length} customer${rows.length === 1 ? '' : 's'}?`,
+          text: 'They keep their order history but cannot sign in or place new orders.',
+          items: rows.filter((user) => user.status === 'active').map((user) => `${user.name} · ${user.phone || user.email}`),
+          confirmText: 'Deactivate'
+        }),
+      perform: setAccountStatus('inactive'),
+      rowLabel: (user) => user.name || user.phone,
+      onSettled: refreshUsers
+    },
+    {
+      label: 'Reactivate',
+      icon: MdCheckCircle,
+      tone: 'success',
+      action: 'Reactivated',
+      unit: 'customers',
+      confirm: (rows) =>
+        confirmAction({
+          tone: 'success',
+          title: `Reactivate ${rows.length} customer${rows.length === 1 ? '' : 's'}?`,
+          text: 'They can sign in and place orders again.',
+          confirmText: 'Reactivate'
+        }),
+      perform: setAccountStatus('active'),
+      rowLabel: (user) => user.name || user.phone,
+      onSettled: refreshUsers
+    }
+  ];
 
   // Promote a customer to any staff role; branch-scoped roles ask for a branch.
   const handlePromote = async (row) => {
     if (!staffRoles.length) {
-      return Swal.fire('No roles available', 'Create a role under Users → Roles & Permissions first.', 'info');
+      return alertInfo('No roles available', 'Create a role under Users → Roles & Permissions first.');
     }
-    const roleOptions = Object.fromEntries(staffRoles.map((r) => [r.slug, r.name]));
-    const { isConfirmed, value: slug } = await Swal.fire({
-      title: `Promote ${row.name}`,
-      text: 'The account moves to the Staff list with the selected role.',
-      input: 'select',
-      inputOptions: roleOptions,
-      inputPlaceholder: 'Select role',
-      showCancelButton: true,
-      confirmButtonText: 'Next',
-      preConfirm: (v) => {
-        if (!v) Swal.showValidationMessage('Select a role.');
-        return v;
-      }
-    });
-    if (!isConfirmed || !slug) return;
 
-    const targetRole = staffRoles.find((r) => r.slug === slug);
+    const slug = await promptSelect({
+      title: `Promote ${row.name}`,
+      text: 'The account moves to the Staff list with the role you pick.',
+      options: staffRoles.map((role) => ({ value: role.slug, label: role.name })),
+      placeholder: 'Choose a role',
+      confirmText: 'Next',
+      requiredMessage: 'Pick a role to continue.'
+    });
+    if (!slug) return;
+
+    const targetRole = staffRoles.find((role) => role.slug === slug);
     const payload = { userId: row.id };
 
     if (targetRole?.requiresBranch) {
       let branches = [];
       try {
         const res = await api.adminGetBranches();
-        branches = (res?.data || []).filter((b) => b.isActive !== false);
-      } catch {
-        return Swal.fire('Error', 'Could not load branches.', 'error');
+        branches = (res?.data || []).filter((branch) => branch.isActive !== false);
+      } catch (error) {
+        return alertError(error, { title: "Couldn't load branches" });
       }
-      if (!branches.length) return Swal.fire('No branches', 'Create an active branch first.', 'info');
-      const options = Object.fromEntries(branches.map((b) => [b.id, `${b.name}${b.code ? ` (${b.code})` : ''}`]));
-      const { isConfirmed: branchOk, value: branch } = await Swal.fire({
-        title: 'Select branch',
-        text: `"${targetRole.name}" is branch-scoped — ${row.name} will only work within this branch.`,
-        input: 'select',
-        inputOptions: options,
-        inputPlaceholder: 'Select branch',
-        showCancelButton: true,
-        confirmButtonText: 'Promote',
-        preConfirm: (v) => {
-          if (!v) Swal.showValidationMessage('Select a branch.');
-          return v;
-        }
+      if (!branches.length) return alertInfo('No branches yet', 'Create an active branch before assigning this role.');
+
+      const branch = await promptSelect({
+        title: 'Which branch?',
+        text: `"${targetRole.name}" is branch-scoped — ${row.name} will only work within the branch you pick.`,
+        options: branches.map((entry) => ({
+          value: entry.id,
+          label: `${entry.name}${entry.code ? ` (${entry.code})` : ''}`
+        })),
+        placeholder: 'Choose a branch',
+        confirmText: 'Promote',
+        requiredMessage: 'Pick a branch to continue.'
       });
-      if (!branchOk || !branch) return;
+      if (!branch) return;
       payload.branch = branch;
     }
 
@@ -233,7 +275,7 @@ export default function UserList() {
             <MdOpenInNew size={17} />
           </Link>
           <button
-            onClick={() => handleChangeStatus(u.id)}
+            onClick={() => handleChangeStatus(u)}
             className="rounded-md p-2 transition hover:bg-slate-100"
             style={{ color: 'var(--brand-strong)' }}
             title="Toggle Status"
@@ -290,6 +332,9 @@ export default function UserList() {
         columns={columns}
         data={users}
         sort={sort}
+        selectionLabel="customers"
+        exportFileName="customers-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading || isFetching}
         empty={<EmptyState title="No customers found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="customers" />}

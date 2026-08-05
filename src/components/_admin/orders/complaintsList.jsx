@@ -5,7 +5,8 @@ import { useMutation, useQuery, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import Link from 'next/link';
 import * as api from 'src/services';
-import { MdAdd, MdRefresh, MdReport } from 'react-icons/md';
+import { alertError, promptSelect } from 'src/utils/swal';
+import { MdAdd, MdFlag, MdRefresh, MdReport, MdSwapHoriz } from 'react-icons/md';
 import ComplaintImagePicker from './ComplaintImagePicker';
 import PrivateComplaintImage from './PrivateComplaintImage';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -285,7 +286,17 @@ function ComplaintPanel({ complaint, onClose }) {
   );
 }
 
+const COMPLAINT_STATUS_LABELS = {
+  open: 'Open',
+  reviewing: 'Reviewing',
+  resolved: 'Resolved',
+  rejected: 'Rejected'
+};
+
+const COMPLAINT_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+
 export default function ComplaintsList() {
+  const qc = useQueryClient();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -296,10 +307,63 @@ export default function ComplaintsList() {
     ['admin-complaints', params],
     () => api.getComplaintsByAdmin(params),
     {
-      onError: (err) => Swal.fire(err?.response?.data?.message || 'Could not load complains', '', 'error')
+      onError: (error) => alertError(error, { title: "Couldn't load complaints" })
     }
   );
   const complaints = data?.data || [];
+
+  const refreshComplaints = () => qc.invalidateQueries('admin-complaints');
+  const complaintLabel = (complaint) => `${complaint.subject} · #${complaint.orderNo}`;
+
+  let pendingStatus = null;
+  let pendingPriority = null;
+
+  const bulkActions = [
+    {
+      label: 'Set status',
+      icon: MdSwapHoriz,
+      tone: 'neutral',
+      action: 'Updated',
+      unit: 'complaints',
+      hint: 'Move every selected complaint to the same status',
+      confirm: async (rows) => {
+        pendingStatus = await promptSelect({
+          title: `Move ${rows.length} complaint${rows.length === 1 ? '' : 's'} to…`,
+          text: 'Resolving or rejecting closes the complaint for the customer.',
+          options: Object.entries(COMPLAINT_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+          placeholder: 'Choose a status',
+          confirmText: 'Update'
+        });
+        return Boolean(pendingStatus);
+      },
+      perform: (complaint) => api.updateComplaintByAdmin({ id: complaint.id, status: pendingStatus }),
+      rowLabel: complaintLabel,
+      onSettled: refreshComplaints
+    },
+    {
+      label: 'Set priority',
+      icon: MdFlag,
+      tone: 'neutral',
+      action: 'Reprioritised',
+      unit: 'complaints',
+      confirm: async (rows) => {
+        pendingPriority = await promptSelect({
+          title: `Set the priority of ${rows.length} complaint${rows.length === 1 ? '' : 's'}`,
+          text: 'Priority drives the order agents work through the queue.',
+          options: COMPLAINT_PRIORITIES.map((value) => ({
+            value,
+            label: value.charAt(0).toUpperCase() + value.slice(1)
+          })),
+          placeholder: 'Choose a priority',
+          confirmText: 'Apply'
+        });
+        return Boolean(pendingPriority);
+      },
+      perform: (complaint) => api.updateComplaintByAdmin({ id: complaint.id, priority: pendingPriority }),
+      rowLabel: complaintLabel,
+      onSettled: refreshComplaints
+    }
+  ];
 
   const columns = [
     {
@@ -384,6 +448,9 @@ export default function ComplaintsList() {
       <DataTable
         columns={columns}
         data={complaints}
+        selectionLabel="complaints"
+        exportFileName="complaints-selection.csv"
+        bulkActions={bulkActions}
         isLoading={isLoading}
         onRowClick={(c) => setSelected(c)}
         empty={<EmptyState title="No complaints found" icon={MdReport} />}
