@@ -650,7 +650,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                 name="footerTagline"
                 value={form.footerTagline}
                 onChange={handleChange}
-                placeholder={`${form.siteName || 'Annisa Gallery'} — premium fashion crafted for the modern woman.`}
+                placeholder={`${form.siteName || 'Sidrat'} — premium fashion crafted for the modern woman.`}
               />
             </Field>
             <Field

@@ -407,7 +407,7 @@ export default function Invoice({ order }) {
           }}
         >
           <p style={{ margin: '0 0 4px 0', fontWeight: '500' }}>
-            www.annisagallerybd.com | facebook.com/annisagallerybd | instagram.com/annisagallerybd
+            www.sidratbd.com | facebook.com/sidratbd | instagram.com/sidratbd
           </p>
           <p style={{ margin: '0' }}>Hotline: 01306-535650, 01849992094</p>
         </div>

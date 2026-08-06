@@ -234,7 +234,7 @@ export default function InvoicePDF({ data }) {
           </View>
           <View style={[styles.col4, styles.alignRight]}>
             <Text style={styles.subtitle2}>Have a Question?</Text>
-            <Text> info@annisagallery.com</Text>
+            <Text> info@sidrat.com</Text>
           </View>
         </View>
       </Page>
