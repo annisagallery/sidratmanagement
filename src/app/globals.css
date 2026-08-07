@@ -89,9 +89,25 @@ input[type='number'] {
     display: none !important;
   }
 
+  /* The admin shell is a full-height flex column whose scrolling happens inside
+     <main>. On paper that is a trap: a viewport-height box with hidden overflow
+     clips everything past the first page, so a label sheet or a long report
+     printed from inside the admin silently loses every page but the first.
+     Unwind the shell to normal block flow for print. */
+  .admin-root,
+  .admin-root > div {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
   main {
     padding: 0 !important;
     overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
   }
 
   .report-print {

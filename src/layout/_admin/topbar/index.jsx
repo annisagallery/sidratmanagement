@@ -29,7 +29,13 @@ export default function Topbar({ handleDrawerOpen }) {
 
   return (
     <>
-      <header className="relative z-50 shrink-0 border-b border-slate-200 bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]">
+      {/* role="banner" is what the print stylesheet keys off to drop the admin
+          chrome — without it the topbar prints at the head of every label
+          sheet and pushes the whole grid off its die-cut alignment. */}
+      <header
+        role="banner"
+        className="relative z-50 shrink-0 border-b border-slate-200 bg-white shadow-[0_1px_8px_rgba(15,23,42,0.04)]"
+      >
         <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-5 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button

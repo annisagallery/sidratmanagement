@@ -28,6 +28,8 @@ import {
 } from 'react-icons/fi';
 
 import * as api from 'src/services';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { printInvoices, printShippingLabels } from 'src/components/_admin/dispatch/openDocuments';
 import ActionBar from 'src/components/_admin/orders/ActionBar';
 import HistoryModal from 'src/components/_admin/shared/HistoryModal';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
@@ -57,6 +59,7 @@ const ACTION_STATUS = { CONFIRM: 'confirmed', DELIVER: 'delivered', CANCEL: 'can
 export default function OrderDetail({ params }) {
   const { orderNo } = use(params);
   const router = useRouter();
+  const settings = useSiteSettings();
 
   const { statuses: orderStatuses } = useStatuses('order');
 
@@ -260,8 +263,14 @@ export default function OrderDetail({ params }) {
         onBack={() => router.push('/orders')}
         onPrev={() => order.previousOrder && router.push(`/orders/${order.previousOrder}`)}
         onNext={() => order.nextOrder && router.push(`/orders/${order.nextOrder}`)}
-        onPrint={() => window.open(`/invoice/${orderNo}`, '_blank')}
-        onPrintLabel={() => window.open(`/labels?orders=${encodeURIComponent(orderNo)}`, '_blank')}
+        onPrint={() =>
+          printInvoices([{ orderNo }], settings).catch((error) => errorAlert('The invoice could not be built', error))
+        }
+        onPrintLabel={() =>
+          printShippingLabels([{ orderNo }], settings).catch((error) =>
+            errorAlert('The label could not be built', error)
+          )
+        }
         onHistory={() => setModal('history')}
       />
 

@@ -7,7 +7,8 @@ import Swal from 'sweetalert2';
 import { MdChevronRight, MdPointOfSale, MdReceiptLong } from 'react-icons/md';
 
 import * as api from 'src/services';
-import { printInvoiceSheet } from 'src/utils/printSheets';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { printInvoices } from 'src/components/_admin/dispatch/openDocuments';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -31,6 +32,7 @@ const fmtMoney = (amount) =>
  */
 export default function PosSalesList() {
   const router = useRouter();
+  const settings = useSiteSettings();
   const [search, setSearch] = useState('');
   const [branch, setBranch] = useState('');
   const [page, setPage] = useState(1);
@@ -57,6 +59,16 @@ export default function PosSalesList() {
   const sales = data?.data || [];
   const total = data?.total || 0;
   const totalPages = data?.count || 1;
+
+  // Resolves false so the selection survives — printing changes nothing.
+  const printSaleInvoices = async (rows) => {
+    try {
+      await printInvoices(rows, settings);
+    } catch (error) {
+      Swal.fire(error?.message || 'The invoices could not be built', '', 'error');
+    }
+    return false;
+  };
 
   const columns = [
     {
@@ -202,8 +214,8 @@ export default function PosSalesList() {
             label: 'Print invoices',
             icon: MdReceiptLong,
             tone: 'neutral',
-            hint: 'One invoice per A4 page, in a new tab',
-            onClick: printInvoiceSheet
+            hint: 'One invoice per A4 page, as a PDF in a new tab',
+            onClick: printSaleInvoices
           }
         ]}
         isLoading={isLoading || isFetching}

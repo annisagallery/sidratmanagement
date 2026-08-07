@@ -11,8 +11,7 @@ import {
   MdPeople,
   MdPointOfSale,
   MdOutlineAccountBalanceWallet,
-  MdOutlineReceipt
-} from 'react-icons/md';
+  MdOutlineReceipt, MdOutlineQrCode2 } from 'react-icons/md';
 import { HiOutlineSpeakerphone } from 'react-icons/hi';
 import {
   FiBarChart2,
@@ -53,6 +52,11 @@ export const navParents = [
     tabs: [
       { label: 'Orders', href: '/orders', icon: FiList },
       { label: 'Items', href: '/orders/items', icon: FiPackage },
+      // Printing a dispatch run is a job of its own, not something you do while
+      // working the queue — so it gets its own desk, like Barcode Labels does.
+      // Labels and invoices share one, because a run needs both for the same
+      // orders and picking them twice is how the two end up disagreeing.
+      { label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping },
       { label: 'Complaints', href: '/orders/complaints', icon: FiAlertCircle },
       {
         label: 'Settings',
@@ -83,7 +87,8 @@ export const navParents = [
     tabs: [
       { label: 'Products', href: '/products', icon: FaShirt },
       { label: 'Categories', href: '/categories', icon: TbCategory },
-      { label: 'Attributes', href: '/attributes', icon: TbAdjustments }
+      { label: 'Attributes', href: '/attributes', icon: TbAdjustments },
+      { label: 'Barcode Labels', href: '/products/labels', icon: MdOutlineQrCode2 }
       // Inventory Limits removed: a presale ceiling is no longer typed in by
       // hand. It is derived from each product's bill of materials, which is
       // edited per product at /products/[slug]/bom.
@@ -210,6 +215,9 @@ export const navGroups = [
         key: 'order-items', label: 'Order Items', href: '/orders/items', icon: FiPackage, subject: 'OrderItem'
       },
       {
+        key: 'order-print', label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping, subject: 'Order'
+      },
+      {
         key: 'complaints', label: 'Complaints', href: '/orders/complaints', icon: FiAlertCircle, subject: 'Complaint'
       },
       {
@@ -230,7 +238,8 @@ export const navGroups = [
     items: [
       { key: 'products', label: 'Products', href: '/products', icon: FaShirt, subject: 'Product' },
       { key: 'categories', label: 'Categories', href: '/categories', icon: TbCategory, subject: 'Category' },
-      { key: 'attributes', label: 'Attributes', href: '/attributes', icon: TbAdjustments, subject: 'Attribute' }
+      { key: 'attributes', label: 'Attributes', href: '/attributes', icon: TbAdjustments, subject: 'Attribute' },
+      { key: 'product-labels', label: 'Barcode Labels', href: '/products/labels', icon: MdOutlineQrCode2, subject: 'Product' }
       // Presale Settings removed — see the note in the Products tab list above.
     ]
   },

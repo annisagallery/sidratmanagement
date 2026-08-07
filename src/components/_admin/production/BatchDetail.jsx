@@ -41,7 +41,8 @@ import {
   qty,
   toast
 } from 'src/components/_admin/ui/primitives';
-import { BatchStatusPill, variationLabel } from 'src/components/_admin/inventory/shared';
+import { BatchStatusPill, catalogCode, variationLabel } from 'src/components/_admin/inventory/shared';
+import { openLabelSheet, productionStickerLabels } from 'src/components/_admin/labels/openLabelSheet';
 import BatchEditModal from './BatchEditModal';
 
 export default function BatchDetail({ batchNo }) {
@@ -61,15 +62,36 @@ export default function BatchDetail({ batchNo }) {
     enabled: Boolean(batchId) && batch?.status !== 'DRAFT'
   });
 
+  // Keyed on `productionBatchItemId` — the column the API actually returns. It
+  // was keyed on `productionBatchItem`, a Mongoose-era name that no longer
+  // exists, so every unit landed under "undefined" and the codes column on
+  // every line came back empty.
   const unitsByItem = useMemo(() => {
     const map = new Map();
     (unitsQuery.data?.data || []).forEach((unit) => {
-      const key = String(unit.productionBatchItem);
+      const key = String(unit.productionBatchItemId);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(unit);
     });
     return map;
   }, [unitsQuery.data]);
+
+  // Straight to a PDF rather than through a rendered page: the sheet is die-cut
+  // stock, and a browser print dialog is free to scale it.
+  const [building, setBuilding] = useState(false);
+  const printStickers = async () => {
+    setBuilding(true);
+    try {
+      const units = unitsQuery.data?.data || (await getProductionBatchUnits(batchId))?.data || [];
+      await openLabelSheet(productionStickerLabels(units), {
+        title: `${batch?.batchNo || 'Batch'} stickers`
+      });
+    } catch (error) {
+      errorAlert('The sticker sheet could not be built', error);
+    } finally {
+      setBuilding(false);
+    }
+  };
 
   const refresh = () => {
     queryClient.invalidateQueries('production-batch');
@@ -162,10 +184,12 @@ export default function BatchDetail({ batchNo }) {
         ) : (
           <button
             type="button"
-            onClick={() => window.open(`/production-stickers/${batchId}`, '_blank')}
+            onClick={printStickers}
+            disabled={building}
+            title="Opens a print-ready PDF with one barcode label per piece"
             className="btn-ghost"
           >
-            <FiPrinter size={14} /> Stickers
+            <FiPrinter size={14} /> {building ? 'Building PDF…' : 'Stickers'}
           </button>
         )}
         {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
@@ -204,7 +228,7 @@ export default function BatchDetail({ batchNo }) {
                 <tr>
                   <th>Product</th>
                   <th>For</th>
-                  <th>Unit codes</th>
+                  <th>Production codes</th>
                   <th className="text-center">Planned</th>
                   <th className="text-center">Received</th>
                 </tr>
@@ -221,7 +245,7 @@ export default function BatchDetail({ batchNo }) {
                           <p className="text-[13px] font-semibold text-slate-800">
                             {item.product?.name}
                             <span className="ops-code ml-2 text-[11px] font-normal text-slate-400">
-                              #{item.product?.code}
+                              {catalogCode(item.product, item.variation) || '—'}
                             </span>
                           </p>
                           <p className="text-[11px] text-slate-500">{variationLabel(item.variation)}</p>

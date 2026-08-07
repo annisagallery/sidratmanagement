@@ -17,7 +17,13 @@ import Swal from 'sweetalert2';
 import { FiPlay, FiPlus, FiPrinter, FiRefreshCw, FiSearch, FiXCircle } from 'react-icons/fi';
 import { LuFactory } from 'react-icons/lu';
 
-import { cancelProductionBatch, getProductionBatches, startProductionBatch } from 'src/services';
+import {
+  cancelProductionBatch,
+  getProductionBatchUnits,
+  getProductionBatches,
+  startProductionBatch
+} from 'src/services';
+import { openLabelSheet, productionStickerLabels } from 'src/components/_admin/labels/openLabelSheet';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import {
@@ -81,6 +87,24 @@ export default function BatchList() {
       confirmButtonColor: '#e11d48'
     });
     if (result.isConfirmed) cancel.mutate({ id: oid(batch) });
+  };
+
+  // Stickers go straight to a PDF rather than through a rendered page: the
+  // sheet is die-cut stock, and a browser print dialog is free to scale it.
+  const [stickersFor, setStickersFor] = useState(null);
+  const printStickers = async (batch) => {
+    const id = oid(batch);
+    setStickersFor(id);
+    try {
+      const response = await getProductionBatchUnits(id);
+      await openLabelSheet(productionStickerLabels(response?.data || []), {
+        title: `${batch.batchNo} stickers`
+      });
+    } catch (error) {
+      errorAlert('The sticker sheet could not be built', error);
+    } finally {
+      setStickersFor(null);
+    }
   };
 
   const counts = batches.reduce((acc, batch) => ({ ...acc, [batch.status]: (acc[batch.status] || 0) + 1 }), {});
@@ -176,7 +200,6 @@ export default function BatchList() {
           <thead>
             <tr>
               <th>Batch</th>
-              <th className="text-center">Lines</th>
               <th>Progress</th>
               <th>Status</th>
               <th>Created</th>
@@ -185,7 +208,7 @@ export default function BatchList() {
           </thead>
           <tbody>
             {batchesQuery.isLoading ? (
-              <EmptyRow colSpan={6} title="Loading batches…" />
+              <EmptyRow colSpan={5} title="Loading batches…" />
             ) : batches.length ? (
               batches.map((batch) => {
                 const total = planned(batch);
@@ -201,7 +224,6 @@ export default function BatchList() {
                         <span className="block text-[11px] text-slate-400">v{batch.version || 1}</span>
                       </Link>
                     </td>
-                    <td className="text-center tabular-nums text-slate-600">{(batch.items || []).length}</td>
                     <td>
                       <div className="flex items-center gap-2">
                         <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
@@ -237,11 +259,12 @@ export default function BatchList() {
                         {batch.status !== 'DRAFT' ? (
                           <button
                             type="button"
-                            onClick={() => window.open(`/production-stickers/${oid(batch)}`, '_blank')}
-                            title="Print a barcode label for every piece in this batch"
+                            onClick={() => printStickers(batch)}
+                            disabled={stickersFor === oid(batch)}
+                            title="Opens a print-ready PDF with one barcode label per piece in this batch"
                             className="btn-ghost h-8 !px-2.5 !text-xs"
                           >
-                            <FiPrinter size={12} /> Stickers
+                            <FiPrinter size={12} /> {stickersFor === oid(batch) ? 'Building…' : 'Stickers'}
                           </button>
                         ) : null}
                         {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
@@ -265,7 +288,7 @@ export default function BatchList() {
               })
             ) : (
               <EmptyRow
-                colSpan={6}
+                colSpan={5}
                 icon={LuFactory}
                 title="No batches"
                 hint="Plan one from the queue to start making pieces."

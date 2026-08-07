@@ -730,6 +730,16 @@ export const getSiteSettingsByAdmin = async () => {
   const { data } = await http.get(`/admin/settings`);
   return data;
 };
+/**
+ * The logo's bytes, via our own API rather than the image host.
+ *
+ * A browser paints a cross-origin image without permission but will not let
+ * script READ it unless the host sends CORS headers — and the PDF invoices and
+ * shipping labels have to read it to embed it. Returns a fetch Response so the
+ * caller handles it exactly like a direct fetch of the image URL.
+ */
+export const getBrandLogoBlob = async () =>
+  fetch(`${http.defaults.baseURL}/settings/logo`, { credentials: 'include' });
 export const updateSiteSettings = async (payload) => {
   const { data } = await http.put(`/admin/settings`, payload);
   return data;

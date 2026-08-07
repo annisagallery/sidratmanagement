@@ -6,8 +6,9 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import { alertError, confirmDelete, toastSuccess } from 'src/utils/swal';
 import * as api from 'src/services';
-import { MdArrowBack, MdEdit, MdDelete, MdOpenInNew } from 'react-icons/md';
+import { MdArrowBack, MdEdit, MdDelete, MdOpenInNew, MdPrint } from 'react-icons/md';
 import { FiImage, FiTag, FiList, FiBox, FiPackage, FiX } from 'react-icons/fi';
+import { displaySku } from 'src/components/_admin/inventory/shared';
 
 const card = 'bg-white rounded-md border border-gray-200 p-5';
 
@@ -285,6 +286,13 @@ export default function ViewProduct({ slug }) {
             className="hidden sm:flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-md text-sm font-medium hover:bg-gray-50 transition"
           >
             <MdOpenInNew size={14} /> View on site
+          </button>
+          <button
+            onClick={() => window.open(`/product-labels?slug=${encodeURIComponent(slug)}`, '_blank', 'noopener')}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-md text-sm font-medium hover:bg-gray-50 transition"
+            title="Print retail price labels — 44 per A4 sheet"
+          >
+            <MdPrint size={14} /> Labels
           </button>
           <button
             onClick={() => router.push(`/products/${slug}`)}
@@ -748,8 +756,8 @@ export default function ViewProduct({ slug }) {
                               <span className="text-xs text-gray-400">Default</span>
                             )}
                           </div>
-                          {row.variation?.sku && (
-                            <p className="mt-0.5 font-mono text-xs text-gray-400">{row.variation.sku}</p>
+                          {displaySku(row.variation?.sku) && (
+                            <p className="mt-0.5 font-mono text-xs text-gray-400">{displaySku(row.variation.sku)}</p>
                           )}
                         </td>
                         <td className="px-2 py-1.5 font-mono text-[10px] font-semibold text-gray-600">

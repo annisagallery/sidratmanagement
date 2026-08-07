@@ -65,11 +65,60 @@ export function BatchStatusPill({ status }) {
   return <Pill tone={meta.tone}>{meta.label}</Pill>;
 }
 
-/** How a variation is named on paper: its SKU, else its attribute values. */
-export const variationLabel = (variation) =>
-  variation?.sku ||
-  variation?.attributes
-    ?.map((attribute) => attribute.valueName)
+/**
+ * SKUs carried over from the old MySQL POS are not SKUs.
+ *
+ * The importer stamps every variation it creates with
+ * `MYSQL-<sourceProductId>-<optionId>` (scripts/migrate-from-mysql/index.js),
+ * and the rollback script finds migrated rows by exactly that prefix — so the
+ * value has to stay in the database. It is bookkeeping, not a name, and showing
+ * it puts "MYSQL-1406-7320" where "Classic Black / Cherry" belongs.
+ */
+const INTERNAL_SKU = /^MYSQL-/i;
+
+/** A SKU worth showing someone, or null. */
+export const displaySku = (sku) => {
+  const value = String(sku || '').trim();
+  return value && !INTERNAL_SKU.test(value) ? value : null;
+};
+
+/**
+ * How a variation is named out loud: its attribute values, else its SKU.
+ *
+ * Attributes come first because "Classic Black / Cherry" is what someone on the
+ * floor says; a SKU is a lookup key and is only a name when there is nothing
+ * else to call the thing.
+ */
+export const variationLabel = (variation) => {
+  const attributes = (variation?.attributes || [])
+    .map((attribute) => attribute.valueName)
     .filter(Boolean)
-    .join(' / ') ||
-  'Base product';
+    .join(' / ');
+  return attributes || displaySku(variation?.sku) || 'Base product';
+};
+
+/**
+ * The code printed on a sticker: product code, then the variation's production
+ * code. It is the tail of every production unit barcode, and the whole of the
+ * catalogue barcode for a variation that has none of its own — which is why the
+ * floor calls it "the production code" and expects to see it next to the name.
+ */
+export const catalogCode = (product, variation) => {
+  const productCode = Number(product?.code);
+  if (!Number.isFinite(productCode) || productCode <= 0) return null;
+  const optionCode = Number(variation?.productionCode);
+  const left = String(productCode).padStart(4, '0');
+  return Number.isFinite(optionCode) && optionCode > 0
+    ? `${left}-${String(optionCode).padStart(4, '0')}`
+    : left;
+};
+
+/**
+ * The product name on a production queue row.
+ *
+ * These rows are OrderItems, and an OrderItem keeps a snapshot of the product
+ * as it was when the customer ordered. The snapshot is the fallback rather than
+ * the first choice: it is the only name left if the product is later deleted.
+ */
+export const needName = (item) =>
+  item?.product?.name || item?.productSnapshotName || 'Unknown product';

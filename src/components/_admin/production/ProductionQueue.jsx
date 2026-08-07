@@ -33,7 +33,7 @@ import {
   qty,
   toast
 } from 'src/components/_admin/ui/primitives';
-import { variationLabel } from 'src/components/_admin/inventory/shared';
+import { catalogCode, needName, variationLabel } from 'src/components/_admin/inventory/shared';
 
 /** How late, in the words someone would use out loud. */
 function dueMeta(value) {
@@ -87,7 +87,9 @@ export default function ProductionQueue() {
       if (only === 'rescuable' && !(need.isCustom && need.availableCustomStock > 0)) return false;
       if (!term) return true;
       return (
-        need.pid?.name?.toLowerCase().includes(term) || String(need.orderNo || '').toLowerCase().includes(term)
+        needName(need).toLowerCase().includes(term) ||
+        String(catalogCode(need.product, need.variation) || '').toLowerCase().includes(term) ||
+        String(need.orderNo || '').toLowerCase().includes(term)
       );
     });
   }, [needs, search, only]);
@@ -191,8 +193,15 @@ export default function ProductionQueue() {
                       </Link>
                     </td>
                     <td>
-                      <p className="text-[13px] font-semibold text-slate-800">{need.pid?.name}</p>
-                      <p className="text-[11px] text-slate-500">{variationLabel(need.variationId)}</p>
+                      <p className="text-[13px] font-semibold text-slate-800">{needName(need)}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {catalogCode(need.product, need.variation) ? (
+                          <span className="ops-code mr-1.5 text-slate-400">
+                            {catalogCode(need.product, need.variation)}
+                          </span>
+                        ) : null}
+                        {variationLabel(need.variation)}
+                      </p>
                       {need.isCustom ? (
                         <Pill tone="info" className="mt-1">
                           Custom

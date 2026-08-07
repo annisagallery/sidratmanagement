@@ -19,8 +19,9 @@ import {
 } from 'react-icons/md';
 
 import * as api from 'src/services';
-import { alertError, confirmDelete, promptSelect } from 'src/utils/swal';
-import { printInvoiceSheet, printLabelSheet } from 'src/utils/printSheets';
+import { alertError, alertWarning, confirmDelete, promptSelect } from 'src/utils/swal';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { printInvoices, printShippingLabels } from 'src/components/_admin/dispatch/openDocuments';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -99,6 +100,7 @@ export default function OrderList() {
   const limit = 20;
 
   const qc = useQueryClient();
+  const settings = useSiteSettings();
   const { statuses } = useStatuses('order');
   const { statuses: itemStatuses } = useStatuses('orderItem');
   const { data: tagData } = useQuery('admin-order-tags', () => api.getOrderTagsByAdmin(''));
@@ -137,6 +139,34 @@ export default function OrderList() {
 
   const refreshOrders = () => qc.invalidateQueries(['admin-orders']);
 
+  /**
+   * Both documents are PDFs built from full orders, so each row is re-fetched
+   * first — the list projection carries neither the address nor the payments
+   * the collectable amount is derived from.
+   *
+   * Each resolves false so the selection survives: printing changes nothing
+   * about the orders, and an operator usually prints invoices and labels for
+   * the same batch, back to back. The dedicated print desk at /orders/print
+   * does both from one selection.
+   */
+  const printDocuments = (task, failureTitle, missingNoun) => async (rows) => {
+    try {
+      const { skipped } = await task(rows, settings);
+      if (skipped) {
+        alertWarning(
+          'Some orders were left out',
+          `${skipped} order${skipped === 1 ? '' : 's'} could not be loaded, so ${skipped === 1 ? `its ${missingNoun} is` : `their ${missingNoun}s are`} missing.`
+        );
+      }
+    } catch (error) {
+      alertError(error, { title: failureTitle });
+    }
+    return false;
+  };
+
+  const printLabels = printDocuments(printShippingLabels, 'The label sheet could not be built', 'label');
+  const printInvoicesFor = printDocuments(printInvoices, 'The invoices could not be built', 'invoice');
+
   // The chosen status/tag has to survive from the confirm step into the per-row
   // work, so each action stashes it here rather than re-prompting per order.
   let pendingStatus = null;
@@ -147,15 +177,15 @@ export default function OrderList() {
       label: 'Print invoices',
       icon: MdReceiptLong,
       tone: 'neutral',
-      hint: 'One invoice per A4 page, in a new tab',
-      onClick: printInvoiceSheet
+      hint: 'One invoice per A4 page, as a PDF in a new tab',
+      onClick: printInvoicesFor
     },
     {
       label: 'Print labels',
       icon: MdLocalShipping,
       tone: 'neutral',
-      hint: 'Shipping labels, several to an A4 sheet, in a new tab',
-      onClick: printLabelSheet
+      hint: 'Six shipping labels to an A4 sheet, as a PDF in a new tab',
+      onClick: printLabels
     },
     {
       label: 'Change status',
@@ -427,6 +457,12 @@ export default function OrderList() {
           total={total}
           onPage={setPage}
           sort={sort}
+          // The same actions and the same CSV shape as the summary view — the
+          // view you are in should not change what you can do with a selection.
+          columns={columns}
+          bulkActions={bulkActions}
+          selectionLabel="orders"
+          exportFileName="orders-selection.csv"
         />
       ) : (
         <DataTable

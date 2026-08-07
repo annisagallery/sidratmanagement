@@ -39,7 +39,7 @@ import {
   qty,
   toast
 } from 'src/components/_admin/ui/primitives';
-import { variationLabel } from 'src/components/_admin/inventory/shared';
+import { catalogCode, displaySku, needName, variationLabel } from 'src/components/_admin/inventory/shared';
 
 function dueLabel(value) {
   if (!value) return { text: 'no date', tone: 'neutral' };
@@ -161,8 +161,15 @@ export default function BatchBuilder() {
                       <div className="flex items-center gap-3">
                         <span className="ops-code w-20 shrink-0 text-[11px] text-slate-500">#{need.orderNo}</span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-medium text-slate-800">{need.pid?.name}</p>
-                          <p className="truncate text-[11px] text-slate-500">{variationLabel(need.variationId)}</p>
+                          <p className="truncate text-[13px] font-medium text-slate-800">{needName(need)}</p>
+                          <p className="truncate text-[11px] text-slate-500">
+                            {catalogCode(need.product, need.variation) ? (
+                              <span className="ops-code mr-1.5 text-slate-400">
+                                {catalogCode(need.product, need.variation)}
+                              </span>
+                            ) : null}
+                            {variationLabel(need.variation)}
+                          </p>
                         </div>
                         {need.isCustom ? <Pill tone="info">Custom</Pill> : null}
                         <Pill tone={due.tone}>{due.text}</Pill>
@@ -174,8 +181,9 @@ export default function BatchBuilder() {
                               {
                                 id: oid(need),
                                 orderNo: need.orderNo,
-                                name: need.pid?.name,
-                                variation: variationLabel(need.variationId),
+                                name: needName(need),
+                                code: catalogCode(need.product, need.variation),
+                                variation: variationLabel(need.variation),
                                 due: need.deliveryDate,
                                 note: need.customizeDetails || ''
                               }
@@ -198,7 +206,9 @@ export default function BatchBuilder() {
                 {availableRefills.map((row) => (
                   <li key={row.variationId} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-slate-50">
                     <span className="ops-code w-20 shrink-0 truncate text-[11px] text-slate-500">
-                      {row.sku || `#${row.productCode}`}
+                      {catalogCode({ code: row.productCode }, { productionCode: row.productionCode }) ||
+                        displaySku(row.sku) ||
+                        '—'}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-medium text-slate-800">{row.productName}</p>
@@ -315,7 +325,8 @@ export default function BatchBuilder() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-bold text-slate-900">{entry.name}</p>
                         <p className="truncate text-[11px] text-slate-500">
-                          Order #{entry.orderNo} · {entry.variation}
+                          Order #{entry.orderNo} · {entry.code ? `${entry.code} · ` : ''}
+                          {entry.variation}
                         </p>
                       </div>
                       <Pill tone={dueLabel(entry.due).tone}>{dueLabel(entry.due).text}</Pill>
