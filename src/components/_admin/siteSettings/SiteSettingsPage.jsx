@@ -179,7 +179,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
 
   const [form, setForm] = useState({
     siteName: '',
-    fontFamily: 'play',
     imageServerUrl: '',
     imageServerApiKey: '',
     primaryColor: '#2563eb',
@@ -233,7 +232,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
         const d = res.data || {};
         setForm({
           siteName: d.siteName || '',
-          fontFamily: d.fontFamily || 'play',
           imageServerUrl: d.imageServerUrl || '',
           imageServerApiKey: '',
           primaryColor: d.primaryColor || '#2563eb',
@@ -458,27 +456,11 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
               <Field label="Site Name">
                 <Input name="siteName" value={form.siteName} onChange={handleChange} placeholder="Your Store Name" />
               </Field>
-              <Field
-                label="Storefront Font"
-                hint="Loaded from Google Fonts on the storefront; visitors fall back to sans-serif if unavailable"
-              >
-                <select
-                  name="fontFamily"
-                  value={form.fontFamily}
-                  onChange={handleChange}
-                  className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-yellow-400"
-                >
-                  <option value="play">Play</option>
-                  <option value="roboto">Roboto</option>
-                  <option value="inter">Inter</option>
-                  <option value="poppins">Poppins</option>
-                  <option value="montserrat">Montserrat</option>
-                  <option value="lato">Lato</option>
-                  <option value="nunito">Nunito</option>
-                  <option value="open-sans">Open Sans</option>
-                  <option value="hind-siliguri">Hind Siliguri</option>
-                </select>
-              </Field>
+              {/* The storefront font picker was removed on purpose. Offering
+                  nine families meant every app had to instantiate all nine, and
+                  next/font preloads every family it can see — the storefront was
+                  shipping 17 woff2 files (~311 KiB) per page load to render text
+                  in one of them. The apps now hard-code Play via next/font. */}
               <Field label="Logo Shape" hint="Round clips the logo into a circle — best for square/portrait images">
                 <div className="flex gap-3">
                   {['default', 'round'].map((type) => (
