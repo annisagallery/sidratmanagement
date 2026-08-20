@@ -1,87 +1,33 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from 'react-query';
-import Image from 'next/image';
-import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiUpload } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiCopy } from 'react-icons/fi';
 import * as api from 'src/services';
-import { SETTINGS_TABS, fieldsForTab } from './blocks';
+import { fieldsForTab } from './blocks';
+import {
+  Label,
+  inputCls,
+  ImagePicker,
+  ColorInput,
+  BoxControl,
+  SizeControl,
+  ToggleGroup,
+  LinkControl,
+  ALIGN_OPTIONS,
+  DeviceToggle
+} from './controls';
+import { StylePanel, AdvancedPanel } from './StylePanel';
+import { ICON_OPTIONS } from './icons';
 
-// Renders a block's settings form from its `fields` schema. Every input is
-// controlled and reports upward through onChange(key, value) so the builder
-// keeps a single source of truth for the block's config.
+// Renders a block's settings from its `fields` schema, then bolts the universal
+// Style and Advanced panels on top so every block — including ones whose schema
+// declares nothing but a heading — gets the full set of layout, spacing,
+// typography and effect controls.
+//
+// Every input is controlled and reports upward through onChange(key, value), so
+// the builder keeps a single source of truth for the block's config.
 
-// ── Primitives ───────────────────────────────────────────────────────────────
-
-function Label({ children, hint }) {
-  return (
-    <div className="mb-1">
-      <label className="text-xs font-semibold text-gray-600">{children}</label>
-      {hint && <p className="text-[10px] text-gray-400">{hint}</p>}
-    </div>
-  );
-}
-
-const inputCls =
-  'w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-yellow-400 focus:outline-none';
-
-function ImagePicker({ value, onChange }) {
-  const fileRef = useRef(null);
-  const [busy, setBusy] = useState(false);
-
-  const upload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('model', 'HomepageSection');
-      const res = await api.uploadImage(fd);
-      // The storefront only ever needs the path, so config stores the URL
-      // rather than an Image id — blocks are self-contained that way.
-      onChange(res.path);
-    } catch {
-      /* surfaced by the disabled state returning to normal */
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-        {value ? (
-          <Image src={value} alt="" fill sizes="64px" className="object-cover" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-gray-300">
-            <FiUpload />
-          </div>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-          className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
-        </button>
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600"
-          >
-            Remove
-          </button>
-        )}
-      </div>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={upload} />
-    </div>
-  );
-}
+// ── Reference selects ────────────────────────────────────────────────────────
 
 function CategorySelect({ value, onChange }) {
   const { data } = useQuery('pb-categories', api.getAllCategoriesByAdmin, { staleTime: 300_000 });
@@ -113,20 +59,51 @@ function CampaignSelect({ value, onChange }) {
   );
 }
 
+function IconSelect({ value, onChange }) {
+  return (
+    <div className="grid max-h-40 grid-cols-6 gap-1 overflow-y-auto rounded-md border border-gray-200 p-1.5">
+      {ICON_OPTIONS.map(({ value: key, Icon, label }) => (
+        <button
+          key={key}
+          type="button"
+          title={label}
+          onClick={() => onChange(key)}
+          className={`flex aspect-square items-center justify-center rounded border text-base ${
+            value === key ? 'border-[#93003f] bg-[#93003f]/10 text-[#93003f]' : 'border-transparent text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          <Icon />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Repeater ─────────────────────────────────────────────────────────────────
 
-function Repeater({ field, value, onChange }) {
+function Repeater({ field, value, onChange, device }) {
   const items = Array.isArray(value) ? value : [];
   const [openIdx, setOpenIdx] = useState(0);
 
-  const setItem = (idx, key, v) =>
-    onChange(items.map((item, i) => (i === idx ? { ...item, [key]: v } : item)));
+  const setItem = (idx, key, v) => onChange(items.map((item, i) => (i === idx ? { ...item, [key]: v } : item)));
+
+  const blankItem = () =>
+    Object.fromEntries(
+      field.fields.map((f) => [f.key, f.default !== undefined ? f.default : f.type === 'boolean' ? false : ''])
+    );
 
   const add = () => {
     if (field.max && items.length >= field.max) return;
-    const blank = Object.fromEntries(field.fields.map((f) => [f.key, f.type === 'boolean' ? false : '']));
-    onChange([...items, blank]);
+    onChange([...items, blankItem()]);
     setOpenIdx(items.length);
+  };
+
+  const duplicate = (idx) => {
+    if (field.max && items.length >= field.max) return;
+    const next = [...items];
+    next.splice(idx + 1, 0, { ...items[idx] });
+    onChange(next);
+    setOpenIdx(idx + 1);
   };
 
   const remove = (idx) => {
@@ -135,9 +112,9 @@ function Repeater({ field, value, onChange }) {
   };
 
   const move = (idx, dir) => {
-    const next = [...items];
     const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
     [next[idx], next[target]] = [next[target], next[idx]];
     onChange(next);
     setOpenIdx(target);
@@ -149,11 +126,11 @@ function Repeater({ field, value, onChange }) {
         const open = openIdx === idx;
         return (
           <div key={idx} className="rounded-md border border-gray-200">
-            <div className="flex items-center gap-1 bg-gray-50 px-2 py-1.5">
+            <div className="flex items-center gap-0.5 bg-gray-50 px-2 py-1.5">
               <button
                 type="button"
                 onClick={() => setOpenIdx(open ? -1 : idx)}
-                className="flex flex-1 items-center gap-2 text-left text-xs font-semibold text-gray-700"
+                className="flex flex-1 items-center gap-2 text-left text-[11px] font-semibold text-gray-700"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-white text-[10px] text-gray-500">
                   {idx + 1}
@@ -169,7 +146,7 @@ function Repeater({ field, value, onChange }) {
                 className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
                 aria-label="Move up"
               >
-                <FiChevronUp size={14} />
+                <FiChevronUp size={13} />
               </button>
               <button
                 type="button"
@@ -178,7 +155,16 @@ function Repeater({ field, value, onChange }) {
                 className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
                 aria-label="Move down"
               >
-                <FiChevronDown size={14} />
+                <FiChevronDown size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => duplicate(idx)}
+                disabled={field.max && items.length >= field.max}
+                className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                aria-label="Duplicate"
+              >
+                <FiCopy size={12} />
               </button>
               <button
                 type="button"
@@ -187,16 +173,21 @@ function Repeater({ field, value, onChange }) {
                 className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30"
                 aria-label="Remove"
               >
-                <FiTrash2 size={14} />
+                <FiTrash2 size={13} />
               </button>
             </div>
 
             {open && (
-              <div className="space-y-3 p-3">
+              <div className="space-y-3 p-2.5">
                 {field.fields.map((sub) => (
                   <div key={sub.key}>
-                    <Label>{sub.label}</Label>
-                    <Field field={sub} value={item[sub.key]} onChange={(v) => setItem(idx, sub.key, v)} />
+                    <Label hint={sub.hint}>{sub.label}</Label>
+                    <Field
+                      field={sub}
+                      value={item[sub.key]}
+                      onChange={(v) => setItem(idx, sub.key, v)}
+                      device={device}
+                    />
                   </div>
                 ))}
               </div>
@@ -209,9 +200,9 @@ function Repeater({ field, value, onChange }) {
         type="button"
         onClick={add}
         disabled={field.max && items.length >= field.max}
-        className="flex w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-gray-200 py-2 text-xs font-semibold text-gray-500 hover:border-yellow-400 hover:text-yellow-600 disabled:opacity-40"
+        className="flex w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-gray-200 py-2 text-[11px] font-semibold text-gray-500 hover:border-[#93003f] hover:text-[#93003f] disabled:opacity-40"
       >
-        <FiPlus size={13} /> Add
+        <FiPlus size={12} /> {field.addLabel || 'Add'}
       </button>
     </div>
   );
@@ -219,16 +210,27 @@ function Repeater({ field, value, onChange }) {
 
 // ── Field switch ─────────────────────────────────────────────────────────────
 
-function Field({ field, value, onChange }) {
+function Field({ field, value, onChange, device }) {
   switch (field.type) {
     case 'textarea':
       return (
         <textarea
-          rows={3}
+          rows={field.rows || 3}
           value={value ?? ''}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
           className={inputCls}
+        />
+      );
+
+    case 'html':
+      return (
+        <textarea
+          rows={field.rows || 8}
+          value={value ?? ''}
+          placeholder={field.placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${inputCls} font-mono leading-relaxed`}
         />
       );
 
@@ -239,6 +241,7 @@ function Field({ field, value, onChange }) {
           min={field.min}
           max={field.max}
           value={value ?? ''}
+          placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
           className={inputCls}
         />
@@ -247,7 +250,7 @@ function Field({ field, value, onChange }) {
     case 'select':
       return (
         <select
-          value={value ?? ''}
+          value={String(value ?? '')}
           onChange={(e) => {
             // Options may carry numbers (e.g. images per row); keep the type.
             const picked = field.options.find((o) => String(o.value) === e.target.value);
@@ -263,49 +266,59 @@ function Field({ field, value, onChange }) {
         </select>
       );
 
+    case 'toggleGroup':
+      return (
+        <ToggleGroup
+          value={value}
+          options={field.options === 'align' ? ALIGN_OPTIONS : field.options}
+          onChange={onChange}
+          allowEmpty={field.allowEmpty}
+        />
+      );
+
     case 'boolean':
       return (
         <button
           type="button"
           onClick={() => onChange(!value)}
-          className={`relative h-6 w-11 rounded-full transition-colors ${value ? 'bg-yellow-500' : 'bg-gray-200'}`}
+          className={`relative h-5 w-9 rounded-full transition-colors ${value ? 'bg-[#93003f]' : 'bg-gray-200'}`}
           role="switch"
           aria-checked={!!value}
         >
           <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              value ? 'translate-x-5' : 'translate-x-0.5'
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              value ? 'translate-x-4' : 'translate-x-0.5'
             }`}
           />
         </button>
       );
 
     case 'color':
+      return <ColorInput value={value} onChange={onChange} />;
+
+    case 'size':
       return (
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={value || '#ffffff'}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-9 w-12 cursor-pointer rounded-md border border-gray-200"
-          />
-          <input
-            value={value || ''}
-            placeholder="transparent"
-            onChange={(e) => onChange(e.target.value)}
-            className={`${inputCls} font-mono`}
-          />
-          {value && (
-            <button
-              type="button"
-              onClick={() => onChange('')}
-              className="whitespace-nowrap rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        <SizeControl
+          value={value}
+          onChange={onChange}
+          device={device}
+          units={field.units}
+          min={field.min}
+          max={field.max}
+          // A block's own sizes are rendered as one inline style, so they are a
+          // single value; only the universal Style panel stores them per device.
+          responsive={field.responsive === true}
+        />
       );
+
+    case 'box':
+      return <BoxControl value={value} onChange={onChange} device={device} units={field.units} corners={field.corners} />;
+
+    case 'link':
+      return <LinkControl value={value} onChange={onChange} />;
+
+    case 'icon':
+      return <IconSelect value={value} onChange={onChange} />;
 
     case 'image':
       return <ImagePicker value={value} onChange={onChange} />;
@@ -317,7 +330,7 @@ function Field({ field, value, onChange }) {
       return <CampaignSelect value={value} onChange={onChange} />;
 
     case 'repeater':
-      return <Repeater field={field} value={value} onChange={onChange} />;
+      return <Repeater field={field} value={value} onChange={onChange} device={device} />;
 
     case 'text':
     default:
@@ -326,7 +339,7 @@ function Field({ field, value, onChange }) {
           value={value ?? ''}
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className={`${inputCls} ${field.mono ? 'font-mono text-xs' : ''}`}
+          className={`${inputCls} ${field.mono ? 'font-mono' : ''}`}
         />
       );
   }
@@ -334,55 +347,72 @@ function Field({ field, value, onChange }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-export default function BlockSettings({ block, config, onChange }) {
+const TABS = [
+  { key: 'content', label: 'Content' },
+  { key: 'style', label: 'Style' },
+  { key: 'advanced', label: 'Advanced' }
+];
+
+export default function BlockSettings({ block, config, onChange, onStyleChange, device, onDevice }) {
   const [tab, setTab] = useState('content');
   if (!block) return null;
 
-  // Tabs with nothing in them are not shown at all, so simple blocks stay a
-  // single plain form rather than sprouting two empty tabs.
-  const populated = SETTINGS_TABS.filter((t) => fieldsForTab(block, config, t.key).length > 0);
-  const activeTab = populated.some((t) => t.key === tab) ? tab : populated[0]?.key;
-  const fields = activeTab ? fieldsForTab(block, config, activeTab) : [];
+  const style = config?.style || {};
+  const ownFields = fieldsForTab(block, config, tab);
 
   return (
     <div className="space-y-3">
       <div>
         <p className="text-sm font-bold text-gray-800">{block.label}</p>
-        <p className="text-xs text-gray-500">{block.description}</p>
+        <p className="text-[11px] leading-snug text-gray-500">{block.description}</p>
       </div>
 
-      {block.note && <p className="rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700">{block.note}</p>}
+      {block.note && <p className="rounded-md bg-blue-50 px-2.5 py-2 text-[11px] leading-snug text-blue-700">{block.note}</p>}
 
-      {populated.length > 1 && (
-        <div className="flex gap-1 border-b border-gray-200">
-          {populated.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`-mb-px border-b-2 px-3 py-1.5 text-xs font-semibold transition-colors ${
-                t.key === activeTab
-                  ? 'border-[#93003f] text-[#93003f]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="sticky top-0 z-10 -mx-3 border-b border-gray-200 bg-white px-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex gap-1">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`-mb-px border-b-2 px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                  t.key === tab ? 'border-[#93003f] text-[#93003f]' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {/* Responsive editing is only meaningful once you can say which screen
+              you are editing, so the switcher rides along with the tabs. */}
+          <DeviceToggle device={device} onDevice={onDevice} />
         </div>
+      </div>
+
+      {device !== 'desktop' && (
+        <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[10px] leading-snug text-amber-700">
+          Editing <b>{device}</b>. Values left blank fall back to the larger screen.
+        </p>
       )}
 
       <div className="space-y-4">
-        {fields.map((field) => (
+        {ownFields.map((field) => (
           <div key={field.key}>
             <Label hint={field.hint}>
               {field.label}
               {field.required && <span className="text-red-500"> *</span>}
             </Label>
-            <Field field={field} value={config?.[field.key]} onChange={(v) => onChange(field.key, v)} />
+            <Field field={field} value={config?.[field.key]} onChange={(v) => onChange(field.key, v)} device={device} />
           </div>
         ))}
 
-        {fields.length === 0 && <p className="text-xs text-gray-400">This block has no settings.</p>}
+        {tab === 'content' && ownFields.length === 0 && (
+          <p className="text-[11px] text-gray-400">This block has no content settings — try the Style tab.</p>
+        )}
+
+        {tab === 'style' && <StylePanel style={style} onChange={onStyleChange} device={device} />}
+        {tab === 'advanced' && <AdvancedPanel style={style} onChange={onStyleChange} />}
       </div>
     </div>
   );
