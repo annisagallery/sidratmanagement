@@ -3,21 +3,13 @@ import React from 'react';
 import GuestGuard from 'src/guards/guest';
 // components
 import LoginMain from 'src/components/_main/auth/login';
+
+// The card, heading and page chrome all live in the login form itself so this
+// screen stays byte-identical to the other staff apps' sign-in pages.
 export default async function Login() {
   return (
-    <>
-      <GuestGuard>
-        <div className="max-w-md mx-auto my-12">
-          <div className=" bg-white p-6 border">
-            <div className="mb-5">
-              <h1 className="text-4xl font-bold text-center mb-2">Management</h1>
-              <p className="text-center text-gray-600">Sign in with your admin account</p>
-            </div>
-
-            <LoginMain />
-          </div>
-        </div>
-      </GuestGuard>
-    </>
+    <GuestGuard>
+      <LoginMain />
+    </GuestGuard>
   );
 }

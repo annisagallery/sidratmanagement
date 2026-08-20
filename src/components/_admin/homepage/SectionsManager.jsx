@@ -18,7 +18,8 @@ const SECTION_TYPES = [
   { value: 'categories', label: 'Categories', color: 'bg-purple-100 text-purple-700', hasLink: false },
   { value: 'products', label: 'Products', color: 'bg-green-100 text-green-700', hasLink: true },
   { value: 'campaign', label: 'Campaign', color: 'bg-red-100 text-red-700', hasLink: false },
-  { value: 'label', label: 'Label/Heading', color: 'bg-gray-100 text-gray-600', hasLink: false }
+  { value: 'label', label: 'Label/Heading', color: 'bg-gray-100 text-gray-600', hasLink: false },
+  { value: 'reviews', label: 'Reviews', color: 'bg-amber-100 text-amber-700', hasLink: false }
 ];
 
 const LINK_PRESETS = [

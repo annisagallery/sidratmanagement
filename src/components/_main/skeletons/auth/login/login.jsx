@@ -1,14 +1,17 @@
+// Two labelled fields (phone-or-email, password) and the submit button — the
+// remember-me row and footer link the old skeleton drew no longer exist.
 export default function Login() {
   return (
-    <div className="space-y-3">
-      <div className="h-14 bg-gray-200 rounded-md animate-pulse" />
-      <div className="h-14 bg-gray-200 rounded-md animate-pulse" />
-      <div className="flex justify-between">
-        <div className="h-4 w-28 bg-gray-200 rounded-md animate-pulse" />
-        <div className="h-4 w-24 bg-gray-200 rounded-md animate-pulse" />
+    <>
+      <div className="space-y-1">
+        <div className="h-3 w-24 bg-slate-200 rounded animate-pulse" />
+        <div className="h-10 bg-slate-200 rounded-md animate-pulse" />
       </div>
-      <div className="h-14 bg-gray-200 rounded-md animate-pulse" />
-      <div className="h-4 w-48 bg-gray-200 rounded-md animate-pulse mx-auto" />
-    </div>
+      <div className="space-y-1">
+        <div className="h-3 w-20 bg-slate-200 rounded animate-pulse" />
+        <div className="h-10 bg-slate-200 rounded-md animate-pulse" />
+      </div>
+      <div className="h-10 bg-slate-200 rounded-md animate-pulse" />
+    </>
   );
 }

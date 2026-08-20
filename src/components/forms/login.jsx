@@ -1,135 +1,118 @@
 'use client';
-import * as Yup from 'yup';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation } from 'react-query';
-import RouterLink from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from 'next-nprogress-bar';
-import { useFormik, Form, FormikProvider } from 'formik';
-import useAdminUserStore from 'src/stores/userStore';
+import { MdOutlineDashboard, MdOutlineVisibility, MdOutlineVisibilityOff } from 'react-icons/md';
+import { toast } from 'react-toastify';
+
 import * as api from 'src/services';
-import { MdOutlineVisibility, MdLock, MdOutlineVisibilityOff } from 'react-icons/md';
-import { IoMdMail } from 'react-icons/io';
-import Swal from 'sweetalert2';
+import useAdminUserStore from 'src/stores/userStore';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+
+// Per-app identity. Everything below this block is deliberately identical
+// across all six staff-facing apps — keep the sign-in screens in sync.
+const APP_LABEL = 'Management';
+const APP_TAGLINE = 'Sign in with your store admin account';
+const AppIcon = MdOutlineDashboard;
 
 export default function LoginForm() {
-  const { push } = useRouter();
-  const storeLogin = useAdminUserStore((s) => s.login);
-  const searchParam = useSearchParams();
-  const redirect = searchParam.get('redirect');
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { login } = useAdminUserStore();
+  const { siteName, logo, logoType, primaryColor } = useSiteSettings();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const { mutate } = useMutation(api.login, {
-    onSuccess: async (data) => {
-      storeLogin(data.user);
-      setLoading(false);
-      Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        text: 'Logged in successfully!',
-        showConfirmButton: false,
-        timer: 1500,
-        background: '#f0f4f8',
-        iconColor: '#4CAF50'
-      });
-      push(redirect || '/');
+  const loginMutation = useMutation(api.login, {
+    onSuccess: (data) => {
+      login(data.user);
+      // Read the return path at submit time instead of with useSearchParams:
+      // that hook forces a Suspense boundary during prerender, and the value
+      // is only ever needed once the user has already interacted.
+      const params = new URLSearchParams(window.location.search);
+      router.push(params.get('redirect') || '/');
     },
     onError: (err) => {
-      setLoading(false);
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: err.response.data.message || 'Something went wrong!',
-        confirmButtonColor: '#d33'
-      });
+      toast.error(err?.response?.data?.message || 'Login failed');
     }
   });
 
-  const LoginSchema = Yup.object().shape({
-    email: Yup.string().email('Enter a valid email').required('Email is required.'),
-    password: Yup.string().required('Password is required.').min(8, 'Password should be 8 characters or longer.')
-  });
-
-  const formik = useFormik({
-    initialValues: {
-      email: '',
-      password: '',
-      remember: true
-    },
-    validationSchema: LoginSchema,
-    onSubmit: async (values) => {
-      const { email, password } = values;
-      setLoading(true);
-      mutate({ email, password });
-    }
-  });
-
-  const { errors, touched, values, handleSubmit, getFieldProps } = formik;
+  const onSubmit = (e) => {
+    e.preventDefault();
+    if (!identifier.trim() || !password) return;
+    loginMutation.mutate({ identifier: identifier.trim(), password });
+  };
 
   return (
-    <div className="w-full bg-white ">
-      <FormikProvider value={formik}>
-        <Form autoComplete="off" noValidate onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <div className="relative">
-              <IoMdMail className="absolute left-3 top-3 text-gray-500" />
-              <input
-                id="email"
-                type="email"
-                {...getFieldProps('email')}
-                className={`block w-full border rounded-md py-2 pl-10 pr-3 focus:outline-none focus:ring ${
-                  touched.email && errors.email ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Enter your email"
+    <div
+      className="admin-root flex min-h-screen items-center justify-center bg-slate-100 p-4"
+      style={{ '--brand': primaryColor }}
+    >
+      <form onSubmit={onSubmit} className="card-ui w-full max-w-sm space-y-4 p-6">
+        <div className="flex flex-col items-center gap-1 pb-2">
+          {logo ? (
+            <span className="flex h-14 w-14 overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-sm">
+              <img
+                src={logo}
+                alt={siteName || 'Site logo'}
+                className={`h-full w-full ${logoType === 'round' ? 'rounded-md object-cover' : 'object-contain'}`}
               />
-              {touched.email && errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
-            </div>
-          </div>
+            </span>
+          ) : (
+            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
+              <AppIcon size={26} />
+            </span>
+          )}
+          <h1 className="text-lg font-bold text-slate-800">
+            {siteName} {APP_LABEL}
+          </h1>
+          <p className="text-sm text-slate-500">{APP_TAGLINE}</p>
+        </div>
 
-          <div className="mb-4">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <div className="relative">
-              <MdLock className="absolute left-3 top-3 text-gray-500" />
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                {...getFieldProps('password')}
-                className={`block w-full border rounded-md py-2 pl-10 pr-3 focus:outline-none focus:ring ${
-                  touched.password && errors.password ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Enter your password"
-              />
-              <button type="button" className="absolute right-3 top-3" onClick={() => setShowPassword((prev) => !prev)}>
-                {showPassword ? <MdOutlineVisibility /> : <MdOutlineVisibilityOff />}
-              </button>
-              {touched.password && errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
-            </div>
-          </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Phone or Email
+          </label>
+          <input
+            type="text"
+            inputMode="email"
+            className="input-ui"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="01XXXXXXXXX or you@example.com"
+            autoComplete="username"
+            required
+          />
+        </div>
 
-          <div className="flex justify-between items-center mb-4">
-            <label className="flex items-center">
-              <input type="checkbox" {...getFieldProps('remember')} className="mr-2" checked={values.remember} />
-              Remember me
-            </label>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              className="input-ui pr-10"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+            >
+              {showPassword ? <MdOutlineVisibilityOff size={18} /> : <MdOutlineVisibility size={18} />}
+            </button>
           </div>
+        </div>
 
-          <button
-            type="submit"
-            className={`w-full bg-[var(--brand)] text-white py-2 rounded-md focus:outline-none ${
-              loading ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-95'
-            }`}
-            disabled={loading}
-          >
-            {loading ? 'Loading...' : 'Login'}
-          </button>
-        </Form>
-      </FormikProvider>
+        <button type="submit" className="btn-brand w-full" disabled={loginMutation.isLoading}>
+          {loginMutation.isLoading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
     </div>
   );
 }

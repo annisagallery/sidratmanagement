@@ -587,6 +587,33 @@ export const reorderHomeBanners = async (ids) => {
   return data;
 };
 
+//homepage reviews
+
+export const getHomeReviews = async () => {
+  const { data } = await http.get(`/homereviews`);
+  return data;
+};
+export const getHomeReviewsAdmin = async () => {
+  const { data } = await http.get(`/admin/homereviews`);
+  return data;
+};
+export const createHomeReview = async (payload) => {
+  const { data } = await http.post(`/admin/homereviews`, payload);
+  return data;
+};
+export const updateHomeReview = async (id, payload) => {
+  const { data } = await http.put(`/admin/homereviews/${id}`, payload);
+  return data;
+};
+export const deleteHomeReview = async (id) => {
+  const { data } = await http.delete(`/admin/homereviews/${id}`);
+  return data;
+};
+export const reorderHomeReviews = async (ids) => {
+  const { data } = await http.put(`/admin/homereviews/reorder`, { ids });
+  return data;
+};
+
 //couriers
 
 export const fraudCheck = async (phone) => {

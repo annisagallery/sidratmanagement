@@ -13,8 +13,6 @@ import { FiFileText, FiExternalLink } from 'react-icons/fi';
 import { getSiteSettingsByAdmin, updateSiteSettings, uploadSiteLogo, uploadSiteFavicon } from 'src/services';
 import { useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
-import SectionsManager from 'src/components/_admin/homepage/SectionsManager';
-import BannerList from 'src/components/_admin/banners/bannerList';
 import Image from 'next/image';
 import RichTextEditor from 'src/components/richTextEditor';
 import { fDateTime } from 'src/utils/formatTime';
@@ -361,7 +359,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
   const isNavigation = tab === 'navigation';
   const isBreadcrumbs = tab === 'breadcrumbs';
   const isGlobal = ['brand', 'contact', 'seo', 'footer', 'navigation', 'breadcrumbs', 'product'].includes(tab);
-  const isHomepage = tab === 'homepage';
   const isProduct = tab === 'product';
   const isBranch = tab === 'branch';
   const isInvoice = tab === 'invoice';
@@ -394,16 +391,13 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
         <div className="flex items-center gap-3">
           {hasUnsavedChanges && <span className="text-sm font-semibold text-amber-600">Unsaved changes</span>}
           {!hasUnsavedChanges && msg && <span className="text-sm text-green-600 font-medium">{msg}</span>}
-          {/* Save only applies to Global / Product / Branch tabs */}
-          {!isHomepage && (
-            <button
-              onClick={handleSave}
-              disabled={saving || !hasUnsavedChanges}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2.5 rounded-md font-semibold text-sm disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : hasUnsavedChanges ? 'Save Settings' : 'Saved'}
-            </button>
-          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasUnsavedChanges}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2.5 rounded-md font-semibold text-sm disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : hasUnsavedChanges ? 'Save Settings' : 'Saved'}
+          </button>
         </div>
       </div>
 
@@ -852,18 +846,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
             </div>
           </Card>
         </>
-      )}
-
-      {/* ── HOMEPAGE TAB ─────────────────────────────────────────────────── */}
-      {isHomepage && (
-        <div className="space-y-8">
-          <Card title="Page Sections" subtitle="Drag to reorder, toggle visibility, add or remove sections">
-            <SectionsManager />
-          </Card>
-          <Card title="Hero Banners" subtitle="Images shown in the top carousel (Hero/Slider section)">
-            <BannerList />
-          </Card>
-        </div>
       )}
 
       {/* ── PRODUCT PAGE TAB ─────────────────────────────────────────────── */}

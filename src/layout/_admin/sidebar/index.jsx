@@ -33,13 +33,17 @@ function Navigation({ pathname, close }) {
   // Ability-filtered navigation: items tagged with a `subject` only render
   // when the user's role can at least read it; `superAdminOnly` items render
   // for super admins alone. UX only — the API enforces.
+  // `subject` may be an array when one entry groups pages with different
+  // gates — the item shows if the role can read ANY of them, and PageTabs
+  // then hides the individual tabs the role cannot reach.
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(
         (item) =>
           (!item.superAdminOnly || isSuperAdmin(user)) &&
-          (!item.subject || can(item.action || 'read', item.subject))
+          (!item.subject ||
+            [].concat(item.subject).some((subject) => can(item.action || 'read', subject)))
       )
     }))
     .filter((group) => group.items.length > 0);

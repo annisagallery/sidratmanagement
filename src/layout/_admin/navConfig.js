@@ -26,6 +26,7 @@ import {
   FiShare2,
   FiShoppingBag,
   FiSliders,
+  FiStar,
   FiTag,
   FiAlertCircle,
   FiTrash2
@@ -304,7 +305,7 @@ export const navGroups = [
     key: 'marketing',
     label: 'Marketing',
     items: [
-      { key: 'banners', label: 'Banners', href: '/banners', icon: IoImagesOutline, subject: 'Banner' },
+      { key: 'reviews', label: 'Reviews', href: '/reviews', icon: FiStar, subject: 'Banner' },
       { key: 'campaigns', label: 'Campaigns', href: '/campaigns', icon: HiOutlineSpeakerphone, subject: 'Campaign' },
       { key: 'coupons', label: 'Coupons', href: '/coupon-codes', icon: FiTag, subject: 'Coupon' },
       { key: 'cashback', label: 'Cashback', href: '/cash-settings/transactions', icon: BsCash, subject: 'Cashback', children: [{ label: 'Transactions', href: '/cash-settings/transactions' }, { label: 'User Balance', href: '/cash-settings/list' }, { label: 'Cashback Settings', href: '/cash-settings' }] },
@@ -339,11 +340,19 @@ export const navGroups = [
           { label: 'Contact', href: '/site-settings/global/contact' },
           { label: 'SEO', href: '/site-settings/global/seo' },
           { label: 'Footer', href: '/site-settings/global/footer' },
-          { label: 'Navigation', href: '/site-settings/global/navigation' },
           { label: 'Breadcrumb Settings', href: '/site-settings/global/breadcrumbs' },
           { label: 'Product Showcase', href: '/site-settings/global/product-showcase' },
           { label: 'Branch Page', href: '/site-settings/global/branch-page' },
           { label: 'Invoice', href: '/site-settings/global/invoice' }
+        ]
+      },
+      {
+        key: 'homepage-settings', label: 'Homepage', href: '/homepage-settings', icon: FiHome,
+        subject: ['Banner', 'SiteSettings'],
+        children: [
+          { label: 'Sections', href: '/homepage-settings', subject: 'Banner' },
+          { label: 'Banners', href: '/homepage-settings/banners', subject: 'Banner' },
+          { label: 'Navigation', href: '/homepage-settings/navigation', subject: 'SiteSettings' }
         ]
       },
       {

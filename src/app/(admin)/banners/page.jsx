@@ -1,11 +1,6 @@
-import BannerList from '@/src/components/_admin/banners/bannerList';
-import React from 'react';
+import { redirect } from 'next/navigation';
 
-// Components
-export default function Categories() {
-  return (
-    <>
-      <BannerList />
-    </>
-  );
+// Moved under Settings › Homepage. Kept so old links and bookmarks resolve.
+export default function BannersPage() {
+  redirect('/homepage-settings/banners');
 }

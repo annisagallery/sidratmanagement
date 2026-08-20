@@ -69,7 +69,8 @@ export function BatchStatusPill({ status }) {
  * SKUs carried over from the old MySQL POS are not SKUs.
  *
  * The importer stamps every variation it creates with
- * `MYSQL-<sourceProductId>-<optionId>` (scripts/migrate-from-mysql/index.js),
+ * `MYSQL-<sourceProductId>-<optionId>`
+ * (database-migrations/scripts/migrate-from-mysql/index.js),
  * and the rollback script finds migrated rows by exactly that prefix — so the
  * value has to stay in the database. It is bookkeeping, not a name, and showing
  * it puts "MYSQL-1406-7320" where "Classic Black / Cherry" belongs.

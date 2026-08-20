@@ -21,6 +21,7 @@ import {
   MdDescription,
   MdInventory2,
   MdPhotoLibrary,
+  MdOpenInNew,
   MdReceiptLong,
   MdSearch,
   MdStorefront,
@@ -349,6 +350,24 @@ function LivePreview({
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
           <MdStorefront size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Storefront preview</p>
+          {/* Moved out of the page header: the live page is the thing this
+              panel approximates, so the link belongs next to the preview. Only
+              shown once the product has a slug — an unsaved draft has no page. */}
+          {slug && (
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/product/${slug}`,
+                  '_blank',
+                  'noopener'
+                )
+              }
+              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-[var(--brand-strong)] transition hover:bg-[var(--brand-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+            >
+              <MdOpenInNew size={14} aria-hidden="true" /> View on site
+            </button>
+          )}
         </div>
           {/* Image carousel */}
           <div className="relative bg-gray-50 aspect-square overflow-hidden">
@@ -614,7 +633,7 @@ const STEPS = [
   { label: 'Media', description: 'Gallery and size chart', icon: MdPhotoLibrary },
   { label: 'Options', description: 'Attributes and variations', icon: MdTune },
   { label: 'Presale', description: 'Sell beyond finished stock', icon: MdShoppingCart },
-  { label: 'Materials', description: 'Bill of materials and cost', icon: MdReceiptLong }
+  { label: 'Materials', description: 'Bill of materials', icon: MdReceiptLong }
 ];
 
 const PRODUCT_STATUSES = [
@@ -665,9 +684,9 @@ export default function ProductForm({ currentProduct }) {
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
   const [priceSale, setPriceSale] = useState('');
-  const [rate, setRate] = useState('');
   const [legacyBarcodes, setLegacyBarcodes] = useState('');
-  const [trackInventory, setTrackInventory] = useState(true);
+  // Read-only here: production is switched on the admin portal, but the presale
+  // step still needs to know, because presale is inert while it is off.
   const [productionEnabled, setProductionEnabled] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
 
@@ -734,9 +753,7 @@ export default function ProductForm({ currentProduct }) {
     setCategory(p.category?.id || '');
     setPrice(p.price?.toString() || '');
     setPriceSale(p.priceSale?.toString() || '');
-    setRate(p.rate?.toString() || '');
     setLegacyBarcodes([p.primaryBarcode, ...(p.legacyBarcodes || [])].filter(Boolean).join(', '));
-    setTrackInventory(p.trackInventory !== false);
     setProductionEnabled(p.productionEnabled !== false);
     setIsVisible(p.isVisible !== false);
     setShortDescription(p.shortDescription || '');
@@ -892,10 +909,12 @@ export default function ProductForm({ currentProduct }) {
       category,
       price: Number(price),
       priceSale: priceSale ? Number(priceSale) : null,
-      rate: rate ? Number(rate) : 0,
+      // `rate`, `trackInventory` and `productionEnabled` are deliberately NOT
+      // sent. The production rate is owned by the admin portal's rate cards,
+      // and the two operational switches are no longer edited here. Omitting
+      // them keeps updateProduct's `{...rest}` spread from writing over the
+      // values those owners set — sending a default would silently reset them.
       ...splitLegacyCodes(legacyBarcodes),
-      trackInventory,
-      productionEnabled,
       isVisible,
       shortDescription,
       description,
@@ -1001,6 +1020,8 @@ export default function ProductForm({ currentProduct }) {
               <div className="md:col-span-2">
                 <ProductStatusPicker value={status} onChange={setStatus} />
               </div>
+              {/* Featured and ecommerce visibility are the two storefront
+                  placement switches, so they share a row and a compact height. */}
               <div>
                 <FL>Featured</FL>
                 <button
@@ -1011,6 +1032,24 @@ export default function ProductForm({ currentProduct }) {
                 >
                   <FiStar size={16} />
                   {isFeatured ? 'Featured product' : 'Mark as featured'}
+                </button>
+              </div>
+              <div>
+                <FL>Ecommerce Visibility</FL>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isVisible}
+                  onClick={() => setIsVisible((v) => !v)}
+                  title={
+                    isVisible
+                      ? 'Customers can discover this product in listings and search.'
+                      : 'The direct page remains available, but the product is hidden from listings.'
+                  }
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isVisible ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                >
+                  {isVisible ? <MdVisibility size={16} /> : <MdVisibilityOff size={16} />}
+                  {isVisible ? 'Visible on ecommerce' : 'Hidden from ecommerce'}
                 </button>
               </div>
               <div>
@@ -1036,17 +1075,6 @@ export default function ProductForm({ currentProduct }) {
                 />
               </div>
               <div>
-                <FL>Production Rate (৳)</FL>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-field"
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <div>
                 <FL>Product Code</FL>
                 <input
                   className="input-field cursor-not-allowed bg-gray-50 font-mono text-gray-500"
@@ -1054,7 +1082,7 @@ export default function ProductForm({ currentProduct }) {
                   readOnly
                 />
               </div>
-              <div className="md:col-span-2">
+              <div>
                 <FL>Legacy Product Codes</FL>
                 <input
                   className="input-field font-mono"
@@ -1062,50 +1090,6 @@ export default function ProductForm({ currentProduct }) {
                   onChange={(e) => setLegacyBarcodes(e.target.value)}
                   placeholder="Separate multiple barcodes with commas"
                 />
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={trackInventory}
-                onClick={() => setTrackInventory((value) => !value)}
-                className={`flex min-h-[76px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${trackInventory ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
-              >
-                <MdInventory2 size={20} className="mt-0.5 shrink-0 text-[var(--brand-strong)]" />
-                <span>
-                  <span className="block text-sm font-bold">Track branch inventory</span>
-                  <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">Maintain stock separately for each branch.</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={productionEnabled}
-                onClick={() => setProductionEnabled((value) => !value)}
-                className={`flex min-h-[76px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${productionEnabled ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
-              >
-                <MdTune size={20} className="mt-0.5 shrink-0 text-[var(--brand-strong)]" />
-                <span>
-                  <span className="block text-sm font-bold">Production enabled</span>
-                  <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">Allow this item to enter the production workflow.</span>
-                </span>
-              </button>
-              <div className="md:col-span-2">
-                <FL>Ecommerce Visibility</FL>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isVisible}
-                  onClick={() => setIsVisible((v) => !v)}
-                  className={`flex min-h-[76px] w-full items-start gap-3 rounded-md border p-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isVisible ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
-                >
-                  {isVisible ? <MdVisibility size={20} className="shrink-0 text-emerald-700" /> : <MdVisibilityOff size={20} className="shrink-0" />}
-                  <span>
-                    <span className="block font-bold">{isVisible ? 'Visible on ecommerce' : 'Hidden from ecommerce'}</span>
-                    <span className="mt-1 block text-xs font-normal leading-5 opacity-80">
-                      {isVisible ? 'Customers can discover this product in listings and search.' : 'The direct page remains available, but the product is hidden from listings.'}
-                    </span>
-                  </span>
-                </button>
               </div>
             </div>
           </div>
@@ -1649,7 +1633,7 @@ export default function ProductForm({ currentProduct }) {
               <div className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-3">
                 <MdInfo size={17} className="mt-0.5 shrink-0 text-amber-600" />
                 <p className="text-[13px] text-amber-900">
-                  Production is off for this product, so presale will not apply until you enable it on Product details.
+                  Production is off for this product, so presale will not apply until it is enabled from the admin portal.
                 </p>
               </div>
             )}

@@ -33,8 +33,6 @@ import { alertError, toastSuccess } from 'src/utils/swal';
 const BASE = '__base__';
 
 const qty = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 1000) / 1000;
-const money = (value) =>
-  `৳${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const unitLabel = (material) =>
   material?.unitMode === 'roll_meter' ? 'm' : material?.unit?.name || 'units';
@@ -59,7 +57,7 @@ const serialise = (rows) =>
  * A scope tile. Same shape as the Presale step's option switches so the two
  * screens read as one flow.
  */
-function ScopeTile({ active, primary, title, subtitle, count, cost, dirty, onClick }) {
+function ScopeTile({ active, primary, title, subtitle, count, dirty, onClick }) {
   return (
     <button
       type="button"
@@ -87,9 +85,6 @@ function ScopeTile({ active, primary, title, subtitle, count, cost, dirty, onCli
         <span className="mt-0.5 block truncate text-[11px] text-slate-500">
           {subtitle ?? `${count} material${count === 1 ? '' : 's'}`}
         </span>
-        {cost != null && (
-          <span className="mt-1 block text-[11px] font-bold tabular-nums text-slate-700">{money(cost)}</span>
-        )}
       </span>
     </button>
   );
@@ -195,39 +190,11 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
   );
 }
 
-/** Compact horizontal costing strip for the selected scope. */
-function CostStrip({ scope }) {
-  if (!scope) return null;
-  const materialCost = scope.materialCost ?? scope.effective?.materialCost ?? 0;
-  const complete = scope.costComplete ?? scope.effective?.costComplete;
-  const profit = Number(scope.estimatedProfit || 0);
-
-  const cells = [
-    ['Materials', money(materialCost), 'text-slate-800'],
-    ['Production', money(scope.labourCost), 'text-slate-800'],
-    ['Unit cost', money(scope.estimatedTotalCost), 'text-slate-900'],
-    ['Selling price', money(scope.sellingPrice), 'text-slate-800'],
-    ['Profit', money(profit), profit >= 0 ? 'text-emerald-700' : 'text-red-700'],
-  ];
-
-  return (
-    <div className="card-ui overflow-hidden">
-      <div className="grid grid-cols-2 divide-slate-100 sm:grid-cols-3 lg:grid-cols-5 lg:divide-x">
-        {cells.map(([label, value, tone]) => (
-          <div key={label} className="px-4 py-3">
-            <p className="section-label">{label}</p>
-            <p className={`mt-0.5 text-base font-bold tabular-nums ${tone}`}>{value}</p>
-          </div>
-        ))}
-      </div>
-      {complete === false && (
-        <p className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] font-semibold text-amber-800">
-          Some materials have no purchase cost yet, so this estimate is incomplete.
-        </p>
-      )}
-    </div>
-  );
-}
+// The costing strip that used to sit here (materials cost, production cost,
+// unit cost, selling price and profit) is intentionally gone from Management:
+// costing is not shared with everyone who can edit a product. The bill of
+// materials itself — what a unit consumes — still belongs here; the money
+// attached to it is read in the admin portal only.
 
 export default function ProductBom({ slug, embedded = false }) {
   const router = useRouter();
@@ -343,7 +310,7 @@ export default function ProductBom({ slug, embedded = false }) {
       {!embedded && (
         <PageHeader
           title={`${bom?.product?.name || 'Product'} materials`}
-          subtitle="What one finished unit consumes, and what it costs to make"
+          subtitle="What one finished unit consumes"
           icon={MdReceiptLong}
         >
           <button className="btn-ghost min-h-11" onClick={() => router.push(`/products/${slug}`)}>
@@ -361,7 +328,6 @@ export default function ProductBom({ slug, embedded = false }) {
           active={isBase}
           title="Base — all options"
           subtitle={`${baseRows.length} material${baseRows.length === 1 ? '' : 's'} · applies to every option`}
-          cost={bom?.base?.estimatedTotalCost}
           dirty={dirtyFor(BASE)}
           onClick={() => setScope(BASE)}
         />
@@ -373,15 +339,12 @@ export default function ProductBom({ slug, embedded = false }) {
               active={scope === variation.id}
               title={variation.label}
               subtitle={own ? `${own} extra material${own === 1 ? '' : 's'}` : 'Base only'}
-              cost={variation.estimatedTotalCost}
               dirty={dirtyFor(variation.id)}
               onClick={() => setScope(variation.id)}
             />
           );
         })}
       </div>
-
-      <CostStrip scope={activeScope} />
 
       {/* Configurator for the selected tile. */}
       <section className="card-ui overflow-hidden">

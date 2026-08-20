@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { hrefMatches, navGroups } from 'src/layout/_admin/navConfig';
+import { usePermissions } from 'src/context/PermissionsContext';
 
 function findCurrentItem(pathname) {
   let winner = null;
@@ -22,8 +23,14 @@ function findCurrentItem(pathname) {
 
 export default function PageTabs() {
   const pathname = usePathname();
+  const { can } = usePermissions();
   const item = findCurrentItem(pathname);
-  const tabs = item?.children || [];
+  // A tab may carry its own `subject` when one parent groups pages behind
+  // different gates; untagged tabs inherit the parent's visibility. UX only —
+  // the API enforces.
+  const tabs = (item?.children || []).filter(
+    (tab) => !tab.subject || [].concat(tab.subject).some((subject) => can(tab.action || 'read', subject))
+  );
 
   // A single destination adds no navigational value; go directly to its page.
   if (tabs.length < 2) return null;
