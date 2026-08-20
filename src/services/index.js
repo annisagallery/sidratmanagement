@@ -971,29 +971,12 @@ export const verifyOrderPayment = async ({ orderNo, paymentId, status }) => {
 };
 
 // ── Complaints ────────────────────────────────────────────────────────────────
-export const getComplaintsByAdmin = async (params = '') => {
-  const query = typeof params === 'string' ? params : new URLSearchParams(params).toString();
-  const { data } = await http.get(`/admin/complaints?${query}`);
-  return data;
-};
-export const getComplaintByAdmin = async (id) => {
-  const { data } = await http.get(`/admin/complaints/${id}`);
-  return data;
-};
-export const getComplaintImageByAdmin = async (complaintId, imageId) => {
-  const { data } = await http.get(`/admin/complaints/${complaintId}/images/${imageId}`, { responseType: 'blob' });
-  return data;
-};
 export const createComplaintByAdmin = async (payload) => {
   const { data } = await http.post(`/admin/complaints`, payload);
   return data;
 };
 export const uploadComplaintImagesByAdmin = async (formData) => {
   const { data } = await http.post(`/admin/complaints/images`, formData);
-  return data;
-};
-export const updateComplaintByAdmin = async ({ id, ...payload }) => {
-  const { data } = await http.put(`/admin/complaints/${id}`, payload);
   return data;
 };
 

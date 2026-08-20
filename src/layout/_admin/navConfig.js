@@ -28,7 +28,6 @@ import {
   FiSliders,
   FiStar,
   FiTag,
-  FiAlertCircle,
   FiTrash2
 } from 'react-icons/fi';
 
@@ -58,7 +57,6 @@ export const navParents = [
       // Labels and invoices share one, because a run needs both for the same
       // orders and picking them twice is how the two end up disagreeing.
       { label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping },
-      { label: 'Complaints', href: '/orders/complaints', icon: FiAlertCircle },
       {
         label: 'Settings',
         href: '/orders/settings',
@@ -217,9 +215,6 @@ export const navGroups = [
       },
       {
         key: 'order-print', label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping, subject: 'Order'
-      },
-      {
-        key: 'complaints', label: 'Complaints', href: '/orders/complaints', icon: FiAlertCircle, subject: 'Complaint'
       },
       {
         key: 'sales-settings', label: 'Sales Settings', href: '/orders/settings/delivery-types', icon: FiSettings, subject: 'OrderSettings',
