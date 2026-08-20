@@ -345,7 +345,6 @@ export const navGroups = [
         key: 'homepage-settings', label: 'Homepage', href: '/homepage-settings', icon: FiHome,
         subject: ['Banner', 'SiteSettings'],
         children: [
-          { label: 'Sections', href: '/homepage-settings', subject: 'Banner' },
           { label: 'Banners', href: '/homepage-settings/banners', subject: 'Banner' },
           { label: 'Navigation', href: '/homepage-settings/navigation', subject: 'SiteSettings' }
         ]

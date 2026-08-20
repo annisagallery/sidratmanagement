@@ -3,10 +3,6 @@ import { createContext, useContext } from 'react';
 
 export const defaultSettings = {
   siteName: 'Management',
-  // Where the two public apps live. Empty until an operator fills them in on
-  // Settings -> Branding; the page builder says so rather than guessing.
-  storefrontUrl: '',
-  adminUrl: '',
   logo: null,
   favicon: null,
   logoType: 'default',

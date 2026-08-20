@@ -223,28 +223,6 @@ export const deleteCampaignByAdmin = async (id) => {
   return data;
 };
 
-// Homepage Sections
-export const getHomepageSectionsAdmin = async () => {
-  const { data } = await http.get(`/admin/homepage-sections`);
-  return data;
-};
-export const createHomepageSection = async (payload) => {
-  const { data } = await http.post(`/admin/homepage-sections`, payload);
-  return data;
-};
-export const updateHomepageSection = async (id, payload) => {
-  const { data } = await http.put(`/admin/homepage-sections/${id}`, payload);
-  return data;
-};
-export const deleteHomepageSection = async (id) => {
-  const { data } = await http.delete(`/admin/homepage-sections/${id}`);
-  return data;
-};
-export const reorderHomepageSections = async (ids) => {
-  const { data } = await http.put(`/admin/homepage-sections/reorder`, { ids });
-  return data;
-};
-
 export const getProductReviews = async (pid) => {
   const { data } = await http.get(`/reviews/${pid}`);
   return data;

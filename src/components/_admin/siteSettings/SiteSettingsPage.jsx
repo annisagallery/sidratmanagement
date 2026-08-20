@@ -177,8 +177,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
 
   const [form, setForm] = useState({
     siteName: '',
-    storefrontUrl: '',
-    adminUrl: '',
     imageServerUrl: '',
     imageServerApiKey: '',
     primaryColor: '#2563eb',
@@ -232,8 +230,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
         const d = res.data || {};
         setForm({
           siteName: d.siteName || '',
-          storefrontUrl: d.storefrontUrl || '',
-          adminUrl: d.adminUrl || '',
           imageServerUrl: d.imageServerUrl || '',
           imageServerApiKey: '',
           primaryColor: d.primaryColor || '#2563eb',
@@ -544,52 +540,6 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
           </div>
 
           <div className="grid w-full grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* Site addresses. Kept here rather than in each app's build-time
-                env: the homepage builder frames the storefront and talks to it
-                over postMessage, and when those two origins are wrong the
-                preview quietly points at localhost on a live site. */}
-            <Card
-              show={isBrand}
-              title="Site Addresses"
-              subtitle="Where the storefront and this admin live. Used by the homepage builder preview."
-            >
-              <Field
-                label="Storefront URL"
-                hint="The public address customers visit. The homepage builder previews this site."
-              >
-                <Input
-                  name="storefrontUrl"
-                  value={form.storefrontUrl}
-                  onChange={handleChange}
-                  placeholder="https://www.example.com"
-                  type="url"
-                />
-              </Field>
-              <Field
-                label="Admin URL"
-                hint="The address of this management app. The storefront only accepts preview edits from here."
-              >
-                <Input
-                  name="adminUrl"
-                  value={form.adminUrl}
-                  onChange={handleChange}
-                  placeholder="https://admin.example.com"
-                  type="url"
-                />
-              </Field>
-              <div
-                className={`rounded-md border px-4 py-3 text-sm ${
-                  form.storefrontUrl && form.adminUrl
-                    ? 'border-green-200 bg-green-50 text-green-700'
-                    : 'border-amber-200 bg-amber-50 text-amber-700'
-                }`}
-              >
-                {form.storefrontUrl && form.adminUrl
-                  ? 'The homepage builder preview is configured.'
-                  : 'Set both addresses, or the homepage builder preview falls back to localhost and shows nothing on a live site.'}
-              </div>
-            </Card>
-
             {/* Contact Info */}
             <Card show={isContact} title="Contact Info" subtitle="Shown in the footer, contact page, and order emails">
               <div className="grid grid-cols-2 gap-4">
