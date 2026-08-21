@@ -16,6 +16,7 @@ import { HiOutlineSpeakerphone } from 'react-icons/hi';
 import {
   FiBarChart2,
   FiBookmark,
+  FiCalendar,
   FiCreditCard,
   FiHome,
   FiList,
@@ -153,7 +154,8 @@ export const navParents = [
       { label: 'Charges', href: '/shippingcharge', icon: MdOutlineLocalShipping },
       { label: 'Shipments', href: '/shipping/shipments', icon: FiShare2 },
       { label: 'Couriers', href: '/shipping/couriers', icon: MdOutlineLocalShipping },
-      { label: 'Branches', href: '/branches', icon: FiMapPin }
+      { label: 'Branches', href: '/branches', icon: FiMapPin },
+      { label: 'Calendar', href: '/branch-calendar', icon: FiCalendar, subject: 'BranchOffDay' }
     ]
   },
   {
@@ -346,6 +348,7 @@ export const navGroups = [
         subject: ['Banner', 'SiteSettings'],
         children: [
           { label: 'Banners', href: '/homepage-settings/banners', subject: 'Banner' },
+          { label: 'Customer Reviews', href: '/homepage-settings/reviews', subject: 'Banner' },
           { label: 'Navigation', href: '/homepage-settings/navigation', subject: 'SiteSettings' }
         ]
       },
@@ -359,6 +362,10 @@ export const navGroups = [
         ]
       },
       { key: 'maintenance', label: 'Maintenance', href: '/site-settings/maintenance', icon: FiSliders, subject: 'SiteSettings' },
+      // TEMPORARY: the bridge to the old POS, gated on a subject only `manage
+      // all` roles hold. Removed with the rest of it — see
+      // postgressserver/src/legacy-pos/README.md.
+      { key: 'legacy-pos', label: 'Old POS Migration', href: '/legacy-pos', icon: MdSwapHoriz, subject: 'LegacyPos' },
       { key: 'message-settings', label: 'Message Settings', href: '/message-settings/api', icon: FiMessageSquare, subject: 'MessageSettings', children: [{ label: 'API', href: '/message-settings/api' }, { label: 'Message Format Settings', href: '/message-settings/formats' }] },
       { key: 'image-server', label: 'Image Server', href: '/site-settings/image-server', icon: IoImagesOutline, subject: 'ApiSettings', children: [{ label: 'API Settings', href: '/site-settings/image-server' }] }
     ]

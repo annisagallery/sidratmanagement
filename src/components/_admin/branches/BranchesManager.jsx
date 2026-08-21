@@ -1,4 +1,5 @@
 'use client';
+import WeeklyHoursEditor, { seedWeek } from './weeklyHoursEditor';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { toast } from 'react-toastify';
@@ -6,7 +7,8 @@ import { FiEdit2, FiTrash2, FiPlus, FiX, FiCheck, FiMapPin, FiHome } from 'react
 import { adminGetBranches, adminCreateBranch, adminUpdateBranch, adminDeleteBranch } from 'src/services';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 
-const DAYS = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+// Index order matters here: it lines up with the weekly schedule, where 0 is Sunday.
+const DAYS_IN_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const EMPTY = {
   name: '',
@@ -14,7 +16,12 @@ const EMPTY = {
   city: '',
   address: '',
   phone: '',
+  // offDay / openTime / closeTime are still written by the server from the
+  // weekly schedule; the form no longer edits them directly.
   offDay: '',
+  openTime: '',
+  closeTime: '',
+  weeklyHours: null,
   mapLink: '',
   bin: '',
   vatPercent: null,
@@ -43,6 +50,11 @@ function BranchForm({ initial = EMPTY, onSave, onCancel, saving }) {
         e.preventDefault();
         onSave({
           ...form,
+          weeklyHours: seedWeek(form.weeklyHours, {
+            offDay: form.offDay,
+            openTime: form.openTime,
+            closeTime: form.closeTime
+          }),
           bin: (form.bin || '').trim(),
           vatPercent: form.vatPercent === '' || form.vatPercent == null ? null : Number(form.vatPercent)
         });
@@ -82,16 +94,6 @@ function BranchForm({ initial = EMPTY, onSave, onCancel, saving }) {
         </Field>
         <Field label="Phone">
           <input className="input-ui" value={form.phone} onChange={set('phone')} placeholder="01XXXXXXXXX" />
-        </Field>
-        <Field label="Off Day">
-          <select className="select-ui w-full" value={form.offDay} onChange={set('offDay')}>
-            <option value="">— None —</option>
-            {DAYS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
         </Field>
         <Field label="Google Maps Link">
           <input
@@ -150,6 +152,13 @@ function BranchForm({ initial = EMPTY, onSave, onCancel, saving }) {
           </div>
         </Field>
       </div>
+
+      <WeeklyHoursEditor
+        value={form.weeklyHours}
+        legacy={{ offDay: form.offDay, openTime: form.openTime, closeTime: form.closeTime }}
+        onChange={(weeklyHours) => setForm((p) => ({ ...p, weeklyHours }))}
+      />
+
       <div className="flex gap-3 pt-1">
         <button type="submit" disabled={saving} className="btn-brand">
           <FiCheck /> {saving ? 'Saving…' : 'Save Branch'}
@@ -333,7 +342,23 @@ export default function BranchesManager() {
                       <p className="mb-0.5 text-xs text-slate-500">{b.address}</p>
                       <div className="mt-1 flex flex-wrap gap-4">
                         {b.phone && <span className="text-xs text-slate-400">📞 {b.phone}</span>}
-                        {b.offDay && <span className="text-xs text-slate-400">🚫 Off: {b.offDay}</span>}
+                        {(() => {
+                          const week = seedWeek(b.weeklyHours, b);
+                          const shut = week.map((d, i) => (d.isOpen ? null : DAYS_IN_ORDER[i])).filter(Boolean);
+                          const trading = week.find((d) => d.isOpen && d.openTime && d.closeTime);
+                          return (
+                            <>
+                              {shut.length > 0 && (
+                                <span className="text-xs text-slate-400">🚫 Closed: {shut.join(', ')}</span>
+                              )}
+                              {trading && (
+                                <span className="text-xs text-slate-400">
+                                  🕘 {trading.openTime}–{trading.closeTime}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                         {b.bin && <span className="text-xs text-slate-400">🧾 BIN: {b.bin}</span>}
                         {b.vatPercent != null && (
                           <span className="text-xs text-slate-400">VAT {b.vatPercent}% (override)</span>
