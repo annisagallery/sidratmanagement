@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { FiX, FiSearch, FiLayers, FiTrash2 } from 'react-icons/fi';
+import { FiX, FiSearch, FiLayers } from 'react-icons/fi';
 import * as api from 'src/services';
 
 // Picking the products a campaign covers.
@@ -21,6 +21,11 @@ import * as api from 'src/services';
 const money = (value) => (value == null || value === '' ? '—' : `৳${Number(value).toLocaleString('en-BD')}`);
 
 const asList = (res) => (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
+
+// Query strings here are passed WITHOUT a leading "?": getProductsByAdmin and
+// getCategoriesByAdmin both append one. Sending another makes the first key
+// "?category" rather than "category", and the admin products endpoint answers
+// an unrecognised filter with the whole catalogue.
 
 function Thumb({ product, size = 36 }) {
   const path = product?.featuredImage?.path || product?.images?.[0]?.path;
@@ -53,7 +58,7 @@ export default function CampaignProductPicker({ products, onChange }) {
   useEffect(() => {
     let alive = true;
     api
-      .getCategoriesByAdmin('?limit=200')
+      .getCategoriesByAdmin('limit=200')
       .then((res) => {
         if (alive) setCategories(asList(res));
       })
@@ -86,7 +91,7 @@ export default function CampaignProductPicker({ products, onChange }) {
     setSearching(true);
     setError('');
     try {
-      const res = await api.getProductsByAdmin(`?search=${encodeURIComponent(search)}&limit=10`);
+      const res = await api.getProductsByAdmin(`search=${encodeURIComponent(search)}&limit=10`);
       setResults(asList(res));
     } catch (e) {
       setResults([]);
@@ -126,7 +131,7 @@ export default function CampaignProductPicker({ products, onChange }) {
     try {
       // limit is deliberately high: the point is to take the category in one
       // go, and a campaign that covers a category covers all of it.
-      const res = await api.getProductsByAdmin(`?category=${encodeURIComponent(category.slug)}&limit=500`);
+      const res = await api.getProductsByAdmin(`category=${encodeURIComponent(category.slug)}&limit=500`);
       const found = asList(res);
       const added = addMany(found);
       setNote(
@@ -146,10 +151,6 @@ export default function CampaignProductPicker({ products, onChange }) {
   // ── Added list ─────────────────────────────────────────────────────────────
 
   const remove = (id) => onChange(products.filter((p) => p.id !== id));
-  const clearAll = () => {
-    onChange([]);
-    setNote('');
-  };
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -161,15 +162,6 @@ export default function CampaignProductPicker({ products, onChange }) {
     <div className="space-y-3 rounded-md border border-gray-100 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">Products ({products.length})</h2>
-        {products.length > 0 && (
-          <button
-            type="button"
-            onClick={clearAll}
-            className="flex items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-red-500"
-          >
-            <FiTrash2 size={12} /> Remove all
-          </button>
-        )}
       </div>
 
       {/* Search — always visible, the way the order panel does it */}

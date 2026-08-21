@@ -223,15 +223,15 @@ export default function CampaignForm({ data: existing }) {
             products={form.products}
             onChange={(products) => setForm((p) => ({ ...p, products }))}
           />
+        </div>
 
+        {/* Right: where it applies, then discount + dates + image */}
+        <div className="space-y-5">
           <CampaignBranchPicker
             selected={form.branches}
             onChange={(branches) => setForm((p) => ({ ...p, branches }))}
           />
-        </div>
 
-        {/* Right: discount + dates + image */}
-        <div className="space-y-5">
           {/* Discount */}
           <div className="bg-white border border-gray-100 rounded-md p-5 space-y-4 shadow-sm">
             <h2 className="font-semibold text-gray-700 text-sm">Discount</h2>
