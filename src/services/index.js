@@ -1143,6 +1143,21 @@ export const createStockTransfer = async (payload) => (await http.post('/admin/i
 export const approveStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/approve`)).data;
 export const dispatchStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/dispatch`)).data;
 export const receiveStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/receive`)).data;
+// Purchasing — stock bought in finished rather than made. Receiving goes
+// through the same lot path a production receipt does, so nothing downstream
+// has to know which of the two a unit came from.
+export const getPurchases = async (params = {}) => (await http.get('/admin/purchases', { params })).data;
+export const getPurchase = async (id) => (await http.get(`/admin/purchases/${id}`)).data;
+export const createPurchase = async (payload) => (await http.post('/admin/purchases', payload)).data;
+export const updatePurchase = async ({ id, ...payload }) => (await http.put(`/admin/purchases/${id}`, payload)).data;
+export const receivePurchase = async ({ id, lines }) =>
+  (await http.post(`/admin/purchases/${id}/receive`, { lines })).data;
+export const cancelPurchase = async (id) => (await http.post(`/admin/purchases/${id}/cancel`)).data;
+export const addPurchasePayment = async ({ id, ...payload }) =>
+  (await http.post(`/admin/purchases/${id}/payments`, payload)).data;
+export const deletePurchasePayment = async ({ id, paymentId }) =>
+  (await http.delete(`/admin/purchases/${id}/payments/${paymentId}`)).data;
+
 export const getProductStockList = async (params = {}) =>
   (await http.get('/admin/inventory/products', { params })).data;
 export const getProductStockDetail = async (id) =>

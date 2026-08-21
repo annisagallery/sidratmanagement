@@ -101,6 +101,7 @@ export const navParents = [
     href: '/inventory',
     tabs: [
       { label: 'Stock', href: '/inventory', icon: MdOutlineInventory2 },
+      { label: 'Purchases', href: '/purchases', icon: FiShoppingBag },
       { label: 'Production', href: '/production', icon: LuFactory },
       { label: 'Production Scan', href: '/production/scan', icon: LuFactory },
       { label: 'Transfers', href: '/inventory/transfers', icon: MdSwapHoriz }
@@ -278,6 +279,17 @@ export const navGroups = [
         icon: LuFactory,
         subject: 'Production',
         children: productionTabs
+      },
+      {
+        key: 'purchases',
+        label: 'Purchases',
+        href: '/purchases',
+        icon: FiShoppingBag,
+        subject: 'Purchase',
+        children: [
+          { label: 'All purchases', href: '/purchases' },
+          { label: 'Add purchase', href: '/purchases/create' }
+        ]
       },
       {
         key: 'transfers',

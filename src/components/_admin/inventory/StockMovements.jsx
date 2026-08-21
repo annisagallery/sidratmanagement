@@ -1,14 +1,27 @@
 'use client';
 
 /**
- * The stock ledger — every reason a number changed.
+ * The stock ledger — every reason a number changed, and where the stock came
+ * from in the first place.
  *
- * When a count is wrong, this is the screen that says why: what moved, in which
- * direction, at whose hand. Sign is carried by colour and an explicit + / −
- * rather than by the reader remembering which movement types are outward.
+ * It used to answer only the first half: a type, a quantity, a branch. That
+ * tells you something moved but not what anyone opens this screen to find out —
+ * was this made or was it bought, and against which batch or which purchase.
+ * The reference was in the database the whole time as a bare id and was never
+ * shown.
+ *
+ * Two different facts are now on every row and they are deliberately not merged:
+ *
+ *   Movement  — what happened here. A transfer out is a transfer out.
+ *   Origin    — where the units were born. A bag transferred between branches
+ *               is still a purchased bag, and stays labelled as one.
+ *
+ * Sign is carried by colour and an explicit + / − rather than by the reader
+ * remembering which movement types are outward.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from 'react-query';
 import { format } from 'date-fns';
 import { FiArrowRight, FiList, FiRefreshCw } from 'react-icons/fi';
@@ -24,6 +37,7 @@ import { variationLabel } from './shared';
  */
 const MOVEMENT = {
   PRODUCTION_RECEIPT: { label: 'Made', tone: 'good', dir: 'in' },
+  PURCHASE_RECEIPT: { label: 'Bought in', tone: 'good', dir: 'in' },
   OPENING_STOCK: { label: 'Opening stock', tone: 'neutral', dir: 'in' },
   TRANSFER_IN: { label: 'Transfer in', tone: 'info', dir: 'in' },
   TRANSFER_OUT: { label: 'Transfer out', tone: 'warn', dir: 'out' },
@@ -34,30 +48,62 @@ const MOVEMENT = {
   ADJUSTMENT: { label: 'Adjustment', tone: 'bad', dir: 'either' }
 };
 
+/** The filter the question is actually asked in: made, or bought. */
+const SOURCES = {
+  PRODUCTION: 'Production',
+  PURCHASE: 'Purchases',
+  TRANSFER: 'Transfers',
+  SALE: 'Sales',
+  RETURN: 'Returns',
+  ADJUSTMENT: 'Adjustments',
+  OPENING: 'Opening stock'
+};
+
+/** How a lot's origin reads once the units have moved on from it. */
+const ORIGIN = {
+  PRODUCTION: { label: 'Made', tone: 'good' },
+  PURCHASE: { label: 'Bought', tone: 'brand' },
+  TRANSFER: { label: 'Transferred', tone: 'info' },
+  OPENING: { label: 'Opening', tone: 'neutral' },
+  ADJUSTMENT: { label: 'Adjusted', tone: 'neutral' },
+  RETURN: { label: 'Returned', tone: 'info' }
+};
+
+/** Where a resolved reference points, so its number is a link and not a label. */
+const REFERENCE_HREF = {
+  purchase: (id) => `/purchases/${id}`,
+  transfer: () => '/inventory/transfers',
+  production: (id) => `/production/batches/${id}`
+};
+
 const LIMITS = [50, 100, 250, 500];
 
 export default function StockMovements() {
-  const [branch, setBranch] = useState('');
-  const [type, setType] = useState('');
+  const [filters, setFilters] = useState({ branch: '', source: '', type: '' });
   const [limit, setLimit] = useState(100);
 
+  const patch = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+
   const branchesQuery = useQuery('inventory-branches', adminGetBranches);
-  const movementsQuery = useQuery(['inventory-transactions', branch, limit], () =>
-    getInventoryTransactions({ limit, ...(branch ? { branch } : {}) })
+  // Filtering happens on the server now: a `source` covers several movement
+  // types, and filtering a truncated page in the browser would silently answer
+  // "no purchases" whenever the last 100 movements happened to be sales.
+  const movementsQuery = useQuery(['inventory-transactions', filters, limit], () =>
+    getInventoryTransactions({
+      limit,
+      ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
+    })
   );
 
   const branches = branchesQuery.data?.data || [];
-  const rows = useMemo(() => {
-    const all = movementsQuery.data?.data || [];
-    return type ? all.filter((row) => row.type === type) : all;
-  }, [movementsQuery.data, type]);
+  const rows = movementsQuery.data?.data || [];
 
   return (
     <div className="space-y-4">
       <PageBar
         eyebrow="Inventory"
         title="Stock movements"
-        subtitle="Every change to a stock figure, newest first."
+        subtitle="Every change to a stock figure, newest first — with what it was made or bought against."
       >
         <button type="button" onClick={() => movementsQuery.refetch()} className="btn-ghost">
           <FiRefreshCw size={14} className={movementsQuery.isFetching ? 'animate-spin' : ''} /> Refresh
@@ -67,10 +113,10 @@ export default function StockMovements() {
       <Section
         title="Ledger"
         icon={FiList}
-        hint={`${rows.length} movement${rows.length === 1 ? '' : 's'}`}
+        hint={`${rows.length} of ${movementsQuery.data?.total ?? 0} movement${rows.length === 1 ? '' : 's'}`}
         actions={
           <Toolbar>
-            <select value={branch} onChange={(event) => setBranch(event.target.value)} className="select-ui" aria-label="Filter by branch">
+            <select value={filters.branch} onChange={(event) => patch('branch', event.target.value)} className="select-ui" aria-label="Filter by branch">
               <option value="">All branches</option>
               {branches.map((entry) => (
                 <option key={oid(entry)} value={oid(entry)}>
@@ -78,7 +124,24 @@ export default function StockMovements() {
                 </option>
               ))}
             </select>
-            <select value={type} onChange={(event) => setType(event.target.value)} className="select-ui" aria-label="Filter by movement type">
+            <select
+              value={filters.source}
+              onChange={(event) => {
+                patch('source', event.target.value);
+                // A type inside the old source would contradict the new one.
+                patch('type', '');
+              }}
+              className="select-ui"
+              aria-label="Filter by where the movement came from"
+            >
+              <option value="">All sources</option>
+              {Object.entries(SOURCES).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select value={filters.type} onChange={(event) => patch('type', event.target.value)} className="select-ui" aria-label="Filter by movement type">
               <option value="">All movements</option>
               {Object.entries(MOVEMENT).map(([value, meta]) => (
                 <option key={value} value={value}>
@@ -107,20 +170,23 @@ export default function StockMovements() {
               <th>When</th>
               <th>Movement</th>
               <th>Product</th>
+              <th>Origin</th>
+              <th>Against</th>
               <th>Where</th>
               <th className="text-right">Quantity</th>
               <th>By</th>
-              <th>Note</th>
             </tr>
           </thead>
           <tbody>
             {movementsQuery.isLoading ? (
-              <EmptyRow colSpan={7} title="Loading movements…" />
+              <EmptyRow colSpan={8} title="Loading movements…" />
             ) : rows.length ? (
               rows.map((row) => {
                 const meta = MOVEMENT[row.type] || { label: row.type, tone: 'neutral', dir: 'either' };
                 const amount = Number(row.quantity || 0);
                 const outward = meta.dir === 'out' || (meta.dir === 'either' && amount < 0);
+                const origin = ORIGIN[row.originSource];
+                const href = row.reference ? REFERENCE_HREF[row.reference.kind]?.(row.reference.id) : null;
                 return (
                   <tr key={oid(row)}>
                     <td className="whitespace-nowrap text-[11px] text-slate-500">
@@ -134,6 +200,31 @@ export default function StockMovements() {
                       {row.variation ? (
                         <p className="text-[11px] text-slate-400">{variationLabel(row.variation)}</p>
                       ) : null}
+                    </td>
+                    <td>
+                      {origin ? (
+                        <Pill tone={origin.tone}>{origin.label}</Pill>
+                      ) : (
+                        <span className="text-[11px] text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {row.reference ? (
+                        <>
+                          {href ? (
+                            <Link href={href} className="ops-code text-[12px] font-bold text-[var(--brand-strong)] hover:underline">
+                              {row.reference.label}
+                            </Link>
+                          ) : (
+                            <span className="ops-code text-[12px] font-bold text-slate-700">{row.reference.label}</span>
+                          )}
+                          {row.reference.detail ? (
+                            <p className="truncate text-[11px] text-slate-400">{row.reference.detail}</p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="text-slate-600">
                       <span className="inline-flex items-center gap-1.5">
@@ -155,14 +246,11 @@ export default function StockMovements() {
                       {qty(Math.abs(amount))}
                     </td>
                     <td className="text-[12px] text-slate-600">{row.performedBy?.name || 'System'}</td>
-                    <td className="max-w-[220px] truncate text-[11px] text-slate-400" title={row.note || ''}>
-                      {row.note || '—'}
-                    </td>
                   </tr>
                 );
               })
             ) : (
-              <EmptyRow colSpan={7} icon={FiList} title="No movements" hint="Nothing has moved under these filters." />
+              <EmptyRow colSpan={8} icon={FiList} title="No movements" hint="Nothing has moved under these filters." />
             )}
           </tbody>
         </GlobalTable>
