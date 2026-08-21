@@ -349,6 +349,7 @@ export const navGroups = [
         children: [
           { label: 'Banners', href: '/homepage-settings/banners', subject: 'Banner' },
           { label: 'Customer Reviews', href: '/homepage-settings/reviews', subject: 'Banner' },
+          { label: 'Notice Bar', href: '/homepage-settings/notice-bar', subject: 'Banner' },
           { label: 'Navigation', href: '/homepage-settings/navigation', subject: 'SiteSettings' }
         ]
       },

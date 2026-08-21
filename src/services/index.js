@@ -592,6 +592,30 @@ export const reorderHomeReviews = async (ids) => {
   return data;
 };
 
+//notice bar — the storefront's announcement marquee. A curated list: the
+//strip only appears once at least one row is active.
+
+export const getNoticeBarAdmin = async () => {
+  const { data } = await http.get(`/admin/noticebar`);
+  return data;
+};
+export const createNotice = async (payload) => {
+  const { data } = await http.post(`/admin/noticebar`, payload);
+  return data;
+};
+export const updateNotice = async (id, payload) => {
+  const { data } = await http.put(`/admin/noticebar/${id}`, payload);
+  return data;
+};
+export const reorderNotices = async (ids) => {
+  const { data } = await http.put(`/admin/noticebar/reorder`, { ids });
+  return data;
+};
+export const deleteNotice = async (id) => {
+  const { data } = await http.delete(`/admin/noticebar/${id}`);
+  return data;
+};
+
 //homepage notices — two fixed slots, addressed by number rather than by id
 
 export const getHomeNoticesAdmin = async () => {
