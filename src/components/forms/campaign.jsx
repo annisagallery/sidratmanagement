@@ -1,10 +1,12 @@
 'use client';
 import { useState, useRef } from 'react';
-import { useMutation, useQuery } from 'react-query';
+import { useMutation } from 'react-query';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next-nprogress-bar';
-import { FiX, FiSearch, FiUpload } from 'react-icons/fi';
-import { addCampaignByAdmin, updateCampaignByAdmin, uploadImage, getProductsByAdmin } from 'src/services';
+import { FiUpload } from 'react-icons/fi';
+import { addCampaignByAdmin, updateCampaignByAdmin, uploadImage } from 'src/services';
+import CampaignProductPicker from 'src/components/_admin/campaigns/productPicker';
+import CampaignBranchPicker from 'src/components/_admin/campaigns/branchPicker';
 import Image from 'next/image';
 
 const TYPES = [
@@ -47,8 +49,6 @@ export default function CampaignForm({ data: existing }) {
   const cardImgRef = useRef();
   const [imgLoading, setImgLoading] = useState(false);
   const [cardImgLoading, setCardImgLoading] = useState(false);
-  const [productSearch, setProductSearch] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
   const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
@@ -65,7 +65,9 @@ export default function CampaignForm({ data: existing }) {
     startDate: fmt(existing?.startDate) || '',
     endDate: fmt(existing?.endDate) || '',
     status: existing?.status || 'active',
-    products: existing?.products || []
+    products: existing?.products || [],
+    // Empty means "everywhere" — see CampaignBranchPicker.
+    branches: (existing?.branches || []).map((b) => b.id ?? b)
   });
 
   const set = (k) => (e) => {
@@ -76,21 +78,6 @@ export default function CampaignForm({ data: existing }) {
       return next;
     });
   };
-
-  // Product search
-  const { data: searchData } = useQuery(
-    ['product-search-campaign', productSearch],
-    () => getProductsByAdmin(`?search=${productSearch}&limit=10`),
-    { enabled: productSearch.length >= 2, keepPreviousData: true }
-  );
-  const searchResults = searchData?.data ?? [];
-
-  const addProduct = (p) => {
-    if (!form.products.find((x) => x.id === p.id)) {
-      setForm((prev) => ({ ...prev, products: [...prev.products, p] }));
-    }
-  };
-  const removeProduct = (id) => setForm((p) => ({ ...p, products: p.products.filter((x) => x.id !== id) }));
 
   // Image upload helpers
   const handleImageChange = async (e) => {
@@ -154,7 +141,7 @@ export default function CampaignForm({ data: existing }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    saveMut.mutate({ ...form, products: form.products.map((p) => p.id) });
+    saveMut.mutate({ ...form, products: form.products.map((p) => p.id), branches: form.branches });
   };
 
   return (
@@ -232,97 +219,15 @@ export default function CampaignForm({ data: existing }) {
             </Field>
           </div>
 
-          {/* Products */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-700 text-sm">Products ({form.products.length})</h2>
-              <button
-                type="button"
-                onClick={() => setShowSearch((v) => !v)}
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-strong)] hover:opacity-80"
-              >
-                <FiSearch /> Search &amp; add
-              </button>
-            </div>
+          <CampaignProductPicker
+            products={form.products}
+            onChange={(products) => setForm((p) => ({ ...p, products }))}
+          />
 
-            {showSearch && (
-              <div className="relative">
-                <input
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Type product name…"
-                  className={inp('pr-8')}
-                  autoFocus
-                />
-                {searchResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {searchResults.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          addProduct(p);
-                          setProductSearch('');
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 text-left"
-                      >
-                        {p.featuredImage?.path ? (
-                          <Image
-                            src={p.featuredImage.path}
-                            className="w-8 h-8 rounded-md object-cover border"
-                            alt=""
-                            width={32}
-                            height={32}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-md bg-gray-100" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                          <p className="text-xs text-gray-400">৳{p.price}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {form.products.length > 0 ? (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {form.products.map((p) => (
-                  <div key={p.id} className="flex items-center gap-3 p-2 border border-gray-100 rounded-md">
-                    {p.featuredImage?.path || p.images?.[0]?.path ? (
-                      <Image
-                        src={p.featuredImage?.path || p.images[0]?.path || '/placeholder.svg'}
-                        className="w-9 h-9 rounded-md object-cover border shrink-0"
-                        alt=""
-                        width={36}
-                        height={36}
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-md bg-gray-100 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                      <p className="text-xs text-gray-400">৳{p.price ?? p.priceSale}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeProduct(p.id)}
-                      className="text-gray-300 hover:text-red-500 shrink-0"
-                    >
-                      <FiX size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-md">
-                No products added yet
-              </p>
-            )}
-          </div>
+          <CampaignBranchPicker
+            selected={form.branches}
+            onChange={(branches) => setForm((p) => ({ ...p, branches }))}
+          />
         </div>
 
         {/* Right: discount + dates + image */}
