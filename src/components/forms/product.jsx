@@ -422,7 +422,7 @@ function LivePreview({
             <div className="absolute top-2 left-2 flex flex-col gap-1">
               <StatusBadge status={status} />
               {isFeatured && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-950">
+                <span className="inline-flex items-center gap-1 rounded-md bg-[var(--brand)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
                   <FiStar size={10} aria-hidden="true" /> Featured
                 </span>
               )}

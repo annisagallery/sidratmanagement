@@ -16,7 +16,7 @@ const DashboardCard = ({ color = 'bg-primary', title, value, icon, isAmount = fa
   };
 
   return (
-    <div className="flex items-center p-4 bg-white  rounded-md border border-yellow-500">
+    <div className="flex items-center p-4 bg-white  rounded-md border border-[var(--brand)]">
       {/* Icon Section */}
       <div className={`p-3 rounded-md ${color} bg-opacity-20`}>{icon}</div>
 

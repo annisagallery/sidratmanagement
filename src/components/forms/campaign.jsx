@@ -169,7 +169,7 @@ export default function CampaignForm({ data: existing }) {
         <button
           type="submit"
           disabled={saveMut.isLoading}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2.5 rounded-md font-semibold text-sm disabled:opacity-50"
+          className="btn-brand px-6 py-2.5 text-sm disabled:opacity-50"
         >
           {saveMut.isLoading ? 'Saving…' : existing ? 'Save Changes' : 'Create Campaign'}
         </button>
@@ -239,7 +239,7 @@ export default function CampaignForm({ data: existing }) {
               <button
                 type="button"
                 onClick={() => setShowSearch((v) => !v)}
-                className="flex items-center gap-1.5 text-xs text-yellow-600 hover:text-yellow-700 font-medium"
+                className="flex items-center gap-1.5 text-xs font-medium text-[var(--brand-strong)] hover:opacity-80"
               >
                 <FiSearch /> Search &amp; add
               </button>
@@ -338,7 +338,7 @@ export default function CampaignForm({ data: existing }) {
                 ].map(([v, l]) => (
                   <label
                     key={v}
-                    className={`flex-1 text-center py-2 rounded-md border text-sm cursor-pointer transition-colors ${form.discountType === v ? 'bg-yellow-50 border-yellow-400 text-yellow-700 font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 text-center py-2 rounded-md border text-sm cursor-pointer transition-colors ${form.discountType === v ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand-strong)] font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   >
                     <input
                       type="radio"
@@ -437,7 +437,7 @@ export default function CampaignForm({ data: existing }) {
         <button
           type="submit"
           disabled={saveMut.isLoading}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white px-8 py-3 rounded-md font-semibold disabled:opacity-50"
+          className="btn-brand px-8 py-3 disabled:opacity-50"
         >
           {saveMut.isLoading ? 'Saving…' : existing ? 'Save Changes' : 'Create Campaign'}
         </button>

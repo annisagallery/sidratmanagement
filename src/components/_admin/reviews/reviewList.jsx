@@ -129,7 +129,7 @@ export default function ReviewList() {
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-semibold"
+          className="btn-brand px-4 py-2 text-sm disabled:opacity-50"
         >
           <FiPlus /> {uploading ? 'Uploading…' : 'Add Reviews'}
         </button>
@@ -142,7 +142,7 @@ export default function ReviewList() {
       ) : reviews.length === 0 ? (
         <button
           onClick={() => fileRef.current?.click()}
-          className="w-full text-center py-16 text-gray-400 border-2 border-dashed border-gray-200 rounded-md hover:border-yellow-400 hover:text-yellow-600 transition-colors"
+          className="w-full text-center py-16 text-gray-400 border-2 border-dashed border-gray-200 rounded-md hover:border-[var(--brand)] hover:text-[var(--brand-strong)] transition-colors"
         >
           <FiImage className="mx-auto mb-2 text-2xl" />
           <p className="text-sm font-medium">No reviews yet — upload square images</p>
@@ -161,7 +161,7 @@ export default function ReviewList() {
               onDrop={handleDrop}
               onDragEnd={handleDrop}
               className={`group relative rounded-md border bg-white shadow-sm overflow-hidden cursor-grab active:cursor-grabbing transition-all
-                ${dragOverIdx === i && dragIdx !== i ? 'ring-2 ring-yellow-400' : 'border-gray-200'}
+                ${dragOverIdx === i && dragIdx !== i ? 'ring-2 ring-[var(--brand-ring)]' : 'border-gray-200'}
                 ${!review.isActive ? 'opacity-50' : ''}`}
             >
               {/* Square frame, matching how the storefront crops it */}

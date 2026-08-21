@@ -112,7 +112,7 @@ function CountStepper({ label, name, value, onChange, min = 1, max = 10, hint })
           {Array.from({ length: max }).map((_, i) => (
             <div
               key={i}
-              className={`h-2 w-5 rounded-md transition-colors ${i < value ? 'bg-yellow-400' : 'bg-gray-100'}`}
+              className={`h-2 w-5 rounded-md transition-colors ${i < value ? 'bg-[var(--brand)]' : 'bg-gray-100'}`}
             />
           ))}
         </div>
@@ -394,7 +394,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
           <button
             onClick={handleSave}
             disabled={saving || !hasUnsavedChanges}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2.5 rounded-md font-semibold text-sm disabled:opacity-50"
+            className="btn-brand px-6 py-2.5 text-sm disabled:opacity-50"
           >
             {saving ? 'Saving…' : hasUnsavedChanges ? 'Save Settings' : 'Saved'}
           </button>
@@ -464,7 +464,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                       onClick={() => setForm((p) => ({ ...p, logoType: type }))}
                       className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-md border-2 transition-all ${
                         form.logoType === type
-                          ? 'border-yellow-400 bg-yellow-50'
+                          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
@@ -676,7 +676,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                     />
                   )}
                   <span
-                    className={`text-xs px-2 py-1 rounded-md font-medium ${item.isDropdown ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}
+                    className={`text-xs px-2 py-1 rounded-md font-medium ${item.isDropdown ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]' : 'bg-gray-100 text-gray-500'}`}
                   >
                     {item.isDropdown ? 'Dropdown' : 'Link'}
                   </span>
@@ -707,7 +707,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                       navItems: [{ title: 'Categories', path: '', isDropdown: true }, ...p.navItems]
                     }))
                   }
-                  className="border border-dashed border-yellow-300 text-yellow-600 hover:border-yellow-500 px-4 py-2 rounded-md text-sm"
+                  className="rounded-md border border-dashed border-[var(--brand-ring)] px-4 py-2 text-sm text-[var(--brand-strong)] hover:border-[var(--brand)]"
                 >
                   + Add Categories Dropdown
                 </button>
@@ -729,7 +729,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                 <button
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, showBreadcrumbs: !p.showBreadcrumbs }))}
-                  className={`relative w-11 h-6 rounded-md transition-colors focus:outline-none ${form.showBreadcrumbs ? 'bg-yellow-400' : 'bg-gray-300'}`}
+                  className={`relative w-11 h-6 rounded-md transition-colors focus:outline-none ${form.showBreadcrumbs ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
                 >
                   <span
                     className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-md shadow transition-transform ${form.showBreadcrumbs ? 'translate-x-5' : ''}`}
@@ -945,19 +945,19 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                   onClick={() => setForm((f) => ({ ...f, invoicePrintMode: opt.key }))}
                   className={`p-5 rounded-md border-2 text-left transition-all ${
                     form.invoicePrintMode === opt.key
-                      ? 'border-yellow-400 bg-yellow-50 shadow-sm'
+                      ? 'border-[var(--brand)] bg-[var(--brand-soft)] shadow-sm'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-xl">{opt.icon}</span>
                     <p
-                      className={`font-semibold text-sm ${form.invoicePrintMode === opt.key ? 'text-yellow-800' : 'text-gray-800'}`}
+                      className={`font-semibold text-sm ${form.invoicePrintMode === opt.key ? 'text-[var(--brand-strong)]' : 'text-gray-800'}`}
                     >
                       {opt.title}
                     </p>
                     {form.invoicePrintMode === opt.key && (
-                      <span className="ml-auto text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-md">
+                      <span className="ml-auto rounded-md bg-[var(--brand-soft)] px-2 py-0.5 text-xs font-bold text-[var(--brand-strong)]">
                         Active
                       </span>
                     )}
@@ -1016,7 +1016,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
             <div className="flex items-start justify-between gap-6">
               <div>
                 <h2 className="font-semibold text-base text-gray-800 flex items-center gap-2">
-                  <IoConstructOutline size={17} className="text-yellow-500" />
+                  <IoConstructOutline size={17} className="text-[var(--brand)]" />
                   Maintenance Mode
                 </h2>
                 <p className="text-xs text-gray-400 mt-1">
@@ -1108,7 +1108,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
           {/* Live preview */}
           <Card title="Preview" subtitle="How the maintenance page will look to visitors">
             <div className="rounded-md border border-gray-200 bg-gray-50 flex flex-col items-center justify-center py-12 px-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-md bg-yellow-100 flex items-center justify-center text-3xl">🔧</div>
+              <div className="w-16 h-16 rounded-md bg-[var(--brand-soft)] flex items-center justify-center text-3xl">🔧</div>
               <h3 className="text-xl font-bold text-gray-900">{form.maintenanceHeading || "We'll be back soon!"}</h3>
               <p className="text-sm text-gray-500">
                 {form.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.'}
@@ -1122,7 +1122,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
                 <div className="flex gap-3 mt-2">
                   {['00', '00', '00', '00'].map((v, i) => (
                     <div key={i} className="flex flex-col items-center gap-1">
-                      <div className="w-12 h-12 rounded-md bg-yellow-500 flex items-center justify-center text-white font-bold text-lg">
+                      <div className="w-12 h-12 rounded-md bg-[var(--brand)] flex items-center justify-center text-white font-bold text-lg">
                         {v}
                       </div>
                       <span className="text-xs text-gray-400">{['Days', 'Hrs', 'Min', 'Sec'][i]}</span>
