@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { FiX, FiSearch, FiLayers } from 'react-icons/fi';
+import { FiX, FiSearch, FiLayers, FiTrash2 } from 'react-icons/fi';
 import * as api from 'src/services';
 
 // Picking the products a campaign covers.
@@ -51,6 +51,7 @@ export default function CampaignProductPicker({ products, onChange }) {
   const [addingCategory, setAddingCategory] = useState(false);
   const [note, setNote] = useState('');
   const [filter, setFilter] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
   const timer = useRef(null);
   const wrapRef = useRef(null);
 
@@ -150,18 +151,62 @@ export default function CampaignProductPicker({ products, onChange }) {
 
   // ── Added list ─────────────────────────────────────────────────────────────
 
-  const remove = (id) => onChange(products.filter((p) => p.id !== id));
-
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) => `${p.name || ''} ${p.slug || ''}`.toLowerCase().includes(q));
   }, [products, filter]);
 
+  const remove = (id) => onChange(products.filter((p) => p.id !== id));
+
+  // With a filter on, "remove all" clearing the whole list rather than the rows
+  // on screen would be a nasty surprise, so it removes exactly what is shown
+  // and says which it is doing. Two-step because one click can now undo adding
+  // a 59-product category.
+  const clearShown = () => {
+    const doomed = new Set(visible.map((p) => p.id));
+    onChange(products.filter((p) => !doomed.has(p.id)));
+    setConfirmClear(false);
+    setNote('');
+    if (visible.length === products.length) setFilter('');
+  };
+
   return (
     <div className="space-y-3 rounded-md border border-gray-100 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-gray-700">Products ({products.length})</h2>
+
+        {products.length > 0 &&
+          (confirmClear ? (
+            <span className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500">
+                Remove {visible.length === products.length ? 'all' : 'these'} {visible.length}?
+              </span>
+              <button
+                type="button"
+                onClick={clearShown}
+                className="rounded-md bg-red-500 px-2 py-1 font-semibold text-white transition hover:bg-red-600"
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClear(false)}
+                className="rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-600 transition hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmClear(true)}
+              className="flex shrink-0 items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-red-500"
+            >
+              <FiTrash2 size={12} />
+              {visible.length === products.length ? 'Remove all' : `Remove these ${visible.length}`}
+            </button>
+          ))}
       </div>
 
       {/* Search — always visible, the way the order panel does it */}
