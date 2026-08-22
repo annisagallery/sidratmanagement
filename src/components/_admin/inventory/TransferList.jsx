@@ -11,19 +11,27 @@
  * The full line list lives in a drawer rather than a page: it is read to check
  * a van against a docket, and losing the register while doing that is worse
  * than a slightly smaller surface.
+ *
+ * Voiding and reversing live in that drawer too, not on the row. They are
+ * corrections, not steps in the chain, and putting them beside the one button
+ * that answers "whose turn is it" would make a register of four acts read as a
+ * register of six.
  */
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
-import { FiArrowRight, FiCheck, FiPlus, FiRefreshCw, FiSearch, FiTruck } from 'react-icons/fi';
+import { FiArrowRight, FiCheck, FiCornerUpLeft, FiPlus, FiRefreshCw, FiSearch, FiSlash, FiTruck } from 'react-icons/fi';
+import Swal from 'sweetalert2';
 
 import {
   approveStockTransfer,
   dispatchStockTransfer,
   getStockTransfers,
-  receiveStockTransfer
+  receiveStockTransfer,
+  reverseStockTransfer,
+  voidStockTransfer
 } from 'src/services';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
@@ -65,6 +73,53 @@ export default function TransferList() {
   );
 
   const transfers = useMemo(() => transfersQuery.data?.data || [], [transfersQuery.data]);
+
+  /**
+   * Undoing, as opposed to advancing.
+   *
+   * Void stops a transfer that has not arrived and puts anything already
+   * dispatched back on the lots it came off. Reverse raises a new transfer the
+   * other way for whatever the destination still has — some of it may have been
+   * sold since it landed, so the server answers with what it could actually
+   * include, and that answer is shown rather than swallowed by a toast.
+   */
+  const correct = useMutation(
+    ({ mode, id, reason }) => (mode === 'void' ? voidStockTransfer({ id, reason }) : reverseStockTransfer({ id, reason })),
+    {
+      onSuccess: (result, variables) => {
+        queryClient.invalidateQueries('inventory-transfers');
+        queryClient.invalidateQueries('inventory-product-stock');
+        queryClient.invalidateQueries('inventory-balances');
+        queryClient.invalidateQueries('inventory-transactions');
+        setOpen(null);
+        Swal.fire({
+          icon: variables.mode === 'void' ? 'success' : result?.shortfalls?.length ? 'warning' : 'success',
+          title: variables.mode === 'void' ? 'Transfer voided' : 'Reversal raised',
+          text: result?.message,
+          confirmButtonText: 'Done'
+        });
+      },
+      onError: (error) => errorAlert('That could not be done', error)
+    }
+  );
+
+  const runCorrection = async (mode, transfer) => {
+    const voiding = mode === 'void';
+    const { isConfirmed, value } = await Swal.fire({
+      title: voiding ? `Void ${transfer.transferNo}?` : `Reverse ${transfer.transferNo}?`,
+      text: voiding
+        ? 'Anything already dispatched goes back into the source branch, on the lots it came from. The transfer is cancelled.'
+        : `A new transfer is raised from ${transfer.destinationBranch?.name || 'the destination'} back to ${transfer.sourceBranch?.name || 'the source'}, for whatever is still on the shelf. Anything sold since it landed cannot go back.`,
+      icon: 'warning',
+      input: 'text',
+      inputLabel: 'Reason (optional)',
+      inputPlaceholder: voiding ? 'Sent to the wrong branch…' : 'Overstocked, sending it back…',
+      showCancelButton: true,
+      confirmButtonText: voiding ? 'Void it' : 'Raise reversal',
+      cancelButtonText: 'Keep it'
+    });
+    if (isConfirmed) correct.mutate({ mode, id: oid(transfer), reason: value || '' });
+  };
 
   const act = useMutation(({ action, id }) => ACTIONS[action].run(id), {
     onSuccess: (_result, variables) => {
@@ -267,7 +322,8 @@ export default function TransferList() {
           transfer={open}
           onClose={() => setOpen(null)}
           onAct={(action) => act.mutate({ action, id: oid(open) })}
-          busy={act.isLoading}
+          onCorrect={(mode) => runCorrection(mode, open)}
+          busy={act.isLoading || correct.isLoading}
         />
       ) : null}
     </div>
@@ -276,8 +332,12 @@ export default function TransferList() {
 
 /* ── detail ──────────────────────────────────────────────────────────────── */
 
-function TransferDrawer({ transfer, onClose, onAct, busy }) {
+function TransferDrawer({ transfer, onClose, onAct, onCorrect, busy }) {
   const next = TRANSFER_STATUS[transfer.status]?.next;
+  // Void applies while the stock has not landed; once it has, the only honest
+  // correction is a new transfer back, because some of it may already be sold.
+  const canVoid = ['DRAFT', 'APPROVED', 'IN_TRANSIT'].includes(transfer.status);
+  const canReverse = transfer.status === 'RECEIVED';
   const timeline = [
     { label: 'Drafted', at: transfer.createdAt, by: transfer.createdBy?.name },
     { label: 'Dispatched', at: transfer.dispatchedAt, by: transfer.dispatchedBy?.name },
@@ -290,16 +350,39 @@ function TransferDrawer({ transfer, onClose, onAct, busy }) {
       subtitle="Stock transfer"
       onClose={onClose}
       footer={
-        next ? (
-          <button type="button" onClick={() => onAct(next.action)} disabled={busy} className="btn-brand h-10 w-full">
-            <FiCheck size={15} /> {busy ? 'Working…' : next.label}
-          </button>
-        ) : (
-          <p className="text-center text-xs font-semibold text-slate-500">
-            This transfer is {TRANSFER_STATUS[transfer.status]?.label.toLowerCase() || transfer.status.toLowerCase()} —
-            nothing further to do.
-          </p>
-        )
+        <div className="space-y-2">
+          {next ? (
+            <button type="button" onClick={() => onAct(next.action)} disabled={busy} className="btn-brand h-10 w-full">
+              <FiCheck size={15} /> {busy ? 'Working…' : next.label}
+            </button>
+          ) : null}
+
+          {/* Corrections sit under the step, quieter than it: they are the
+              answer to "this should not have happened", not to "what next". */}
+          {canVoid ? (
+            <button
+              type="button"
+              onClick={() => onCorrect('void')}
+              disabled={busy}
+              className="btn-ghost h-10 w-full !text-rose-600"
+            >
+              <FiSlash size={14} /> Void — return everything to {transfer.sourceBranch?.name || 'the source'}
+            </button>
+          ) : null}
+
+          {canReverse ? (
+            <button type="button" onClick={() => onCorrect('reverse')} disabled={busy} className="btn-ghost h-10 w-full">
+              <FiCornerUpLeft size={14} /> Reverse — send back what is still there
+            </button>
+          ) : null}
+
+          {!next && !canVoid && !canReverse ? (
+            <p className="text-center text-xs font-semibold text-slate-500">
+              This transfer is {TRANSFER_STATUS[transfer.status]?.label.toLowerCase() || transfer.status.toLowerCase()} —
+              nothing further to do.
+            </p>
+          ) : null}
+        </div>
       }
     >
       <div className="space-y-4">

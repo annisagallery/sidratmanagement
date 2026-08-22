@@ -224,3 +224,76 @@ input[type='number'] {
     border-color: var(--brand);
   }
 }
+
+/* ── SweetAlert icons ──────────────────────────────────────────────────────
+   SweetAlert draws its icons out of bordered divs and rotated pseudo-elements
+   whose geometry only holds together under its own box model. Inside these
+   apps they came out broken — the storefront never showed it because it draws
+   its own dialogs (ecom/src/utils/swalBase.js) and never renders a stock icon
+   at all.
+
+   Rather than chase the collision, the icon is replaced: the stock parts are
+   hidden and the box is repainted with a flat SVG mark in a tinted square, the
+   same icon language and the same palette the storefront uses. That fixes
+   every existing Swal.fire({ icon }) call in the app without touching one of
+   them, and it cannot break again — nothing here depends on borders, rotation
+   or a box model.
+
+   Specificity beats SweetAlert's own `div:where(.swal2-icon)` rules, which
+   :where() deliberately scores at zero. */
+
+.swal2-icon {
+  width: 52px !important;
+  height: 52px !important;
+  margin: 4px auto 14px !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 28px 28px !important;
+  zoom: 1 !important;
+}
+
+/* The rings, lines and x-marks the stock icon is assembled from. */
+.swal2-icon .swal2-success-ring,
+.swal2-icon .swal2-success-fix,
+.swal2-icon [class^='swal2-success-line'],
+.swal2-icon [class^='swal2-success-circular'],
+.swal2-icon [class^='swal2-x-mark'],
+.swal2-icon .swal2-icon-content {
+  display: none !important;
+}
+
+.swal2-icon.swal2-success {
+  background-color: #ecfdf5 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") !important;
+}
+
+.swal2-icon.swal2-error {
+  background-color: #fff1f2 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e11d48' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m15 9-6 6M9 9l6 6'/%3E%3C/svg%3E") !important;
+}
+
+.swal2-icon.swal2-warning {
+  background-color: #fffbeb !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d97706' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z'/%3E%3C/svg%3E") !important;
+}
+
+.swal2-icon.swal2-info {
+  background-color: #f0f9ff !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 16v-4m0-4h.01'/%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E") !important;
+}
+
+.swal2-icon.swal2-question {
+  background-color: #f8fafc !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3m.1 4h.01'/%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E") !important;
+}
+
+/* A toast is one line tall, so the icon sits beside the text at text size. */
+.swal2-toast .swal2-icon {
+  width: 26px !important;
+  height: 26px !important;
+  margin: 0 8px 0 0 !important;
+  border-radius: 9px !important;
+  background-size: 16px 16px !important;
+}

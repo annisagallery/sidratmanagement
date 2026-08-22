@@ -1143,6 +1143,14 @@ export const createStockTransfer = async (payload) => (await http.post('/admin/i
 export const approveStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/approve`)).data;
 export const dispatchStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/dispatch`)).data;
 export const receiveStockTransfer = async (id) => (await http.post(`/admin/inventory/transfers/${id}/receive`)).data;
+// Corrections rather than steps, and admin-only. Void undoes a transfer that
+// has not arrived, putting anything already dispatched back on the lots it came
+// off. Reverse raises a new transfer the other way for whatever the destination
+// still has — the rest has been sold, and the response says so.
+export const voidStockTransfer = async ({ id, reason }) =>
+  (await http.post(`/admin/inventory/transfers/${id}/void`, { reason })).data;
+export const reverseStockTransfer = async ({ id, reason }) =>
+  (await http.post(`/admin/inventory/transfers/${id}/reverse`, { reason })).data;
 // Purchasing — stock bought in finished rather than made. Receiving goes
 // through the same lot path a production receipt does, so nothing downstream
 // has to know which of the two a unit came from.
