@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
-import { FiArrowRight, FiCheck, FiCornerUpLeft, FiPlus, FiRefreshCw, FiSearch, FiSlash, FiTruck } from 'react-icons/fi';
+import { FiArrowRight, FiCheck, FiCornerUpLeft, FiEye, FiPlus, FiPrinter, FiRefreshCw, FiSearch, FiSlash, FiTruck } from 'react-icons/fi';
 import Swal from 'sweetalert2';
 
 import {
@@ -34,6 +34,8 @@ import {
   voidStockTransfer
 } from 'src/services';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { printTransferDocket } from 'src/components/_admin/documents/openStockDocuments';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import {
   Drawer,
@@ -60,6 +62,14 @@ const lineTotal = (transfer) => (transfer.lines || []).reduce((sum, line) => sum
 
 export default function TransferList() {
   const queryClient = useQueryClient();
+  const settings = useSiteSettings();
+
+  // Printing is deliberately not awaited into a loading state: the tab has to
+  // open in the same tick as the click or the browser blocks it, so the work
+  // continues in that tab and only a failure comes back here.
+  const printDocket = (transfer) =>
+    printTransferDocket(transfer, settings).catch((error) => errorAlert('The docket could not be printed', error));
+
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -278,20 +288,40 @@ export default function TransferList() {
                       <TransferStatusPill status={transfer.status} />
                     </td>
                     <td className="text-right">
-                      {next ? (
+                      {/* View and print are always here. They used to appear
+                          only once a transfer had no step left, so the rows
+                          people most needed to read — the ones still in
+                          progress — were the ones that offered no way to open
+                          them. */}
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          disabled={busy}
-                          onClick={() => act.mutate({ action: next.action, id })}
-                          className="btn-brand h-8 !text-xs"
+                          onClick={() => setOpen(transfer)}
+                          className="btn-ghost h-8 !px-2 !text-xs"
+                          title="View lines"
                         >
-                          <FiCheck size={13} /> {busy ? 'Working…' : next.label}
+                          <FiEye size={13} /> View
                         </button>
-                      ) : (
-                        <button type="button" onClick={() => setOpen(transfer)} className="btn-ghost h-8 !text-xs">
-                          View
+                        <button
+                          type="button"
+                          onClick={() => printDocket(transfer)}
+                          className="btn-ghost h-8 !px-2 !text-xs"
+                          title="Print docket"
+                          aria-label={`Print docket for ${transfer.transferNo}`}
+                        >
+                          <FiPrinter size={13} />
                         </button>
-                      )}
+                        {next ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => act.mutate({ action: next.action, id })}
+                            className="btn-brand h-8 !text-xs"
+                          >
+                            <FiCheck size={13} /> {busy ? 'Working…' : next.label}
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -323,6 +353,7 @@ export default function TransferList() {
           onClose={() => setOpen(null)}
           onAct={(action) => act.mutate({ action, id: oid(open) })}
           onCorrect={(mode) => runCorrection(mode, open)}
+          onPrint={() => printDocket(open)}
           busy={act.isLoading || correct.isLoading}
         />
       ) : null}
@@ -332,7 +363,7 @@ export default function TransferList() {
 
 /* ── detail ──────────────────────────────────────────────────────────────── */
 
-function TransferDrawer({ transfer, onClose, onAct, onCorrect, busy }) {
+function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) {
   const next = TRANSFER_STATUS[transfer.status]?.next;
   // Void applies while the stock has not landed; once it has, the only honest
   // correction is a new transfer back, because some of it may already be sold.
@@ -356,6 +387,10 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, busy }) {
               <FiCheck size={15} /> {busy ? 'Working…' : next.label}
             </button>
           ) : null}
+
+          <button type="button" onClick={onPrint} className="btn-ghost h-10 w-full">
+            <FiPrinter size={14} /> Print docket
+          </button>
 
           {/* Corrections sit under the step, quieter than it: they are the
               answer to "this should not have happened", not to "what next". */}

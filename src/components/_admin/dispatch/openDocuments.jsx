@@ -42,7 +42,12 @@ export function brandGaps(settings) {
   return gaps;
 }
 
-async function resolveBrand(settings) {
+/**
+ * Exported so the stock documents brand themselves the same way. One resolver
+ * means a transfer docket and an invoice cannot disagree about the shop's own
+ * name, logo or helpline.
+ */
+export async function resolveBrand(settings) {
   const helplines = [settings?.phone, settings?.whatsappNumber]
     .map((value) => String(value || '').trim())
     .filter(Boolean);

@@ -26,6 +26,7 @@ import {
   FiEdit2,
   FiInbox,
   FiPackage,
+  FiPrinter,
   FiSlash,
   FiTrash2,
   FiTruck
@@ -33,11 +34,13 @@ import {
 
 import {
   addPurchasePayment,
-  cancelPurchase,
   deletePurchasePayment,
   getPurchase,
-  receivePurchase
+  receivePurchase,
+  voidPurchase
 } from 'src/services';
+import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { printPurchaseOrder } from 'src/components/_admin/documents/openStockDocuments';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import {
   CellInput,
@@ -71,6 +74,7 @@ const METHODS = ['cash', 'bank', 'bkash', 'nagad', 'cheque', 'other'];
 export default function PurchaseDetail({ id }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const settings = useSiteSettings();
 
   const purchaseQuery = useQuery(['purchase', id], () => getPurchase(id));
   const purchase = purchaseQuery.data?.data;
@@ -130,26 +134,51 @@ export default function PurchaseDetail({ id }) {
     onError: (error) => errorAlert('The payment could not be removed', error)
   });
 
-  const cancel = useMutation(() => cancelPurchase(id), {
-    onSuccess: () => {
-      toast('Purchase cancelled');
+  /**
+   * Voiding, rather than cancelling.
+   *
+   * One action for both situations, because to the person doing it there is
+   * only one: this purchase should not stand. Nothing received and it simply
+   * withdraws; stock already received and it comes back off the shelf too.
+   *
+   * If any of that stock has since been sold the server refuses the whole
+   * thing rather than half-applying it, and says what is in the way — a
+   * purchase half-unwound would read as cancelled while the stock said
+   * otherwise.
+   */
+  const voidIt = useMutation((reason) => voidPurchase({ id, reason }), {
+    onSuccess: (result) => {
       queryClient.invalidateQueries(['purchase', id]);
       queryClient.invalidateQueries('purchases');
+      queryClient.invalidateQueries('inventory-transactions');
+      queryClient.invalidateQueries('inventory-product-stock');
+      Swal.fire({ icon: 'success', title: 'Purchase voided', text: result?.message, confirmButtonText: 'Done' });
     },
-    onError: (error) => errorAlert('The purchase could not be cancelled', error)
+    onError: (error) => errorAlert('The purchase could not be voided', error)
   });
 
-  const confirmCancel = async () => {
-    const result = await Swal.fire({
-      title: `Cancel ${purchase.purchaseNo}?`,
-      text: 'Nothing has been received against it, so the order can be withdrawn.',
+  const confirmVoid = async () => {
+    const received = (purchase.items || []).reduce((sum, item) => sum + Number(item.receivedQuantity || 0), 0);
+    const { isConfirmed, value } = await Swal.fire({
+      title: `Void ${purchase.purchaseNo}?`,
+      text: received
+        ? `${received} unit${received === 1 ? '' : 's'} already received will be taken back off ${purchase.branch?.name || 'the warehouse'}. Anything sold since cannot be, and the void will be refused if so.`
+        : 'Nothing has been received against it, so the order is simply withdrawn.',
       icon: 'warning',
+      input: 'text',
+      inputLabel: 'Reason (optional)',
+      inputPlaceholder: 'Ordered in error…',
       showCancelButton: true,
-      confirmButtonText: 'Cancel purchase',
+      confirmButtonText: 'Void it',
       cancelButtonText: 'Keep it'
     });
-    if (result.isConfirmed) cancel.mutate();
+    if (isConfirmed) voidIt.mutate(value || '');
   };
+
+  const printOrder = () =>
+    printPurchaseOrder(purchase, settings).catch((error) =>
+      errorAlert('The purchase order could not be printed', error)
+    );
 
   if (purchaseQuery.isLoading) {
     return <p className="p-8 text-sm text-slate-400">Loading purchase…</p>;
@@ -172,15 +201,20 @@ export default function PurchaseDetail({ id }) {
       >
         <PurchaseStatusPill status={purchase.status} />
         <PaymentStatusPill status={purchase.paymentStatus} />
+        <button type="button" onClick={printOrder} className="btn-ghost">
+          <FiPrinter size={14} /> Print
+        </button>
         {untouched && purchase.status !== 'CANCELLED' ? (
-          <>
-            <button type="button" onClick={() => router.push(`/purchases/${id}/edit`)} className="btn-ghost">
-              <FiEdit2 size={14} /> Edit
-            </button>
-            <button type="button" onClick={confirmCancel} className="btn-ghost !text-rose-600">
-              <FiSlash size={14} /> Cancel
-            </button>
-          </>
+          <button type="button" onClick={() => router.push(`/purchases/${id}/edit`)} className="btn-ghost">
+            <FiEdit2 size={14} /> Edit
+          </button>
+        ) : null}
+        {/* Void stays available after receiving — that is the case it exists
+            for. Only an already-cancelled purchase has nothing to withdraw. */}
+        {purchase.status !== 'CANCELLED' ? (
+          <button type="button" onClick={confirmVoid} disabled={voidIt.isLoading} className="btn-ghost !text-rose-600">
+            <FiSlash size={14} /> {voidIt.isLoading ? 'Voiding…' : 'Void'}
+          </button>
         ) : null}
       </PageBar>
 

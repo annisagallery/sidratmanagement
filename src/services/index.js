@@ -1161,6 +1161,11 @@ export const updatePurchase = async ({ id, ...payload }) => (await http.put(`/ad
 export const receivePurchase = async ({ id, lines }) =>
   (await http.post(`/admin/purchases/${id}/receive`, { lines })).data;
 export const cancelPurchase = async (id) => (await http.post(`/admin/purchases/${id}/cancel`)).data;
+// The superset of cancel: withdraws a purchase whether or not stock has been
+// received, taking back off the shelf whatever it put there. Refused, with the
+// reason, if any of it has since been sold.
+export const voidPurchase = async ({ id, reason }) =>
+  (await http.post(`/admin/purchases/${id}/void`, { reason })).data;
 export const addPurchasePayment = async ({ id, ...payload }) =>
   (await http.post(`/admin/purchases/${id}/payments`, payload)).data;
 export const deletePurchasePayment = async ({ id, paymentId }) =>
