@@ -85,21 +85,37 @@ export default function TransferBuilder() {
 
   const sourceBranch = branches.find((branch) => oid(branch) === route.source);
 
+  /**
+   * The source's lots, folded into one row per product/variation.
+   *
+   * Keyed off the lot's own `productId` / `variationId` columns rather than
+   * `lot.product.id`. Those columns are on every row unconditionally; the
+   * nested objects are a `select` on the endpoint, and when that select once
+   * omitted `id` every key here evaluated to the same empty string — so all
+   * 1,200 lots at a branch folded into a single row carrying the whole
+   * branch's quantity and whichever lot's price came back first. Reading the
+   * foreign key cannot fail that way.
+   */
   const stockAtSource = useMemo(() => {
     const map = new Map();
     lots.forEach((lot) => {
-      const key = `${oid(lot.product)}:${oid(lot.variation)}`;
+      const productId = lot.productId || oid(lot.product);
+      const variationId = lot.variationId || oid(lot.variation);
+      if (!productId) return;
+
+      const key = `${productId}:${variationId}`;
       const entry = map.get(key) || {
         key,
-        product: oid(lot.product),
-        variation: oid(lot.variation),
+        product: productId,
+        variation: variationId,
         productName: lot.product?.name || 'Unknown product',
         productCode: lot.product?.code,
         variationName: lot.variation ? variationLabel(lot.variation) : 'Base product',
         free: 0,
-        // The shelf price the source carries it at, so the docket can be
-        // valued the way the old POS valued one. First priced lot wins; an
-        // unpriced lot leaves the line at zero rather than inventing a figure.
+        // What the source carries this stock at, so the docket can be valued
+        // the way the old POS valued one. Every lot of a given variation is
+        // priced the same in practice; an unpriced one leaves the line at zero
+        // rather than inventing a figure.
         unitPrice: 0
       };
       entry.free += lotFree(lot);
@@ -192,7 +208,7 @@ export default function TransferBuilder() {
 
   const head = [
     { label: 'Product' },
-    { label: 'Unit price', className: 'text-right' },
+    { label: 'Shelf price', className: 'text-right' },
     { label: 'Quantity', className: 'text-right' },
     { label: 'Subtotal', className: 'text-right' }
   ];
