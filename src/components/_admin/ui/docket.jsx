@@ -57,6 +57,17 @@ export function DocketField({ label, required = false, hint, children }) {
  * come from the product catalogue (a purchase can order anything) or from what
  * is physically standing at a branch (a transfer can only move what is there).
  * The box does not care which — it lists what it is given and calls onPick.
+ *
+ * Built for a barcode scanner, because that is how these dockets are actually
+ * filled in. A scanner types the code and presses Enter, so Enter picks the
+ * first match; focus stays in the box afterwards so the next scan lands
+ * somewhere; and picking an item already on the docket is the caller's job to
+ * treat as "one more of that", never as a duplicate to refuse.
+ *
+ * `ready` is what stops a fast scanner picking the wrong product. When the
+ * options on screen were resolved for an older search term than the one now in
+ * the box, Enter does nothing rather than adding whatever the previous term
+ * matched — the list catches up a moment later and the next Enter is correct.
  */
 export function DocketSearch({
   value,
@@ -65,12 +76,14 @@ export function DocketSearch({
   onPick,
   disabled = false,
   loading = false,
-  placeholder = 'Add product by name or code…',
+  ready = true,
+  placeholder = 'Scan a barcode, or search by name or code…',
   emptyHint = 'No product matches that.',
   disabledHint = ''
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const close = (event) => {
@@ -80,17 +93,36 @@ export function DocketSearch({
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  const pick = (option) => {
+    onPick(option);
+    onChange('');
+    setOpen(false);
+    // A scanner fires the next code immediately; without this the box has lost
+    // focus and the code goes nowhere, or worse, into the page behind it.
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (!ready || loading) return;
+    const first = options.find((option) => !option.disabled);
+    if (first) pick(first);
+  };
+
   return (
     <div ref={boxRef} className="relative border-b border-slate-200 p-4">
       <div className="relative">
         <FiSearch className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
         <input
+          ref={inputRef}
           value={value}
           disabled={disabled}
           onChange={(event) => {
             onChange(event.target.value);
             setOpen(true);
           }}
+          onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
           placeholder={disabled && disabledHint ? disabledHint : placeholder}
           className="input-ui h-11 w-full pl-10 text-[13px] disabled:bg-slate-50 disabled:text-slate-400"
@@ -119,11 +151,7 @@ export function DocketSearch({
                   <button
                     type="button"
                     disabled={option.disabled}
-                    onClick={() => {
-                      onPick(option);
-                      onChange('');
-                      setOpen(false);
-                    }}
+                    onClick={() => pick(option)}
                     className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <span className="min-w-0">
@@ -174,9 +202,9 @@ export function DocketTable({ head, children }) {
   );
 }
 
-export function DocketRow({ index, onRemove, children }) {
+export function DocketRow({ index, onRemove, flash = false, children }) {
   return (
-    <tr className="align-top">
+    <tr className={`align-top transition-colors duration-500 ${flash ? 'bg-amber-50' : ''}`}>
       <td className="px-3 py-2.5 text-[12px] font-semibold tabular-nums text-slate-400">{index + 1}</td>
       {children}
       <td className="px-3 py-2.5 text-right">

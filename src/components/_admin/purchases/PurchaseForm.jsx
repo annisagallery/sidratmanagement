@@ -128,7 +128,6 @@ export default function PurchaseForm({ purchase = null }) {
   // somewhere. Variations are offered as separate rows because that is what
   // arrives in a carton and what stock is counted in.
   const options = useMemo(() => {
-    const taken = new Set(lines.map((line) => `${line.product}:${line.variation}`));
     const rows = [];
     products.forEach((product) => {
       const variations = product.variations || [];
@@ -137,7 +136,6 @@ export default function PurchaseForm({ purchase = null }) {
           const key = `${oid(product)}:${oid(variation)}`;
           rows.push({
             key,
-            disabled: taken.has(key),
             title: product.name,
             subtitle: variationLabel(variation),
             meta: product.code ? `#${product.code}` : '',
@@ -153,7 +151,6 @@ export default function PurchaseForm({ purchase = null }) {
       const key = `${oid(product)}:`;
       rows.push({
         key,
-        disabled: taken.has(key),
         title: product.name,
         subtitle: 'Base product',
         meta: product.code ? `#${product.code}` : '',
@@ -165,13 +162,31 @@ export default function PurchaseForm({ purchase = null }) {
       });
     });
     return rows;
-  }, [products, lines]);
+  }, [products]);
 
-  const addLine = (option) =>
+  // Scanning the same barcode twice means two of them. The docket used to
+  // refuse the second scan outright, which is the one behaviour a scanner
+  // cannot work with — a carton of forty is forty scans of the same code, and
+  // typing the quantity by hand afterwards defeats the point of scanning it.
+  //
+  // A repeat lands on the line that is already there rather than starting a
+  // second one: two lines for the same product would have to be reconciled by
+  // whoever reads the purchase, and they would both be right.
+  const addLine = (option) => {
+    const match = lines.find(
+      (line) => line.product === option.product && line.variation === option.variation
+    );
+    if (match) {
+      setLine(match.key, { quantity: num(match.quantity) + 1 });
+      flash(match.key);
+      return;
+    }
+    nextKey.current += 1;
+    const key = `${option.key}-${nextKey.current}`;
     setLines((current) => [
       ...current,
       {
-        key: `${option.key}-${Date.now()}`,
+        key,
         product: option.product,
         variation: option.variation,
         productName: option.productName,
@@ -184,9 +199,29 @@ export default function PurchaseForm({ purchase = null }) {
         salePrice: ''
       }
     ]);
+    flash(key);
+  };
 
   const setLine = (key, patch) =>
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+
+  // Line keys come from a counter, not Date.now(): a scanner can fire twice
+  // inside the same millisecond, and two lines sharing a React key is a
+  // rendering bug that only shows up under exactly the workload this screen is
+  // built for.
+  const nextKey = useRef(0);
+
+  // Which line the last scan touched. A quantity ticking from 12 to 13 is no
+  // acknowledgement at all if the row is off the bottom of the screen, so the
+  // row lights up briefly instead.
+  const [flashKey, setFlashKey] = useState(null);
+  const flashTimer = useRef(null);
+  const flash = (key) => {
+    setFlashKey(key);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashKey(null), 700);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   const priced = lines.map((line) => ({ ...line, subTotal: lineSubTotal(line) }));
   const totals = useDocketTotals(priced, adjust);
@@ -293,7 +328,8 @@ export default function PurchaseForm({ purchase = null }) {
           options={options}
           onPick={addLine}
           loading={productsQuery.isFetching && debounced !== ''}
-          emptyHint={debounced ? 'No product matches that.' : 'Start typing a product name or code.'}
+          ready={debounced === search.trim() && !productsQuery.isFetching}
+          emptyHint={debounced ? 'No product matches that.' : 'Scan a barcode, or start typing a name or code.'}
         />
 
         <DocketTable head={HEAD}>
@@ -302,6 +338,7 @@ export default function PurchaseForm({ purchase = null }) {
               <DocketRow
                 key={line.key}
                 index={index}
+                flash={flashKey === line.key}
                 onRemove={() => setLines((current) => current.filter((entry) => entry.key !== line.key))}
               >
                 <td className="px-3 py-2.5">

@@ -22,7 +22,7 @@
  * and splits across as many as the quantity needs.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { FiAlertTriangle, FiRepeat, FiSave } from 'react-icons/fi';
@@ -51,13 +51,18 @@ import {
   qty,
   toast
 } from 'src/components/_admin/ui/primitives';
-import { variationLabel } from './shared';
+import { catalogCode, variationLabel } from './shared';
 
 const lotFree = (lot) => Math.max(0, Number(lot.onHandQuantity || 0) - Number(lot.reservedQuantity || 0));
 const num = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 };
+
+// Codes get scanned, typed and printed with different punctuation — "0001-0002"
+// off a sticker, "00010002" from a scanner that drops the dash. Comparing the
+// letters and digits alone makes those the same code.
+const squash = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const todayValue = () => {
   const d = new Date();
@@ -111,6 +116,22 @@ export default function TransferBuilder() {
         productName: lot.product?.name || 'Unknown product',
         productCode: lot.product?.code,
         variationName: lot.variation ? variationLabel(lot.variation) : 'Base product',
+        // Everything this row can be found by. Barcodes and the sticker code
+        // are in here because the docket is filled in with a scanner, and a
+        // picker that only matches names cannot be scanned into at all.
+        haystack: [
+          lot.product?.name,
+          lot.variation ? variationLabel(lot.variation) : '',
+          lot.product?.code,
+          lot.variation?.sku,
+          catalogCode(lot.product, lot.variation),
+          lot.product?.primaryBarcode,
+          lot.variation?.primaryBarcode,
+          ...(lot.product?.legacyBarcodes || []),
+          ...(lot.variation?.legacyBarcodes || [])
+        ]
+          .filter(Boolean)
+          .join(' '),
         free: 0,
         // What the source carries this stock at, so the docket can be valued
         // the way the old POS valued one. Every lot of a given variation is
@@ -129,29 +150,75 @@ export default function TransferBuilder() {
 
   const options = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const taken = new Set(lines.map((line) => `${line.product}:${line.variation}`));
+    const squashed = squash(term);
     return stockAtSource
-      .filter(
-        (entry) =>
-          !term ||
-          entry.productName.toLowerCase().includes(term) ||
-          entry.variationName.toLowerCase().includes(term) ||
-          String(entry.productCode || '').includes(term)
-      )
+      .filter((entry) => {
+        if (!term) return true;
+        if (entry.haystack.toLowerCase().includes(term)) return true;
+        // A scanned code with its punctuation dropped still has to find the
+        // row whose sticker carries that code.
+        return squashed.length >= 4 && squash(entry.haystack).includes(squashed);
+      })
       .map((entry) => ({
         ...entry,
-        disabled: taken.has(entry.key),
         title: entry.productName,
         subtitle: entry.variationName,
         meta: `${qty(entry.free)} free`
       }));
-  }, [stockAtSource, search, lines]);
+  }, [stockAtSource, search]);
 
-  const addLine = (entry) =>
+  const setLine = (key, patch) =>
+    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+
+  // Line keys come from a counter, not Date.now(): a scanner can fire twice
+  // inside the same millisecond, and two lines sharing a React key is a
+  // rendering bug that only shows up under exactly the workload this screen is
+  // built for.
+  const nextKey = useRef(0);
+
+  // Which line the last scan touched. A quantity ticking from 12 to 13 is no
+  // acknowledgement at all if the row is off the bottom of the screen.
+  const [flashKey, setFlashKey] = useState(null);
+  const flashTimer = useRef(null);
+  const flash = (key) => {
+    setFlashKey(key);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashKey(null), 700);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
+  // Scanning the same barcode twice means two of them — a carton of forty is
+  // forty scans of one code, and the docket used to refuse every scan after the
+  // first. A repeat lands on the existing line rather than opening a second one
+  // for the same product.
+  //
+  // Unlike a purchase, a transfer has a ceiling: you cannot send stock that is
+  // not standing there. So the scan that would go past what is free is refused
+  // at the moment it happens, with the reason — not silently accepted and then
+  // reported as a validation error under the submit button, long after whoever
+  // was scanning stopped looking at the screen.
+  const addLine = (entry) => {
+    const free = freeAtSource.get(entry.key) || 0;
+    const match = lines.find((line) => `${line.product}:${line.variation}` === entry.key);
+    const wanted = match ? num(match.quantity) + 1 : 1;
+
+    if (wanted > free) {
+      toast(`Only ${qty(free)} of ${entry.productName} free at ${sourceBranch?.name || 'the source'}`);
+      return;
+    }
+
+    if (match) {
+      setLine(match.key, { quantity: wanted });
+      flash(match.key);
+      return;
+    }
+
+    nextKey.current += 1;
+    const key = `${entry.key}-${nextKey.current}`;
     setLines((current) => [
       ...current,
       {
-        key: `${entry.key}-${Date.now()}`,
+        key,
         product: entry.product,
         variation: entry.variation,
         productName: entry.productName,
@@ -161,9 +228,8 @@ export default function TransferBuilder() {
         unitPrice: entry.unitPrice || 0
       }
     ]);
-
-  const setLine = (key, patch) =>
-    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+    flash(key);
+  };
 
   const priced = lines.map((line) => ({ ...line, subTotal: num(line.quantity) * num(line.unitPrice) }));
   const units = priced.reduce((sum, line) => sum + num(line.quantity), 0);
@@ -290,7 +356,7 @@ export default function TransferBuilder() {
           onPick={addLine}
           disabled={!route.source}
           loading={lotsQuery.isLoading && Boolean(route.source)}
-          placeholder={`Add product from ${sourceBranch?.name || 'the source'}…`}
+          placeholder={`Scan a barcode, or search ${sourceBranch?.name || 'the source'}…`}
           disabledHint="Choose where the stock is coming from first"
           emptyHint={
             search ? 'Nothing in stock there matches that.' : `${sourceBranch?.name || 'The source'} has no free stock to send.`
@@ -312,6 +378,7 @@ export default function TransferBuilder() {
                 <DocketRow
                   key={line.key}
                   index={index}
+                  flash={flashKey === line.key}
                   onRemove={() => setLines((current) => current.filter((entry) => entry.key !== line.key))}
                 >
                   <td className="px-3 py-2.5">
