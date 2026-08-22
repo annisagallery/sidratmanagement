@@ -10,6 +10,18 @@ import { FiCheck, FiX, FiTrash2, FiPlus, FiCopy, FiRefreshCw, FiEye, FiEyeOff } 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000';
 const WEBHOOK_URL = `${BASE_URL}/api/webhook/payment`;
 
+// What the customer is told to do differs per wallet. A personal bKash number
+// takes Send Money, a merchant till takes Payment, an agent takes Cash Out —
+// telling everyone "Send Money" routes real money to the wrong place.
+const ACCOUNT_TYPES = [
+  { value: 'personal', label: 'Personal', action: 'Send Money' },
+  { value: 'merchant', label: 'Merchant', action: 'Payment' },
+  { value: 'agent', label: 'Agent', action: 'Cash Out' }
+];
+
+const actionFor = (accountType) =>
+  ACCOUNT_TYPES.find((a) => a.value === accountType)?.action || 'Send Money';
+
 // ── Payment Types ─────────────────────────────────────────────────────────────
 
 function TypeRow({ t, onSave, onDelete }) {
@@ -19,7 +31,10 @@ function TypeRow({ t, onSave, onDelete }) {
     slug: t.slug,
     color: t.color,
     accounts: t.accounts?.join(', ') || '',
-    isActive: t.isActive
+    isActive: t.isActive,
+    accountType: t.accountType || 'personal',
+    instructions: t.instructions || '',
+    logoUrl: t.logoUrl || ''
   });
 
   const save = () => {
@@ -38,7 +53,10 @@ function TypeRow({ t, onSave, onDelete }) {
       slug: t.slug,
       color: t.color,
       accounts: t.accounts?.join(', ') || '',
-      isActive: t.isActive
+      isActive: t.isActive,
+      accountType: t.accountType || 'personal',
+      instructions: t.instructions || '',
+      logoUrl: t.logoUrl || ''
     });
     setEditing(false);
   };
@@ -46,6 +64,7 @@ function TypeRow({ t, onSave, onDelete }) {
   const inp = 'border rounded-md px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]';
 
   return (
+    <>
     <tr className="border-b border-gray-100 hover:bg-gray-50/50">
       <td className="px-4 py-2.5">
         {editing ? (
@@ -105,6 +124,25 @@ function TypeRow({ t, onSave, onDelete }) {
         )}
       </td>
       <td className="px-4 py-2.5">
+        {editing ? (
+          <select
+            value={form.accountType}
+            onChange={(e) => setForm((p) => ({ ...p, accountType: e.target.value }))}
+            className={inp}
+          >
+            {ACCOUNT_TYPES.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label} — {a.action}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="whitespace-nowrap rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+            {actionFor(t.accountType)}
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-2.5">
         <div className="flex items-center justify-end gap-1">
           {editing ? (
             <>
@@ -131,12 +169,58 @@ function TypeRow({ t, onSave, onDelete }) {
         </div>
       </td>
     </tr>
+
+    {/* Fields that need room to breathe. Shown only while editing so the table
+        stays scannable the rest of the time. */}
+    {editing && (
+      <tr className="border-b border-gray-100 bg-gray-50/60">
+        <td colSpan={7} className="px-4 py-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Instructions <span className="text-gray-400">(optional)</span>
+              </label>
+              <input
+                value={form.instructions}
+                onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
+                placeholder="e.g. Do not use the reference field"
+                className={inp}
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Shown to the customer under the payment steps.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Logo URL <span className="text-gray-400">(optional)</span>
+              </label>
+              <input
+                value={form.logoUrl}
+                onChange={(e) => setForm((p) => ({ ...p, logoUrl: e.target.value }))}
+                placeholder="https://…/bkash.svg"
+                className={inp}
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Appears on the payment page so the customer knows which app to open.
+              </p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
 function AddTypeRow({ onAdd }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', slug: '', color: '#6b7280', accounts: '' });
+  const [form, setForm] = useState({
+    name: '',
+    slug: '',
+    color: '#6b7280',
+    accounts: '',
+    accountType: 'personal'
+  });
 
   const submit = () => {
     if (!form.name || !form.slug) return;
@@ -147,14 +231,14 @@ function AddTypeRow({ onAdd }) {
         .map((s) => s.trim())
         .filter(Boolean)
     });
-    setForm({ name: '', slug: '', color: '#6b7280', accounts: '' });
+    setForm({ name: '', slug: '', color: '#6b7280', accounts: '', accountType: 'personal' });
     setOpen(false);
   };
 
   if (!open)
     return (
       <tr>
-        <td colSpan={6} className="px-4 py-2">
+        <td colSpan={7} className="px-4 py-2">
           <button
             onClick={() => setOpen(true)}
             className="flex items-center gap-1.5 text-xs text-[var(--brand-strong)] hover:text-[var(--brand-strong)]"
@@ -211,6 +295,19 @@ function AddTypeRow({ onAdd }) {
         />
       </td>
       <td className="px-4 py-2.5">
+        <select
+          value={form.accountType}
+          onChange={(e) => setForm((p) => ({ ...p, accountType: e.target.value }))}
+          className={inp}
+        >
+          {ACCOUNT_TYPES.map((a) => (
+            <option key={a.value} value={a.value}>
+              {a.label} — {a.action}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-2.5">
         <div className="flex gap-1 justify-end">
           <button onClick={submit} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md">
             <FiCheck size={14} />
@@ -259,7 +356,7 @@ function PaymentTypesSection() {
           <DataTable className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Name', 'Slug', 'Color', 'Preview', 'Accounts', ''].map((h) => (
+                {['Name', 'Slug', 'Color', 'Preview', 'Accounts', 'Customer does', ''].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">
                     {h}
                   </th>

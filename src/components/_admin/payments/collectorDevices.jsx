@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
+import QRCode from 'qrcode';
 import * as api from 'src/services';
 import { FiSmartphone, FiCopy, FiAlertTriangle } from 'react-icons/fi';
 import { MdInbox } from 'react-icons/md';
@@ -10,6 +11,9 @@ import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
+
+// The API the collector phone talks to. Same origin the management app uses.
+const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
 
 const dtStr = (d) => (d ? fDateTime(d) : '—');
 
@@ -44,34 +48,93 @@ export function StatusDot({ status, withLabel = true }) {
 
 // The token is returned exactly once, by design — only its hash is stored, so
 // there is no endpoint that can show it again. Say so plainly.
+//
+// Pairing offers a QR because typing a 64-character token on a phone keypad is
+// where this goes wrong: one wrong character and the device silently fails to
+// authenticate later. The manual fields stay for phones without a camera.
 function PairedModal({ device, onClose }) {
+  const [qr, setQr] = useState(null);
   const copy = (value) => navigator.clipboard?.writeText(value);
+
+  // Short keys keep the QR low-density, so it scans on a cheap handset camera.
+  const payload = JSON.stringify({
+    v: 1,
+    url: API_BASE,
+    id: device.deviceId,
+    token: device.token
+  });
+
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      .then((url) => {
+        if (alive) setQr(url);
+      })
+      .catch(() => {
+        // Falling back to the manual fields is a fine outcome; a broken image
+        // would be worse than no image.
+        if (alive) setQr(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [payload]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-md bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+      <div className="my-8 w-full max-w-md space-y-4 rounded-md bg-white p-6 shadow-xl">
         <h3 className="font-semibold text-slate-800">Device paired</h3>
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <FiAlertTriangle className="mr-1 inline" size={12} />
-          Copy these into the collector app now. The token is shown once and cannot be
-          retrieved later — if you lose it, revoke the device and pair again.
+          Pair the phone now. The token is shown once and cannot be retrieved later — if you
+          lose it, revoke the device and pair again.
         </div>
 
-        {[
-          { label: 'Device ID', value: device.deviceId },
-          { label: 'Token', value: device.token }
-        ].map((field) => (
-          <div key={field.label}>
-            <label className="mb-1 block text-xs font-medium text-slate-500">{field.label}</label>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-100">
-                {field.value}
-              </code>
-              <button onClick={() => copy(field.value)} className="btn-ghost" aria-label={`Copy ${field.label}`}>
-                <FiCopy size={14} />
-              </button>
+        <div className="rounded-md border border-slate-200 p-4 text-center">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Scan with the collector app
+          </p>
+          {qr ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={qr} alt="Pairing QR code" className="mx-auto h-56 w-56" />
+          ) : (
+            <div className="mx-auto flex h-56 w-56 items-center justify-center text-xs text-slate-400">
+              QR unavailable — use the fields below
             </div>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Open SidratPay Collector, tap <strong>Scan QR</strong>, and point it here.
+          </p>
+        </div>
+
+        <details className="rounded-md border border-slate-200">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700">
+            Or enter it by hand
+          </summary>
+          <div className="space-y-3 border-t border-slate-100 p-3">
+            {[
+              { label: 'Server address', value: API_BASE },
+              { label: 'Device ID', value: device.deviceId },
+              { label: 'Token', value: device.token }
+            ].map((field) => (
+              <div key={field.label}>
+                <label className="mb-1 block text-xs font-medium text-slate-500">{field.label}</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-100">
+                    {field.value}
+                  </code>
+                  <button
+                    onClick={() => copy(field.value)}
+                    className="btn-ghost"
+                    aria-label={`Copy ${field.label}`}
+                  >
+                    <FiCopy size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </details>
 
         <div className="flex justify-end">
           <button onClick={onClose} className="btn-brand">
