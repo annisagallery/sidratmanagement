@@ -981,6 +981,67 @@ export const regenerateWebhookSecret = async () => {
   return data;
 };
 
+// ── Payment verification (SMS) ────────────────────────────────────────────────
+export const getPaymentIntents = async (params = {}) => {
+  const { data } = await http.get(`/admin/payment-intents`, { params });
+  return data;
+};
+// Side-by-side "what the customer claimed vs what the SMS said" for one invoice.
+export const getPaymentIntentReview = async (id) => {
+  const { data } = await http.get(`/admin/payment-intents/${id}/review`);
+  return data;
+};
+export const reviewPaymentIntent = async ({ id, action, note, smsMessageId }) => {
+  const { data } = await http.post(`/admin/payment-intents/${id}/review`, {
+    action,
+    note,
+    smsMessageId
+  });
+  return data;
+};
+
+// ── SMS inbox ─────────────────────────────────────────────────────────────────
+export const getSmsMessages = async (params = {}) => {
+  const { data } = await http.get(`/admin/sms`, { params });
+  return data;
+};
+export const getSmsStats = async () => {
+  const { data } = await http.get(`/admin/sms/stats`);
+  return data;
+};
+// Re-run the rule table over a stored raw body after adding a rule.
+export const reparseSms = async (id) => {
+  const { data } = await http.post(`/admin/sms/${id}/reparse`);
+  return data;
+};
+export const createPaymentFromSms = async ({ id, ...payload }) => {
+  const { data } = await http.post(`/admin/sms/${id}/payment`, payload);
+  return data;
+};
+export const dismissSms = async (id) => {
+  const { data } = await http.post(`/admin/sms/${id}/dismiss`);
+  return data;
+};
+
+// ── Collector devices ─────────────────────────────────────────────────────────
+export const getSmsDevices = async () => {
+  const { data } = await http.get(`/admin/sms-devices`);
+  return data;
+};
+// Returns the pairing token exactly once — it is not retrievable afterwards.
+export const createSmsDevice = async (payload) => {
+  const { data } = await http.post(`/admin/sms-devices`, payload);
+  return data;
+};
+export const updateSmsDevice = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/admin/sms-devices/${id}`, payload);
+  return data;
+};
+export const revokeSmsDevice = async (id) => {
+  const { data } = await http.post(`/admin/sms-devices/${id}/revoke`);
+  return data;
+};
+
 // ── Payment Types ─────────────────────────────────────────────────────────────
 export const getPaymentTypesByAdmin = async () => {
   const { data } = await http.get(`/admin/payment-types`);

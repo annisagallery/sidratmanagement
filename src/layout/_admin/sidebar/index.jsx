@@ -8,6 +8,7 @@ import { hrefMatches, navGroups } from 'src/layout/_admin/navConfig';
 import { usePermissions } from 'src/context/PermissionsContext';
 import useAdminUserStore from 'src/stores/userStore';
 import { isSuperAdmin } from 'src/utils/adminRole';
+import DeviceStatusIndicator from 'src/components/_admin/payments/deviceStatusIndicator';
 
 function activeItemKey(pathname) {
   let match = null;
@@ -80,6 +81,7 @@ function Navigation({ pathname, close }) {
                           style={active ? { color: 'var(--brand-strong)' } : undefined}
                         />
                         <span className="truncate">{item.label}</span>
+                        {item.key === 'collector-devices' && <DeviceStatusIndicator />}
                       </Link>
                     </div>
                   </li>

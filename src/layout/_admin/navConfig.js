@@ -25,8 +25,10 @@ import {
   FiPackage,
   FiSettings,
   FiShare2,
+  FiShield,
   FiShoppingBag,
   FiSliders,
+  FiSmartphone,
   FiStar,
   FiTag,
   FiTrash2
@@ -141,6 +143,9 @@ export const navParents = [
     href: '/payments',
     tabs: [
       { label: 'Payments', href: '/payments', icon: FiList },
+      { label: 'Verification', href: '/payments/verification', icon: FiShield },
+      { label: 'SMS Inbox', href: '/payments/sms', icon: FiMessageSquare },
+      { label: 'Devices', href: '/payments/devices', icon: FiSmartphone },
       { label: 'Finance Review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet },
       { label: 'Settings', href: '/payments/settings', icon: FiSettings }
     ]
@@ -313,6 +318,9 @@ export const navGroups = [
     label: 'Payment',
     items: [
       { key: 'transactions', label: 'Transactions', href: '/payments', icon: BsCreditCard2Front, subject: 'Payment' },
+      { key: 'verification', label: 'Verification', href: '/payments/verification', icon: FiShield, subject: 'Payment' },
+      { key: 'sms-inbox', label: 'SMS Inbox', href: '/payments/sms', icon: FiMessageSquare, subject: 'Payment' },
+      { key: 'collector-devices', label: 'Devices', href: '/payments/devices', icon: FiSmartphone, subject: 'Payment' },
       { key: 'finance-review', label: 'Finance Review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet, subject: 'Order' },
       { key: 'payment-settings', label: 'Payment Settings', href: '/payments/settings', icon: FiSettings, subject: 'Payment' }
     ]
