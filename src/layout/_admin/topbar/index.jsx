@@ -7,10 +7,11 @@ import { useState } from 'react';
 import { useQuery } from 'react-query';
 import { RxHamburgerMenu } from 'react-icons/rx';
 import { BsCartPlus } from 'react-icons/bs';
-import { MdOutlinePayment } from 'react-icons/md';
+import { MdOutlinePayment, MdQrCodeScanner } from 'react-icons/md';
 import { FiTool } from 'react-icons/fi';
 import Logo from 'src/components/logo';
 import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import { usePermissions } from 'src/context/PermissionsContext';
 import AddPaymentModal from 'src/components/_admin/payments/addPaymentModal';
 import NotificationInbox from 'src/components/_admin/notifications/NotificationInbox';
 import * as api from 'src/services';
@@ -22,6 +23,10 @@ const UserSelect = dynamic(() => import('src/components/select/userSelect'), {
 
 export default function Topbar({ handleDrawerOpen }) {
   const { siteName } = useSiteSettings();
+  // The scan desk moved off the sidebar and onto this bar, so it has to keep
+  // the gate it had there — otherwise the move quietly hands it to roles that
+  // could not see it before. UX only; the API enforces.
+  const { can } = usePermissions();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const { data: typesData } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, {
     staleTime: 5 * 60_000
@@ -68,6 +73,21 @@ export default function Topbar({ handleDrawerOpen }) {
               <MdOutlinePayment size={16} />
               <span className="hidden lg:inline">Add Payment</span>
             </button>
+
+            {/* The scan desk is not a page anyone browses to — it is picked up
+                mid-task, at a bench, usually with a scanner already in hand. It
+                sat in the sidebar next to planning screens nobody on the floor
+                opens; here it is one reach away from wherever they are. */}
+            {can('read', 'Production') && (
+              <Link
+                href="/production/scan"
+                className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                title="Production scan desk"
+              >
+                <MdQrCodeScanner size={16} />
+                <span className="hidden lg:inline">Scan</span>
+              </Link>
+            )}
 
             <Link
               href="/production/create"

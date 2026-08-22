@@ -103,7 +103,6 @@ export const navParents = [
       { label: 'Stock', href: '/inventory', icon: MdOutlineInventory2 },
       { label: 'Purchases', href: '/purchases', icon: FiShoppingBag },
       { label: 'Production', href: '/production', icon: LuFactory },
-      { label: 'Production Scan', href: '/production/scan', icon: LuFactory },
       { label: 'Transfers', href: '/inventory/transfers', icon: MdSwapHoriz }
     ]
   },
@@ -265,17 +264,6 @@ export const navGroups = [
         key: 'production',
         label: 'Production',
         href: '/production',
-        icon: LuFactory,
-        subject: 'Production',
-        children: productionTabs
-      },
-      // The scan desk keeps its own sidebar entry — it is used by the factory
-      // floor, not the planner — but carries the same tabs so nobody is
-      // stranded there.
-      {
-        key: 'production-scan',
-        label: 'Production Scan',
-        href: '/production/scan',
         icon: LuFactory,
         subject: 'Production',
         children: productionTabs
