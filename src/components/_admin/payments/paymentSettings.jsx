@@ -1,13 +1,26 @@
 'use client';
-import DataTable from 'src/components/_admin/ui/DataTable';
-import { useState, useRef } from 'react';
+import Link from 'next/link';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
 import { confirmDelete } from 'src/utils/swal';
-import { FiCheck, FiX, FiTrash2, FiPlus, FiCopy, FiRefreshCw, FiEye, FiEyeOff } from 'react-icons/fi';
+import {
+  FiAlertTriangle,
+  FiArrowRight,
+  FiCheck,
+  FiCopy,
+  FiEye,
+  FiEyeOff,
+  FiPlus,
+  FiRefreshCw,
+  FiSmartphone,
+  FiTrash2,
+  FiX
+} from 'react-icons/fi';
+import PageHeader from 'src/components/_admin/ui/PageHeader';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
 const WEBHOOK_URL = `${BASE_URL}/api/webhook/payment`;
 
 // What the customer is told to do differs per wallet. A personal bKash number
@@ -22,362 +35,399 @@ const ACCOUNT_TYPES = [
 const actionFor = (accountType) =>
   ACCOUNT_TYPES.find((a) => a.value === accountType)?.action || 'Send Money';
 
-// ── Payment Types ─────────────────────────────────────────────────────────────
+function Section({ title, description, children, id }) {
+  return (
+    <section id={id} className="card-ui p-5 sm:p-6">
+      <div className="mb-4">
+        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+        {description && <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-slate-400">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
 
-function TypeRow({ t, onSave, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    name: t.name,
-    slug: t.slug,
-    color: t.color,
-    accounts: t.accounts?.join(', ') || '',
-    isActive: t.isActive,
-    accountType: t.accountType || 'personal',
-    instructions: t.instructions || '',
-    logoUrl: t.logoUrl || ''
-  });
-
-  const save = () => {
-    onSave(t.id, {
-      ...form,
-      accounts: form.accounts
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    });
-    setEditing(false);
+function CopyField({ label, value, type = 'text', children }) {
+  const copy = () => {
+    navigator.clipboard?.writeText(value);
+    Swal.fire({ title: 'Copied', icon: 'success', timer: 900, showConfirmButton: false });
   };
-  const cancel = () => {
-    setForm({
-      name: t.name,
-      slug: t.slug,
-      color: t.color,
-      accounts: t.accounts?.join(', ') || '',
-      isActive: t.isActive,
-      accountType: t.accountType || 'personal',
-      instructions: t.instructions || '',
-      logoUrl: t.logoUrl || ''
-    });
-    setEditing(false);
-  };
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+      <div className="flex gap-2">
+        <input readOnly type={type} value={value} className="input-ui flex-1 bg-slate-50 font-mono text-xs text-slate-600" />
+        {children}
+        <button type="button" onClick={copy} className="btn-icon" title={`Copy ${label.toLowerCase()}`} aria-label={`Copy ${label.toLowerCase()}`}>
+          <FiCopy size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
-  const inp = 'border rounded-md px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]';
+// ── Payment methods ───────────────────────────────────────────────────────────
+
+const emptyForm = {
+  name: '',
+  slug: '',
+  color: '#6b7280',
+  accounts: '',
+  accountType: 'personal',
+  instructions: '',
+  logoUrl: '',
+  isActive: true
+};
+
+const toForm = (type) => ({
+  name: type.name || '',
+  slug: type.slug || '',
+  color: type.color || '#6b7280',
+  accounts: type.accounts?.join(', ') || '',
+  accountType: type.accountType || 'personal',
+  instructions: type.instructions || '',
+  logoUrl: type.logoUrl || '',
+  isActive: type.isActive !== false
+});
+
+const toPayload = (form) => ({
+  ...form,
+  accounts: form.accounts
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+});
+
+function MethodForm({ form, setForm, onSave, onCancel, saving }) {
+  const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
   return (
-    <>
-    <tr className="border-b border-gray-100 hover:bg-gray-50/50">
-      <td className="px-4 py-2.5">
-        {editing ? (
-          <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className={inp} />
-        ) : (
-          <span className="text-sm font-medium text-gray-700">{t.name}</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        {editing ? (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Name</label>
+          <input
+            value={form.name}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                name: event.target.value,
+                // Only follow the name while the slug has not been set by hand:
+                // changing it later would orphan payments recorded against it.
+                slug: current.slug ? current.slug : event.target.value.toLowerCase().replace(/\s+/g, '')
+              }))
+            }
+            placeholder="bKash"
+            className="input-ui"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Short code</label>
           <input
             value={form.slug}
-            onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))}
-            className={`${inp} font-mono`}
+            onChange={(event) => setForm((c) => ({ ...c, slug: event.target.value.toLowerCase().replace(/\s+/g, '') }))}
+            placeholder="bkash"
+            className="input-ui font-mono"
           />
-        ) : (
-          <span className="font-mono text-xs text-gray-500">{t.slug}</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        {editing ? (
-          <input
-            type="color"
-            value={form.color}
-            onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))}
-            className="h-8 w-14 cursor-pointer rounded-md border border-gray-200 p-0.5"
-          />
-        ) : (
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded-md border border-gray-200" style={{ backgroundColor: t.color }} />
-            <span className="font-mono text-xs text-gray-400">{t.color}</span>
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        <span
-          className="inline-block px-2.5 py-0.5 rounded-md text-xs font-medium"
-          style={{
-            backgroundColor: (editing ? form.color : t.color) + '22',
-            color: editing ? form.color : t.color,
-            border: `1px solid ${editing ? form.color : t.color}55`
-          }}
-        >
-          {editing ? form.name || 'Preview' : t.name}
-        </span>
-      </td>
-      <td className="px-4 py-2.5">
-        {editing ? (
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Account numbers</label>
           <input
             value={form.accounts}
-            onChange={(e) => setForm((p) => ({ ...p, accounts: e.target.value }))}
-            placeholder="01xxx, 01yyy"
-            className={inp}
+            onChange={set('accounts')}
+            placeholder="01700000000, 01800000000"
+            className="input-ui font-mono"
           />
-        ) : (
-          <span className="text-xs text-gray-500">{t.accounts?.join(', ') || '—'}</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        {editing ? (
-          <select
-            value={form.accountType}
-            onChange={(e) => setForm((p) => ({ ...p, accountType: e.target.value }))}
-            className={inp}
-          >
-            {ACCOUNT_TYPES.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label} — {a.action}
+          <p className="mt-1 text-[11px] text-slate-400">Separate several numbers with commas.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Account kind</label>
+          <select value={form.accountType} onChange={set('accountType')} className="select-ui w-full">
+            {ACCOUNT_TYPES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} — customer taps {option.action}
               </option>
             ))}
           </select>
-        ) : (
-          <span className="whitespace-nowrap rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-            {actionFor(t.accountType)}
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="flex items-center justify-end gap-1">
-          {editing ? (
-            <>
-              <button onClick={save} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md">
-                <FiCheck size={14} />
-              </button>
-              <button onClick={cancel} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md">
-                <FiX size={14} />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setEditing(true)}
-                className="px-2 py-1 text-xs text-[var(--brand-strong)] hover:bg-[var(--brand-soft)] rounded-md"
-              >
-                Edit
-              </button>
-              <button onClick={() => onDelete(t)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-md">
-                <FiTrash2 size={13} />
-              </button>
-            </>
-          )}
         </div>
-      </td>
-    </tr>
-
-    {/* Fields that need room to breathe. Shown only while editing so the table
-        stays scannable the rest of the time. */}
-    {editing && (
-      <tr className="border-b border-gray-100 bg-gray-50/60">
-        <td colSpan={7} className="px-4 py-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Instructions <span className="text-gray-400">(optional)</span>
-              </label>
-              <input
-                value={form.instructions}
-                onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
-                placeholder="e.g. Do not use the reference field"
-                className={inp}
-              />
-              <p className="mt-1 text-[11px] text-gray-400">
-                Shown to the customer under the payment steps.
-              </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Logo URL <span className="text-gray-400">(optional)</span>
-              </label>
-              <input
-                value={form.logoUrl}
-                onChange={(e) => setForm((p) => ({ ...p, logoUrl: e.target.value }))}
-                placeholder="https://…/bkash.svg"
-                className={inp}
-              />
-              <p className="mt-1 text-[11px] text-gray-400">
-                Appears on the payment page so the customer knows which app to open.
-              </p>
-            </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Colour</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={form.color}
+              onChange={set('color')}
+              className="h-9 w-14 cursor-pointer rounded-md border border-slate-200 p-0.5"
+              aria-label="Method colour"
+            />
+            <span className="font-mono text-xs text-slate-400">{form.color}</span>
           </div>
-        </td>
-      </tr>
-    )}
-    </>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Extra instruction <span className="text-slate-400">(optional)</span>
+          </label>
+          <input
+            value={form.instructions}
+            onChange={set('instructions')}
+            placeholder="Do not use the reference field"
+            className="input-ui"
+          />
+          <p className="mt-1 text-[11px] text-slate-400">Shown to the customer under the payment steps.</p>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Logo URL <span className="text-slate-400">(optional)</span>
+          </label>
+          <input value={form.logoUrl} onChange={set('logoUrl')} placeholder="https://…/bkash.svg" className="input-ui" />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(event) => setForm((c) => ({ ...c, isActive: event.target.checked }))}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Customers can pay with this
+        </label>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} className="btn-ghost h-8 px-3 text-xs">
+            <FiX size={13} /> Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!form.name.trim() || !form.slug.trim() || saving}
+            className="btn-brand h-8 px-3 text-xs"
+          >
+            <FiCheck size={13} /> Save method
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function AddTypeRow({ onAdd }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    slug: '',
-    color: '#6b7280',
-    accounts: '',
-    accountType: 'personal'
-  });
+// A method card shows the setting as the sentence the customer will be given.
+// The fields are the same ones the old table held; reading them back as an
+// instruction is what makes a wrong account kind obvious before money moves.
+function MethodCard({ type, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(() => toForm(type));
 
-  const submit = () => {
-    if (!form.name || !form.slug) return;
-    onAdd({
-      ...form,
-      accounts: form.accounts
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    });
-    setForm({ name: '', slug: '', color: '#6b7280', accounts: '', accountType: 'personal' });
-    setOpen(false);
+  const startEdit = () => {
+    setForm(toForm(type));
+    setEditing(true);
   };
 
-  if (!open)
-    return (
-      <tr>
-        <td colSpan={7} className="px-4 py-2">
-          <button
-            onClick={() => setOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-[var(--brand-strong)] hover:text-[var(--brand-strong)]"
-          >
-            <FiPlus size={13} /> Add type
-          </button>
-        </td>
-      </tr>
-    );
+  const save = () => {
+    onSave(type.id, toPayload(form));
+    setEditing(false);
+  };
 
-  const inp = 'border rounded-md px-2 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]';
+  const inactive = type.isActive === false;
+  const accounts = type.accounts?.length ? type.accounts : null;
+
   return (
-    <tr className="bg-[var(--brand-soft)]/30 border-b border-[var(--brand-ring)]">
-      <td className="px-4 py-2.5">
-        <input
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => {
-            setForm((p) => ({ ...p, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, '') }));
-          }}
-          className={inp}
-        />
-      </td>
-      <td className="px-4 py-2.5">
-        <input
-          placeholder="slug"
-          value={form.slug}
-          onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value.toLowerCase().replace(/\s+/g, '') }))}
-          className={`${inp} font-mono`}
-        />
-      </td>
-      <td className="px-4 py-2.5">
-        <input
-          type="color"
-          value={form.color}
-          onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))}
-          className="h-8 w-14 cursor-pointer rounded-md border border-gray-200 p-0.5"
-        />
-      </td>
-      <td className="px-4 py-2.5">
+    <div className={`rounded-md border p-4 transition ${inactive ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
+      <div className="flex items-start gap-3">
         <span
-          className="inline-block px-2.5 py-0.5 rounded-md text-xs font-medium"
-          style={{ backgroundColor: form.color + '22', color: form.color, border: `1px solid ${form.color}55` }}
-        >
-          {form.name || 'Preview'}
-        </span>
-      </td>
-      <td className="px-4 py-2.5">
-        <input
-          placeholder="01xxx, 01yyy"
-          value={form.accounts}
-          onChange={(e) => setForm((p) => ({ ...p, accounts: e.target.value }))}
-          className={inp}
+          className="mt-0.5 h-8 w-8 shrink-0 rounded-md border"
+          style={{ backgroundColor: (type.color || '#6b7280') + '22', borderColor: (type.color || '#6b7280') + '55' }}
+          aria-hidden="true"
         />
-      </td>
-      <td className="px-4 py-2.5">
-        <select
-          value={form.accountType}
-          onChange={(e) => setForm((p) => ({ ...p, accountType: e.target.value }))}
-          className={inp}
-        >
-          {ACCOUNT_TYPES.map((a) => (
-            <option key={a.value} value={a.value}>
-              {a.label} — {a.action}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="flex gap-1 justify-end">
-          <button onClick={submit} className="p-1.5 text-green-600 hover:bg-green-50 rounded-md">
-            <FiCheck size={14} />
-          </button>
-          <button onClick={() => setOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md">
-            <FiX size={14} />
-          </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900">{type.name}</h3>
+            <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">{type.slug}</code>
+            {inactive && (
+              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                Hidden from customers
+              </span>
+            )}
+          </div>
+
+          {!editing && (
+            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+              Customers tap <strong className="font-semibold text-slate-800">{actionFor(type.accountType)}</strong>
+              {accounts ? (
+                <>
+                  {' '}to{' '}
+                  {accounts.map((account, index) => (
+                    <span key={account}>
+                      {index > 0 && ' or '}
+                      <span className="font-mono text-slate-800">{account}</span>
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <span className="text-amber-600"> — but no account number is set, so there is nowhere to send it</span>
+              )}
+              .
+            </p>
+          )}
+
+          {!editing && type.instructions && (
+            <p className="mt-1 border-l-2 border-slate-200 pl-2 text-xs italic text-slate-500">“{type.instructions}”</p>
+          )}
         </div>
-      </td>
-    </tr>
+
+        {!editing && (
+          <div className="flex shrink-0 gap-1">
+            <button type="button" onClick={startEdit} className="btn-ghost h-8 px-3 text-xs">
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(type)}
+              className="btn-icon h-8 w-8 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              aria-label={`Remove ${type.name}`}
+            >
+              <FiTrash2 size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <MethodForm form={form} setForm={setForm} onSave={save} onCancel={() => setEditing(false)} />
+        </div>
+      )}
+    </div>
   );
 }
 
-function PaymentTypesSection() {
+function PaymentMethodsSection() {
   const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const invalidate = () => qc.invalidateQueries(['payment-types']);
+  const onError = (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error');
 
   const { data, isLoading } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, { staleTime: 0 });
   const types = data?.data || [];
 
-  const { mutate: create } = useMutation(api.createPaymentTypeByAdmin, {
-    onSuccess: invalidate,
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+  const { mutate: create, isLoading: creating } = useMutation(api.createPaymentTypeByAdmin, {
+    onSuccess: () => {
+      invalidate();
+      setForm(emptyForm);
+      setAdding(false);
+    },
+    onError
   });
-  const { mutate: update } = useMutation(api.updatePaymentTypeByAdmin, { onSuccess: invalidate });
-  const { mutate: del } = useMutation(api.deletePaymentTypeByAdmin, { onSuccess: invalidate });
+  const { mutate: update } = useMutation(api.updatePaymentTypeByAdmin, { onSuccess: invalidate, onError });
+  const { mutate: remove } = useMutation(api.deletePaymentTypeByAdmin, { onSuccess: invalidate, onError });
 
-  const handleDelete = async (paymentType) => {
+  const handleDelete = async (type) => {
     const confirmed = await confirmDelete({
-      subject: paymentType.name,
-      text: 'Staff stop seeing it when recording a payment. Payments already recorded against it keep the name.'
+      subject: type.name,
+      text: 'Staff stop seeing it when recording a payment, and customers stop being offered it. Payments already recorded against it keep the name.'
     });
-    if (confirmed) del(paymentType.id);
+    if (confirmed) remove(type.id);
   };
 
   return (
-    <section className="bg-white border border-gray-100 rounded-md p-6 shadow-sm space-y-4">
-      <div>
-        <h2 className="font-semibold text-base text-gray-800">Payment Types</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Manage accepted payment methods and their account numbers.</p>
-      </div>
+    <Section
+      id="methods"
+      title="Payment methods"
+      description="What a customer is offered at checkout, and the exact instruction they are given. The account kind decides that instruction — a personal number takes Send Money, a merchant till takes Payment, and getting it wrong sends real money to the wrong place."
+    >
       {isLoading ? (
-        <div className="h-20 bg-gray-100 animate-pulse rounded-md" />
+        <div className="grid gap-3 lg:grid-cols-2">
+          {[0, 1].map((key) => (
+            <div key={key} className="h-28 animate-pulse rounded-md bg-slate-100" />
+          ))}
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-gray-200">
-          <DataTable className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                {['Name', 'Slug', 'Color', 'Preview', 'Accounts', 'Customer does', ''].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {types.map((t) => (
-                <TypeRow
-                  key={t.id}
-                  t={t}
-                  onSave={(id, payload) => update({ id, ...payload })}
-                  onDelete={handleDelete}
-                />
-              ))}
-              <AddTypeRow onAdd={create} />
-            </tbody>
-          </DataTable>
+        <div className="space-y-3">
+          {types.length === 0 && !adding && (
+            <div className="rounded-md border border-dashed border-slate-200 p-8 text-center">
+              <p className="text-sm font-medium text-slate-600">No payment methods yet</p>
+              <p className="mt-0.5 text-xs text-slate-400">Add one to start taking payments at checkout.</p>
+            </div>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {types.map((type) => (
+              <MethodCard key={type.id} type={type} onSave={(id, payload) => update({ id, ...payload })} onDelete={handleDelete} />
+            ))}
+          </div>
+
+          {adding ? (
+            <div className="rounded-md border p-4" style={{ borderColor: 'var(--brand-ring)', backgroundColor: 'var(--brand-soft)' }}>
+              <h3 className="mb-3 text-sm font-bold text-slate-900">New payment method</h3>
+              <MethodForm
+                form={form}
+                setForm={setForm}
+                saving={creating}
+                onSave={() => create(toPayload(form))}
+                onCancel={() => {
+                  setForm(emptyForm);
+                  setAdding(false);
+                }}
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setAdding(true)} className="btn-ghost">
+              <FiPlus size={14} /> Add payment method
+            </button>
+          )}
         </div>
       )}
-    </section>
+    </Section>
+  );
+}
+
+// ── Collector phones ──────────────────────────────────────────────────────────
+
+// Settings that decide how money arrives are worth nothing if the phone that
+// reads the confirmation SMS is off. The state belongs on this page, next to
+// the methods it makes work.
+function CollectorSection() {
+  const { data } = useQuery(['sms-devices-status'], api.getSmsDevices, { staleTime: 30_000, retry: false });
+  const devices = data?.data || [];
+  const offline = devices.filter((device) => device.status === 'offline');
+  const active = devices.filter((device) => device.isActive);
+
+  return (
+    <Section
+      id="collector"
+      title="Collector phones"
+      description="The phones that read payment confirmation SMS and forward them here. Without one, every payment has to be checked by hand."
+    >
+      {offline.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <FiAlertTriangle className="mt-0.5 shrink-0" size={14} />
+          <span>
+            <strong>
+              {offline.length} phone{offline.length > 1 ? 's are' : ' is'} offline.
+            </strong>{' '}
+            Payment SMS are not being collected right now.
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 p-4">
+        <p className="flex items-center gap-2 text-sm text-slate-600">
+          <FiSmartphone size={15} className="text-slate-400" />
+          {devices.length === 0 ? (
+            'No phone paired yet'
+          ) : (
+            <span>
+              <strong className="font-semibold text-slate-800">{active.length}</strong> paired
+              {offline.length > 0 && <span className="text-rose-600"> · {offline.length} offline</span>}
+            </span>
+          )}
+        </p>
+        <Link href="/payments/devices" className="btn-ghost">
+          Manage phones <FiArrowRight size={14} />
+        </Link>
+      </div>
+    </Section>
   );
 }
 
@@ -386,121 +436,93 @@ function PaymentTypesSection() {
 function WebhookSection() {
   const [showSecret, setShowSecret] = useState(false);
   const [secret, setSecret] = useState(null);
-  const copiedRef = useRef(false);
+  const seeded = useRef(false);
 
   const { isLoading } = useQuery(['webhook-config'], api.getWebhookConfig, {
     staleTime: 60_000,
-    onSuccess: (d) => {
-      if (secret === null) setSecret(d?.data?.secret || '');
+    onSuccess: (response) => {
+      if (!seeded.current) {
+        seeded.current = true;
+        setSecret(response?.data?.secret || '');
+      }
     }
   });
 
-  const { mutate: regen, isLoading: regenning } = useMutation(api.regenerateWebhookSecret, {
-    onSuccess: (d) => setSecret(d?.data?.secret || ''),
+  const { mutate: regenerate, isLoading: regenerating } = useMutation(api.regenerateWebhookSecret, {
+    onSuccess: (response) => setSecret(response?.data?.secret || ''),
     onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
   });
 
-  const handleRegen = () =>
+  const handleRegenerate = () =>
     Swal.fire({
-      title: 'Regenerate secret?',
-      text: 'The old secret will stop working immediately.',
+      title: 'Regenerate the secret?',
+      text: 'Anything posting payments with the old secret stops working immediately.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Regenerate',
       confirmButtonColor: '#ef4444'
-    }).then((r) => {
-      if (r.isConfirmed) regen();
-    });
-
-  const copy = (text) => {
-    navigator.clipboard.writeText(text);
-    Swal.fire({ title: 'Copied!', icon: 'success', timer: 900, showConfirmButton: false });
-  };
-
-  const inpBase =
-    'border border-gray-200 rounded-md px-3 py-2 text-sm font-mono flex-1 bg-gray-50 text-gray-600 focus:outline-none';
+    }).then((result) => result.isConfirmed && regenerate());
 
   return (
-    <section className="bg-white border border-gray-100 rounded-md p-6 shadow-sm space-y-5">
-      <div>
-        <h2 className="font-semibold text-base text-gray-800">Webhook (n8n)</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Point your n8n SMS-parse workflow to this URL. Include the secret as the{' '}
-          <code className="bg-gray-100 px-1 rounded-md">X-Webhook-Secret</code> header.
-        </p>
-      </div>
-
+    <Section
+      id="webhook"
+      title="Payments from an outside system"
+      description="An address another system can post a payment to. Collector phones are the everyday path — this stays for anything outside Sidrat that needs to record one."
+    >
       <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Webhook URL</label>
-          <div className="flex gap-2">
-            <input readOnly value={WEBHOOK_URL} className={inpBase} />
-            <button
-              onClick={() => copy(WEBHOOK_URL)}
-              className="p-2 border border-gray-200 rounded-md hover:bg-gray-50 transition text-gray-500"
-            >
-              <FiCopy size={14} />
-            </button>
-          </div>
-        </div>
+        <CopyField label="Address to post to" value={WEBHOOK_URL} />
+        <CopyField label="Secret" value={isLoading ? 'Loading…' : secret || ''} type={showSecret ? 'text' : 'password'}>
+          <button
+            type="button"
+            onClick={() => setShowSecret((value) => !value)}
+            className="btn-icon"
+            aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+          >
+            {showSecret ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="btn-icon text-rose-500 hover:border-rose-200 hover:bg-rose-50"
+            title="Regenerate secret"
+            aria-label="Regenerate secret"
+          >
+            <FiRefreshCw size={14} className={regenerating ? 'animate-spin' : ''} />
+          </button>
+        </CopyField>
 
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Secret Key</label>
-          <div className="flex gap-2">
-            <input
-              readOnly
-              type={showSecret ? 'text' : 'password'}
-              value={isLoading ? 'Loading…' : secret || ''}
-              className={inpBase}
-            />
-            <button
-              onClick={() => setShowSecret((v) => !v)}
-              className="p-2 border border-gray-200 rounded-md hover:bg-gray-50 transition text-gray-500"
-            >
-              {showSecret ? <FiEyeOff size={14} /> : <FiEye size={14} />}
-            </button>
-            <button
-              onClick={() => secret && copy(secret)}
-              className="p-2 border border-gray-200 rounded-md hover:bg-gray-50 transition text-gray-500"
-            >
-              <FiCopy size={14} />
-            </button>
-            <button
-              onClick={handleRegen}
-              disabled={regenning}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition disabled:opacity-50"
-            >
-              <FiRefreshCw size={13} />
-              Regenerate
-            </button>
+        <details className="rounded-md border border-slate-200">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600">
+            What to send
+          </summary>
+          <div className="space-y-2 border-t border-slate-100 p-3 text-xs text-slate-500">
+            <p>
+              Send the secret as the header{' '}
+              <code className="rounded bg-slate-100 px-1 font-mono">X-Webhook-Secret</code>, with a JSON body:
+            </p>
+            <pre className="overflow-x-auto rounded-md bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
+              {JSON.stringify(
+                {
+                  trxId: 'TXN123',
+                  amount: 500,
+                  type: 'bkash',
+                  account: '01700000000',
+                  senderAccount: '01800000000',
+                  note: 'Original SMS'
+                },
+                null,
+                2
+              )}
+            </pre>
+            <p>
+              A repeated <code className="rounded bg-slate-100 px-1 font-mono">trxId</code> answers{' '}
+              <code className="rounded bg-slate-100 px-1 font-mono">409</code> and records nothing, so retrying is safe.
+            </p>
           </div>
-        </div>
-
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-xs text-gray-500 space-y-2">
-          <p className="font-semibold text-gray-700">Expected payload from n8n:</p>
-          <pre className="font-mono text-xs overflow-x-auto">
-            {JSON.stringify(
-              {
-                trxId: 'TXN123',
-                amount: 500,
-                type: 'bkash',
-                account: '01700000000',
-                senderAccount: '01800000000',
-                note: 'Original SMS'
-              },
-              null,
-              2
-            )}
-          </pre>
-          <p className="mt-1">
-            Header: <code className="bg-gray-100 px-1 rounded-md">X-Webhook-Secret: {'<secret>'}</code>
-          </p>
-          <p>
-            Duplicate <code>trxId</code> returns <code>409</code> — safe to retry.
-          </p>
-        </div>
+        </details>
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -508,9 +530,13 @@ function WebhookSection() {
 
 export default function PaymentSettings() {
   return (
-    <div className="space-y-6">
-      <PaymentTypesSection />
-      <WebhookSection />
+    <div className="space-y-4">
+      <PageHeader title="Payment settings" subtitle="How money comes in, and what customers are told to do" />
+      <div className="space-y-4">
+        <PaymentMethodsSection />
+        <CollectorSection />
+        <WebhookSection />
+      </div>
     </div>
   );
 }
