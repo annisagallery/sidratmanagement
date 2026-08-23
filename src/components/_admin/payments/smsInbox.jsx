@@ -83,11 +83,11 @@ function CreatePaymentModal({ sms, types, onClose, onDone }) {
   // Pre-fill from whatever the parser did manage to read, so the common case
   // is confirming a reading rather than retyping it.
   const [form, setForm] = useState({
-    trxId: sms.parsedTrxId || '',
-    amount: sms.parsedAmount || '',
+    trxId: sms.parsed?.trxId || '',
+    amount: sms.parsed?.amount || '',
     type: sms.provider || types[0]?.slug || '',
-    account: sms.parsedAccount || '',
-    senderAccount: sms.parsedSenderAccount || '',
+    account: sms.parsed?.account || '',
+    senderAccount: sms.parsed?.senderAccount || '',
     note: ''
   });
 
@@ -179,7 +179,7 @@ function CreatePaymentModal({ sms, types, onClose, onDone }) {
 
 function MessageRow({ message, selected, onSelect }) {
   const reading = readingOf(message);
-  const amount = fmtAmount(message.parsedAmount);
+  const amount = fmtAmount(message.parsed?.amount);
 
   return (
     <button
@@ -207,8 +207,8 @@ function MessageRow({ message, selected, onSelect }) {
         ) : (
           <span className="text-xs text-slate-300">no amount</span>
         )}
-        {message.parsedTrxId && (
-          <span className="truncate font-mono text-[11px] text-slate-400">{message.parsedTrxId}</span>
+        {message.parsed?.trxId && (
+          <span className="truncate font-mono text-[11px] text-slate-400">{message.parsed?.trxId}</span>
         )}
         {message.paymentId && <FiCheckCircle className="ml-auto shrink-0 text-emerald-500" size={13} />}
       </div>
@@ -251,7 +251,7 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
   }
 
   const unread = message.parseStatus === 'unrecognised';
-  const amount = fmtAmount(message.parsedAmount);
+  const amount = fmtAmount(message.parsed?.amount);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -334,12 +334,12 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
           </h3>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-md border border-slate-200 p-4 sm:grid-cols-3">
             <ParsedField label="Amount" value={amount} wanted={unread} />
-            <ParsedField label="Transaction ID" value={message.parsedTrxId} mono wanted={unread} />
-            <ParsedField label="Paid from" value={message.parsedSenderAccount} />
-            <ParsedField label="Paid to" value={message.parsedAccount} />
-            <ParsedField label="Fee" value={fmtAmount(message.parsedFee)} />
-            <ParsedField label="Balance after" value={fmtAmount(message.parsedBalance)} />
-            <ParsedField label="Reference" value={message.parsedReference} />
+            <ParsedField label="Transaction ID" value={message.parsed?.trxId} mono wanted={unread} />
+            <ParsedField label="Paid from" value={message.parsed?.senderAccount} />
+            <ParsedField label="Paid to" value={message.parsed?.account} />
+            <ParsedField label="Fee" value={fmtAmount(message.parsed?.fee)} />
+            <ParsedField label="Balance after" value={fmtAmount(message.parsed?.balance)} />
+            <ParsedField label="Reference" value={message.parsed?.reference} />
             <ParsedField label="Direction" value={message.direction} />
             <ParsedField label="Matched rule" value={message.ruleId} mono />
           </dl>
