@@ -1041,6 +1041,16 @@ export const revokeSmsDevice = async (id) => {
   const { data } = await http.post(`/admin/sms-devices/${id}/revoke`);
   return data;
 };
+// Rotates the token and reactivates the row: the returned token is shown once,
+// exactly like first pairing, and the phone's old credential dies immediately.
+export const repairSmsDevice = async (id) => {
+  const { data } = await http.post(`/admin/sms-devices/${id}/repair`);
+  return data;
+};
+export const deleteSmsDevice = async (id) => {
+  const { data } = await http.delete(`/admin/sms-devices/${id}`);
+  return data;
+};
 
 // ── Payment Types ─────────────────────────────────────────────────────────────
 export const getPaymentTypesByAdmin = async () => {

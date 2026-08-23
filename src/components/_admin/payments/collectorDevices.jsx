@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import QRCode from 'qrcode';
 import * as api from 'src/services';
-import { FiSmartphone, FiCopy, FiAlertTriangle } from 'react-icons/fi';
+import { FiSmartphone, FiCopy, FiAlertTriangle, FiTrash2 } from 'react-icons/fi';
 import { MdInbox } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
@@ -16,6 +16,10 @@ import { fDateTime } from 'src/utils/formatTime';
 const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
 
 const dtStr = (d) => (d ? fDateTime(d) : '—');
+
+// The API returns `id`; older responses carried Mongo's `_id`. Read both, so a
+// row can never be addressed as `undefined` in the URL.
+const deviceKey = (device) => device?.id || device?._id;
 
 // Relative time reads faster than a timestamp when the question is "is it
 // alive right now" rather than "when exactly did this happen".
@@ -54,6 +58,7 @@ export function StatusDot({ status, withLabel = true }) {
 // authenticate later. The manual fields stay for phones without a camera.
 function PairedModal({ device, onClose }) {
   const [qr, setQr] = useState(null);
+  const heading = device.repaired ? 'Device re-paired' : 'Device paired';
   const copy = (value) => navigator.clipboard?.writeText(value);
 
   // Short keys keep the QR low-density, so it scans on a cheap handset camera.
@@ -83,7 +88,7 @@ function PairedModal({ device, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
       <div className="my-8 w-full max-w-md space-y-4 rounded-md bg-white p-6 shadow-xl">
-        <h3 className="font-semibold text-slate-800">Device paired</h3>
+        <h3 className="font-semibold text-slate-800">{heading}</h3>
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <FiAlertTriangle className="mr-1 inline" size={12} />
           Pair the phone now. The token is shown once and cannot be retrieved later — if you
@@ -208,9 +213,27 @@ export default function CollectorDevices() {
 
   const rows = data?.data || [];
 
+  const onMutationError = (e) =>
+    Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error');
+
   const { mutate: revoke } = useMutation(api.revokeSmsDevice, {
     onSuccess: () => qc.invalidateQueries(['sms-devices']),
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onError: onMutationError
+  });
+
+  // Re-pairing hands back a fresh token, so it ends in the same QR screen as a
+  // first pairing — the phone has to be shown the new credential either way.
+  const { mutate: repair, isLoading: repairing } = useMutation(api.repairSmsDevice, {
+    onSuccess: (res) => {
+      qc.invalidateQueries(['sms-devices']);
+      setPaired({ ...res.data, repaired: true });
+    },
+    onError: onMutationError
+  });
+
+  const { mutate: remove } = useMutation(api.deleteSmsDevice, {
+    onSuccess: () => qc.invalidateQueries(['sms-devices']),
+    onError: onMutationError
   });
 
   const confirmRevoke = (device) => {
@@ -220,7 +243,30 @@ export default function CollectorDevices() {
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Revoke'
-    }).then((r) => r.isConfirmed && revoke(device._id));
+    }).then((r) => r.isConfirmed && revoke(deviceKey(device)));
+  };
+
+  const confirmRepair = (device) => {
+    Swal.fire({
+      title: `Re-pair "${device.name}"?`,
+      text: device.isActive
+        ? 'A new token is issued and the phone must scan it again. The credential it holds now stops working immediately.'
+        : 'The device is put back in service with a new token. The phone must scan it again.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Re-pair'
+    }).then((r) => r.isConfirmed && repair(deviceKey(device)));
+  };
+
+  const confirmDelete = (device) => {
+    Swal.fire({
+      title: `Delete "${device.name}"?`,
+      text: 'The device is removed from this list for good. Messages it already collected are kept — they are payment evidence.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      confirmButtonColor: '#e11d48'
+    }).then((r) => r.isConfirmed && remove(deviceKey(device)));
   };
 
   const columns = [
@@ -296,15 +342,34 @@ export default function CollectorDevices() {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (d) =>
-        d.isActive && (
+      render: (d) => (
+        <div className="flex justify-end gap-1.5">
+          {/* Revoking a device that is already revoked does nothing, so that
+              state offers re-pairing and deletion instead. */}
+          {d.isActive && (
+            <button
+              onClick={() => confirmRevoke(d)}
+              className="whitespace-nowrap rounded-md border border-rose-200 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
+            >
+              Revoke
+            </button>
+          )}
           <button
-            onClick={() => confirmRevoke(d)}
-            className="whitespace-nowrap rounded-md border border-rose-200 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
+            onClick={() => confirmRepair(d)}
+            disabled={repairing}
+            className="whitespace-nowrap rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
-            Revoke
+            {d.isActive ? 'Re-pair' : 'Reconnect'}
           </button>
-        )
+          <button
+            onClick={() => confirmDelete(d)}
+            aria-label={`Delete ${d.name}`}
+            className="whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+          >
+            <FiTrash2 size={13} />
+          </button>
+        </div>
+      )
     }
   ];
 
