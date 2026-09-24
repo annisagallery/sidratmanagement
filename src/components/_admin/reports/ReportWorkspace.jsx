@@ -26,7 +26,6 @@ const PAGE_SIZE = 25;
 // Column `link` type → detail page. The server puts the raw identifier in row._refs[col.key].
 const LINKS = {
   order: (ref) => `/orders/${ref}`,
-  posOrder: (ref) => `/pos-sales/${ref}`,
   product: (ref) => `/products/${ref}/view`,
   customer: (ref) => `/users/${ref}`,
   coupon: (ref) => `/coupon-codes/${ref}`,

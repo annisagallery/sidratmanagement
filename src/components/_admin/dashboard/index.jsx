@@ -15,19 +15,15 @@ import {
   MdPendingActions,
   MdUndo,
   MdOpenInNew,
-  MdTrendingUp,
-  MdEmail,
-  MdPhone
+  MdTrendingUp
 } from 'react-icons/md';
 import { HiChevronRight } from 'react-icons/hi';
-import { fDate } from 'src/utils/formatTime';
 
 const BDT = '৳';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const fmt = (n) => (n ?? 0).toLocaleString('en-US');
 const fmtBdt = (n) => BDT + fmt(n);
-const fmtToday = () => fDate(new Date());
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, icon: Icon, bg, color, href, isLoading }) {
@@ -421,33 +417,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{fmtToday()}</p>
-        </div>
-        <div className="flex items-center gap-4 text-right">
-          <div className="hidden sm:block">
-            {settings.email && (
-              <p className="text-xs text-gray-400 flex items-center justify-end gap-1">
-                <MdEmail size={12} /> {settings.email}
-              </p>
-            )}
-            {settings.phone && (
-              <p className="text-xs text-gray-400 flex items-center justify-end gap-1 mt-0.5">
-                <MdPhone size={12} /> {settings.phone}
-              </p>
-            )}
-          </div>
-          <div
-            className="w-10 h-10 rounded-md flex items-center justify-center text-white font-bold shrink-0"
-            style={{ backgroundColor: primary }}
-          >
-            <MdTrendingUp size={20} />
-          </div>
-        </div>
-      </div>
 
       {/* Top stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

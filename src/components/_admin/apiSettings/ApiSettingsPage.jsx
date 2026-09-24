@@ -183,17 +183,8 @@ const SERVICES = [
 
 export default function ApiSettingsPage({ scope = 'all' }) {
   const services = scope === 'message' ? SERVICES.filter((service) => service.service === 'sms') : SERVICES;
-  const title = scope === 'message' ? 'Message API' : 'API Settings';
-  const subtitle =
-    scope === 'message'
-      ? 'Configure the SMS provider used for customer messages.'
-      : 'Manage third-party service credentials. Changes apply within 5 minutes. Courier credentials live under Shipping → Couriers.';
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
-      </div>
       <div className="space-y-5">
         {services.map((s) => (
           <ServiceCard key={s.service} {...s} />

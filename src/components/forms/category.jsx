@@ -20,6 +20,7 @@ import {
   MdDescription,
   MdImage,
   MdLink,
+  MdLock,
   MdPauseCircleOutline,
   MdSearch,
   MdStorefront,
@@ -200,7 +201,7 @@ CategoryImageUploader.propTypes = {
   onTouched: PropTypes.func.isRequired
 };
 
-function StatusPicker({ value, onChange }) {
+function StatusPicker({ value, onChange, disabled = false }) {
   return (
     <fieldset>
       <legend className="mb-2 text-xs font-semibold text-slate-700">Category status</legend>
@@ -212,9 +213,10 @@ function StatusPicker({ value, onChange }) {
             <button
               key={option.value}
               type="button"
+              disabled={disabled}
               aria-pressed={selected}
               onClick={() => onChange(option.value)}
-              className={`flex min-h-[72px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+              className={`flex min-h-[72px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-60 ${
                 selected
                   ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
@@ -236,7 +238,8 @@ function StatusPicker({ value, onChange }) {
 
 StatusPicker.propTypes = {
   value: PropTypes.string.isRequired,
-  onChange: PropTypes.func.isRequired
+  onChange: PropTypes.func.isRequired,
+  disabled: PropTypes.bool
 };
 
 function CatalogPreview({ values }) {
@@ -363,6 +366,7 @@ function CategoryFormSkeleton() {
 export default function CategoryForm({ data: currentCategory, isLoading: categoryLoading = false }) {
   const router = useRouter();
   const isEdit = Boolean(currentCategory);
+  const isSystem = Boolean(currentCategory?.isSystem);
   const { mutate, isLoading: isSaving } = useMutation(
     isEdit ? 'update' : 'new',
     isEdit ? api.updateCategoryByAdmin : api.addCategoryByAdmin,
@@ -447,6 +451,11 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
         subtitle={isEdit ? `Update how ${currentCategory.name} appears across the catalogue.` : 'Create a clear storefront destination for a product collection.'}
         icon={MdCategory}
       >
+        {isSystem && (
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-600">
+            <MdLock size={16} /> Permanent POS category
+          </span>
+        )}
         <button type="button" onClick={() => router.push('/categories')} className="btn-ghost min-h-11">
           <MdArrowBack size={18} /> Back to categories
         </button>
@@ -475,10 +484,11 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                     </label>
                     <input
                       id="category-name"
+                      disabled={isSystem}
                       placeholder="e.g. Summer collection"
                       aria-invalid={Boolean(touched.name && errors.name)}
                       aria-describedby={touched.name && errors.name ? 'category-name-error' : 'category-name-help'}
-                      className={`${fieldClass} ${touched.name && errors.name ? errorFieldClass : ''}`}
+                      className={`${fieldClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${touched.name && errors.name ? errorFieldClass : ''}`}
                       {...getFieldProps('name')}
                       onChange={handleTitleChange}
                     />
@@ -500,10 +510,11 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                       />
                       <input
                         id="category-slug"
+                        disabled={isSystem}
                         placeholder="summer-collection"
                         aria-invalid={Boolean(touched.slug && errors.slug)}
                         aria-describedby={touched.slug && errors.slug ? 'category-slug-error' : 'category-slug-help'}
-                        className={`${fieldClass} pl-10 font-mono ${touched.slug && errors.slug ? errorFieldClass : ''}`}
+                        className={`${fieldClass} pl-10 font-mono disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${touched.slug && errors.slug ? errorFieldClass : ''}`}
                         {...getFieldProps('slug')}
                       />
                     </div>
@@ -564,16 +575,17 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                   </div>
 
                   <div className="space-y-5">
-                    <StatusPicker value={values.status} onChange={(status) => setFieldValue('status', status)} />
+                    <StatusPicker value={values.status} onChange={(status) => setFieldValue('status', status)} disabled={isSystem} />
 
                     <div>
                       <p className="mb-2 text-xs font-semibold text-slate-700">Ecommerce visibility</p>
                       <button
                         type="button"
+                        disabled={isSystem}
                         role="switch"
                         aria-checked={values.isVisibleInEcom}
                         onClick={() => setFieldValue('isVisibleInEcom', !values.isVisibleInEcom)}
-                        className={`flex min-h-[76px] w-full items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                        className={`flex min-h-[76px] w-full items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-60 ${
                           values.isVisibleInEcom
                             ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
                             : 'border-slate-300 bg-slate-50 text-slate-700'

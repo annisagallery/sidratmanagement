@@ -10,13 +10,17 @@
  */
 
 import { format } from 'date-fns';
-import { FiCreditCard, FiDollarSign, FiPlus, FiX } from 'react-icons/fi';
+import { FiCheck, FiCreditCard, FiDollarSign, FiPlus, FiSlash, FiX } from 'react-icons/fi';
 
 import { CopyButton, Pill, Section, SectionBody, money, oid } from './parts';
 
-const STATUS_TONE = { verified: 'good', failed: 'bad', refunded: 'warn' };
+const STATUS_TONE = { verified: 'good', failed: 'bad', rejected: 'bad', refunded: 'warn' };
 
-export default function PaymentsCard({ payments = [], total = 0, paid = 0, due = 0, onAdd, onRemove }) {
+/**
+ * Only verified payments count toward what is paid. A payment recorded by hand
+ * starts pending, so it carries its own Verify / Reject decision here.
+ */
+export default function PaymentsCard({ payments = [], total = 0, paid = 0, due = 0, onAdd, onRemove, onVerify }) {
   return (
     <Section
       title="Payments"
@@ -71,6 +75,26 @@ export default function PaymentsCard({ payments = [], total = 0, paid = 0, due =
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {payment.method === 'cod' && (payment.status || 'pending') === 'pending' ? (
+                    <span className="text-[11px] font-semibold text-sky-700">Awaiting courier payout</span>
+                  ) : onVerify && (payment.status || 'pending') === 'pending' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onVerify(oid(payment), 'verified')}
+                        className="btn-ghost h-7 !border-emerald-200 !px-2 !text-[11px] !text-emerald-700 hover:!bg-emerald-50"
+                      >
+                        <FiCheck size={12} /> Verify
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onVerify(oid(payment), 'rejected')}
+                        className="btn-ghost h-7 !border-rose-200 !px-2 !text-[11px] !text-rose-600 hover:!bg-rose-50"
+                      >
+                        <FiSlash size={12} /> Reject
+                      </button>
+                    </>
+                  ) : null}
                   <Pill tone={STATUS_TONE[payment.status] || 'warn'}>{payment.status || 'pending'}</Pill>
                   <button
                     type="button"

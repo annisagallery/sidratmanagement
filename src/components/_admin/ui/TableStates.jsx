@@ -1,5 +1,6 @@
 'use client';
 
+import { SHOW_PAGE_GUIDANCE } from './primitives';
 import { MdInbox } from 'react-icons/md';
 
 export function TableSkeleton({ rows = 8, cols = 5 }) {
@@ -25,7 +26,7 @@ export function EmptyState({ title = 'Nothing here yet', hint, icon: Icon = MdIn
     <div className="px-6 py-16 text-center text-slate-400">
       <Icon size={44} className="mx-auto mb-3 opacity-30" />
       <p className="font-medium text-slate-500">{title}</p>
-      {hint && <p className="mt-1 text-sm">{hint}</p>}
+      {hint && SHOW_PAGE_GUIDANCE && <p className="mt-1 text-sm">{hint}</p>}
     </div>
   );
 }

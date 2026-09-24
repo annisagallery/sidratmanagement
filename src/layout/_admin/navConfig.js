@@ -9,7 +9,6 @@ import {
   MdOutlineSecurity,
   MdSwapHoriz,
   MdPeople,
-  MdPointOfSale,
   MdOutlineAccountBalanceWallet,
   MdOutlineReceipt, MdOutlineQrCode2 } from 'react-icons/md';
 import { HiOutlineSpeakerphone } from 'react-icons/hi';
@@ -73,13 +72,6 @@ export const navParents = [
         ]
       }
     ]
-  },
-  {
-    key: 'pos-sales',
-    title: 'Branch Sales',
-    icon: MdPointOfSale,
-    href: '/pos-sales',
-    tabs: []
   },
   {
     key: 'products',
@@ -158,6 +150,7 @@ export const navParents = [
     tabs: [
       { label: 'Charges', href: '/shippingcharge', icon: MdOutlineLocalShipping },
       { label: 'Shipments', href: '/shipping/shipments', icon: FiShare2 },
+      { label: 'COD payouts', href: '/shipping/cod-remittance', icon: BsCash },
       { label: 'Couriers', href: '/shipping/couriers', icon: MdOutlineLocalShipping },
       { label: 'Branches', href: '/branches', icon: FiMapPin },
       { label: 'Calendar', href: '/branch-calendar', icon: FiCalendar, subject: 'BranchOffDay' }
@@ -186,14 +179,13 @@ export const navParents = [
 ];
 
 /**
- * Production is one desk reached from two sidebar entries — the planner's and
- * the factory floor's — so both carry the same tab bar.
+ * Production planning stays inside management. The scan station is excluded:
+ * like POS, it opens as a separate full-screen workstation from the top bar.
  */
 const productionTabs = [
   { label: 'Batches', href: '/production' },
   { label: 'Queue', href: '/production/queue' },
-  { label: 'New batch', href: '/production/create' },
-  { label: 'Scan desk', href: '/production/scan' }
+  { label: 'New batch', href: '/production/create' }
 ];
 
 /**
@@ -213,9 +205,6 @@ export const navGroups = [
     items: [
       {
         key: 'orders', label: 'Orders', href: '/orders', icon: BsCartCheck, subject: 'Order'
-      },
-      {
-        key: 'pos-sales', label: 'Branch Sales', href: '/pos-sales', icon: MdPointOfSale, subject: 'Order'
       },
       {
         key: 'order-items', label: 'Order Items', href: '/orders/items', icon: FiPackage, subject: 'OrderItem'
@@ -331,6 +320,7 @@ export const navGroups = [
     items: [
       { key: 'charges', label: 'Charges', href: '/shippingcharge', icon: MdOutlineLocalShipping, subject: 'Shipping' },
       { key: 'shipments', label: 'Shipments', href: '/shipping/shipments', icon: FiShare2, subject: 'Shipping', children: [{ label: 'All Shipments', href: '/shipping/shipments' }] },
+      { key: 'cod-remittance', label: 'COD Payouts', href: '/shipping/cod-remittance', icon: BsCash, subject: 'Order' },
       { key: 'couriers', label: 'Couriers', href: '/shipping/couriers', icon: MdOutlineLocalShipping, subject: 'Shipping', children: [{ label: 'Courier Accounts', href: '/shipping/couriers' }] }
     ]
   },

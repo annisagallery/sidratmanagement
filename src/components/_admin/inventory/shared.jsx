@@ -65,6 +65,29 @@ export function BatchStatusPill({ status }) {
   return <Pill tone={meta.tone}>{meta.label}</Pill>;
 }
 
+/** One physical piece, from barcode issued to sold. */
+export const UNIT_STATUS = {
+  IN_PRODUCTION: { label: 'Being made', tone: 'warn' },
+  AVAILABLE: { label: 'In stock', tone: 'good' },
+  RESERVED: { label: 'For a customer', tone: 'info' },
+  SOLD: { label: 'Sold', tone: 'neutral' },
+  RETURNED: { label: 'Returned', tone: 'bad' },
+  VOID: { label: 'Void', tone: 'bad' }
+};
+
+export function UnitStatusPill({ status }) {
+  const meta = UNIT_STATUS[status] || { label: status, tone: 'neutral' };
+  return <Pill tone={meta.tone}>{meta.label}</Pill>;
+}
+
+/** Material state of an order-backed piece. */
+export const MATERIAL_STATUS = {
+  COVERED: { label: 'Materials ready', tone: 'good' },
+  PARTIALLY_COVERED: { label: 'Materials short', tone: 'warn' },
+  WAITING_FOR_MATERIAL: { label: 'Waiting for material', tone: 'bad' },
+  CONSUMED: { label: 'Materials used', tone: 'neutral' }
+};
+
 /**
  * SKUs carried over from the old MySQL POS are not SKUs.
  *

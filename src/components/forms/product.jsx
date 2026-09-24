@@ -926,7 +926,6 @@ export default function ProductForm({ currentProduct }) {
       attributes: Object.values(attrSelections)
         .filter((e) => e.values.length > 0)
         .map((e) => ({ attribute: e.attr.id, attributeName: e.attr.name, values: e.values.map((v) => v.id) })),
-      customizableFields: [],
       variations: variations
         .filter((v) => v.enabled !== false)
         .map((v) => ({

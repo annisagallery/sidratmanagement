@@ -107,7 +107,9 @@ export default function BatchList() {
     }
   };
 
-  const counts = batches.reduce((acc, batch) => ({ ...acc, [batch.status]: (acc[batch.status] || 0) + 1 }), {});
+  // Counts for every status from the server — counting the rows on this page
+  // made every tile but the filtered one read 0.
+  const counts = batchesQuery.data?.statusCounts || {};
   const filterBy = (value) => {
     setStatus((current) => (current === value ? '' : value));
     setPage(1);

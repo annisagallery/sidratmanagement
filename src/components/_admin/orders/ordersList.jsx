@@ -115,8 +115,7 @@ export default function OrderList() {
     setPage(1);
   };
 
-  // This page is the fulfillment queue only — POS counter sales live under
-  // the dedicated POS Sales page (/pos-sales).
+  // This page is the fulfillment queue only; counter sales stay outside this channel.
   const params = new URLSearchParams({
     page,
     limit,

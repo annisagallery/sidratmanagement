@@ -17,6 +17,14 @@ import { useState } from 'react';
 import Swal from 'sweetalert2';
 import { FiCheck, FiCopy, FiX } from 'react-icons/fi';
 
+/**
+ * Page titles, subtitles and help text are switched off for now: the navigation
+ * already says where you are, and the screens read cleaner without a paragraph
+ * of instructions above every form. Set this to true to bring every one of them
+ * back — PageBar, PageHeader, field hints and empty-state hints all read it.
+ */
+export const SHOW_PAGE_GUIDANCE = false;
+
 /* ── data helpers ────────────────────────────────────────────────────────── */
 
 /**
@@ -56,6 +64,10 @@ export function errorAlert(title, error, fallback) {
  * `back` renders a return arrow, so a sub-page never strands anyone.
  */
 export function PageBar({ title, subtitle, eyebrow, back, children }) {
+  // Without guidance only the page's actions remain, right-aligned.
+  if (!SHOW_PAGE_GUIDANCE) {
+    return children ? <div className="flex flex-wrap items-center justify-end gap-2">{children}</div> : null;
+  }
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3">
@@ -238,7 +250,7 @@ export function EmptyRow({ colSpan = 1, title, hint, icon: Icon }) {
       <td colSpan={colSpan} className="px-4 py-12 text-center">
         {Icon ? <Icon className="mx-auto mb-2 text-2xl text-slate-300" /> : null}
         <p className="text-sm font-semibold text-slate-600">{title}</p>
-        {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+        {hint && SHOW_PAGE_GUIDANCE ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
       </td>
     </tr>
   );
@@ -254,7 +266,7 @@ export function Field({ label, children, hint, className = '' }) {
     <label className={`block ${className}`}>
       <span className="mb-1 block text-xs font-semibold text-slate-600">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-[11px] text-slate-400">{hint}</span> : null}
+      {hint && SHOW_PAGE_GUIDANCE ? <span className="mt-1 block text-[11px] text-slate-400">{hint}</span> : null}
     </label>
   );
 }

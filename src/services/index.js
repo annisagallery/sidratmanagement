@@ -93,23 +93,6 @@ export const getUsersByAdmin = async (params) => {
   const { data: response } = await http.get(`/admin/users?${params}`);
   return response;
 };
-export const getAdminsByAdmin = async (params) => {
-  const { data: response } = await http.get(`/admin/admins?${params}`);
-  return response;
-};
-export const getUserByAdmin = async (id) => {
-  const { data: response } = await http.get(`/admin/users/${id}`);
-  return response;
-};
-export const updateUserRoleByAdmin = async (id) => {
-  const { data: response } = await http.post(`/admin/users/role/${id}`);
-  return response;
-};
-// Explicit role assignment (user | admin | salesman); branch required for salesman
-export const assignUserRoleByAdmin = async ({ id, role, branch }) => {
-  const { data: response } = await http.post(`/admin/users/role/${id}`, { role, branch });
-  return response;
-};
 export const updateUserStatusByAdmin = async (id) => {
   const { data: response } = await http.post(`/admin/users/status/${id}`);
   return response;
@@ -1057,6 +1040,14 @@ export const getPaymentTypesByAdmin = async () => {
   const { data } = await http.get(`/admin/payment-types`);
   return data;
 };
+export const getCheckoutPaymentSettings = async () => {
+  const { data } = await http.get('/admin/payment-types-settings');
+  return data;
+};
+export const updateCheckoutPaymentSettings = async (payload) => {
+  const { data } = await http.put('/admin/payment-types-settings', payload);
+  return data;
+};
 export const createPaymentTypeByAdmin = async (payload) => {
   const { data } = await http.post(`/admin/payment-types`, payload);
   return data;
@@ -1247,6 +1238,17 @@ export const getProductStockList = async (params = {}) =>
 export const getProductStockDetail = async (id) =>
   (await http.get(`/admin/inventory/products/${id}`)).data;
 export const packOrderByAdmin = async (orderNo) => (await http.post(`/admin/orders/${orderNo}/pack`)).data;
+/** Return some items of a shipped (partial delivery) or delivered order, goods in hand. */
+export const returnOrderItems = async ({ orderNo, items, reason }) =>
+  (await http.post(`/admin/orders/${orderNo}/return-items`, { items, reason })).data;
+/** Cash couriers collected on delivery and still owe. */
+export const getCodOutstanding = async (params = {}) =>
+  (await http.get('/admin/cod-remittances/outstanding', { params })).data;
+/** Match a courier payout to the consignments it covers. */
+export const createCodRemittance = async (payload) => (await http.post('/admin/cod-remittances', payload)).data;
+/** Receive a returned parcel: each item is restocked into HQ or written off. */
+export const receiveOrderReturn = async ({ orderNo, items }) =>
+  (await http.post(`/admin/orders/${orderNo}/return-receipt`, { items })).data;
 export const scanOrderItemForPacking = async ({ orderNo, barcode, itemId, manual = false }) =>
   (await http.post(`/admin/orders/${orderNo}/pack/scan`, { barcode, itemId, manual })).data;
 
@@ -1268,8 +1270,9 @@ export const getProductionReplenishment = async () =>
   (await http.get('/admin/production/replenishment')).data;
 export const submitProductionSubmission = async (payload) =>
   (await http.post('/admin/production/submissions', payload)).data;
-export const submitProductionUnit = async ({ barcode, ...payload }) =>
-  (await http.post(`/admin/production/units/${barcode}/submit`, payload)).data;
+/** Stop a run early: unmade pieces are voided and their customers requeued. */
+export const closeProductionBatch = async ({ id, note }) =>
+  (await http.post(`/admin/production/batches/${id}/close`, { note })).data;
 export const searchProductionProducers = async (q) =>
   (await http.get('/admin/production/producers', { params: { q } })).data;
 
@@ -1280,15 +1283,3 @@ export const getMyAbility = async () => {
 };
 // Role CRUD (create/edit/delete) is managed entirely from the HRM app now —
 // this app only lists roles (for the assign-role dropdown) and assigns them.
-export const getRolesByAdmin = async () => {
-  const { data } = await http.get(`/admin/roles`);
-  return data;
-};
-export const assignRoleByAdmin = async (slug, payload) => {
-  const { data } = await http.post(`/admin/roles/${slug}/assign`, payload);
-  return data;
-};
-export const getAccessLogs = async (params = '') => {
-  const { data } = await http.get(`/admin/access-logs?${params}`);
-  return data;
-};

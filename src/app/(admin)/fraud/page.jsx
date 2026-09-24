@@ -85,9 +85,6 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <h1 className="text-2xl font-semibold tracking-tight text-gray-800 p-4 bg-white border text-center">
-        Fraud Check
-      </h1>
 
       {/* Search Form */}
       <form

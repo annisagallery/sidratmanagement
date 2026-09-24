@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
+import Swal from 'sweetalert2';
 import { differenceInCalendarDays, format, isBefore, startOfDay } from 'date-fns';
 import { FiAlertTriangle, FiCheck, FiClock, FiPlus, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { LuFactory } from 'react-icons/lu';
@@ -48,13 +49,17 @@ function dueMeta(value) {
   return { label: `In ${days}d`, tone: 'neutral', overdue: false };
 }
 
+/** Free ready stock that could fill this row now. */
+const stockFor = (need) => Number(need.availableStock ?? need.availableCustomStock ?? 0);
+
 export default function ProductionQueue() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [only, setOnly] = useState('all');
 
-  const needsQuery = useQuery('production-needs', () => getProductionNeeds({ status: 'production-needed' }));
+  const needsQuery = useQuery('production-needs', () => getProductionNeeds({ status: 'production-needed', limit: 500 }));
   const needs = useMemo(() => needsQuery.data?.data || [], [needsQuery.data]);
+  const totalWaiting = needsQuery.data?.total ?? needs.length;
 
   const assign = useMutation(assignProductionNeedToStock, {
     onSuccess: () => {
@@ -71,10 +76,10 @@ export default function ProductionQueue() {
         (acc, need) => ({
           overdue: acc.overdue + (dueMeta(need.deliveryDate).overdue ? 1 : 0),
           custom: acc.custom + (need.isCustom ? 1 : 0),
-          rescuable: acc.rescuable + (need.isCustom && need.availableCustomStock > 0 ? 1 : 0),
-          undated: acc.undated + (need.deliveryDate ? 0 : 1)
+          rescuable: acc.rescuable + (stockFor(need) > 0 ? 1 : 0),
+          planned: acc.planned + (need.productionBatch ? 1 : 0)
         }),
-        { overdue: 0, custom: 0, rescuable: 0, undated: 0 }
+        { overdue: 0, custom: 0, rescuable: 0, planned: 0 }
       ),
     [needs]
   );
@@ -84,7 +89,8 @@ export default function ProductionQueue() {
     return needs.filter((need) => {
       if (only === 'overdue' && !dueMeta(need.deliveryDate).overdue) return false;
       if (only === 'custom' && !need.isCustom) return false;
-      if (only === 'rescuable' && !(need.isCustom && need.availableCustomStock > 0)) return false;
+      if (only === 'rescuable' && !(stockFor(need) > 0)) return false;
+      if (only === 'unplanned' && need.productionBatch) return false;
       if (!term) return true;
       return (
         needName(need).toLowerCase().includes(term) ||
@@ -95,6 +101,23 @@ export default function ProductionQueue() {
   }, [needs, search, only]);
 
   const toggle = (key) => setOnly((current) => (current === key ? 'all' : key));
+
+  // A custom piece in stock was cut to someone else's measurements. It can
+  // still be the right piece (a cancelled order of the same size), but only a
+  // person comparing the two can say so.
+  const fillFromStock = async (need) => {
+    if (need.isCustom) {
+      const answer = await Swal.fire({
+        title: 'Use a custom piece from stock?',
+        html: `That piece was made to another customer's measurements.<br/>Only use it if it matches:<br/><b>${need.customizeDetails || 'no measurements recorded'}</b>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'It matches — use it'
+      });
+      if (!answer.isConfirmed) return;
+    }
+    assign.mutate(oid(need));
+  };
 
   return (
     <div className="space-y-4">
@@ -112,7 +135,13 @@ export default function ProductionQueue() {
       </PageBar>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Waiting" value={qty(needs.length)} note="Pieces to make" />
+        <StatTile
+          label="Waiting"
+          value={qty(totalWaiting)}
+          note={totals.planned ? `${totals.planned} already in a draft batch` : 'Pieces to make'}
+          onClick={() => toggle('unplanned')}
+          active={only === 'unplanned'}
+        />
         <StatTile
           label="Overdue"
           value={qty(totals.overdue)}
@@ -160,6 +189,7 @@ export default function ProductionQueue() {
               <option value="overdue">Overdue only</option>
               <option value="custom">Custom only</option>
               <option value="rescuable">Fillable from stock</option>
+              <option value="unplanned">Not in a batch yet</option>
             </select>
           </Toolbar>
         }
@@ -180,7 +210,7 @@ export default function ProductionQueue() {
             ) : visible.length ? (
               visible.map((need) => {
                 const due = dueMeta(need.deliveryDate);
-                const rescue = need.isCustom && need.availableCustomStock > 0;
+                const available = stockFor(need);
                 const id = oid(need);
                 return (
                   <tr key={id} className="align-top">
@@ -202,11 +232,14 @@ export default function ProductionQueue() {
                         ) : null}
                         {variationLabel(need.variation)}
                       </p>
-                      {need.isCustom ? (
-                        <Pill tone="info" className="mt-1">
-                          Custom
-                        </Pill>
-                      ) : null}
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {need.isCustom ? <Pill tone="info">Custom</Pill> : null}
+                        {need.productionBatch ? (
+                          <Link href={`/production/batches/${need.productionBatch.batchNo}`}>
+                            <Pill tone="neutral">In {need.productionBatch.batchNo}</Pill>
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <span className="inline-flex items-center gap-1.5">
@@ -231,22 +264,19 @@ export default function ProductionQueue() {
                       )}
                     </td>
                     <td className="text-right">
-                      <button
-                        type="button"
-                        onClick={() => assign.mutate(id)}
-                        disabled={assign.isLoading || (need.isCustom && !need.availableCustomStock)}
-                        title={
-                          rescue
-                            ? 'A matching piece is already in stock — use it instead of making another'
-                            : 'Satisfy this line from ready stock'
-                        }
-                        className={`btn-ghost h-8 !text-xs ${
-                          rescue ? '!border-emerald-200 !bg-emerald-50 !text-emerald-700 hover:!bg-emerald-100' : ''
-                        }`}
-                      >
-                        <FiCheck size={12} />
-                        {rescue ? `Use 1 of ${need.availableCustomStock} in stock` : 'Use ready stock'}
-                      </button>
+                      {available > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => fillFromStock(need)}
+                          disabled={assign.isLoading}
+                          title="A matching piece is already in stock — use it instead of making another"
+                          className="btn-ghost h-8 !border-emerald-200 !bg-emerald-50 !text-xs !text-emerald-700 hover:!bg-emerald-100"
+                        >
+                          <FiCheck size={12} /> Use 1 of {available} in stock
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No stock — make it</span>
+                      )}
                     </td>
                   </tr>
                 );

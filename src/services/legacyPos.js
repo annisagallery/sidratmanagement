@@ -10,21 +10,29 @@ import http from './http';
 
 const BASE = '/admin/legacy-pos';
 
-export const getLegacyPosStatus = async () => (await http.get(`${BASE}/status`)).data;
+const scopedParams = (params = {}) => {
+  const { warehouseIds, ...rest } = params;
+  return warehouseIds?.length ? { ...rest, warehouseIds: warehouseIds.join(',') } : rest;
+};
+
+export const getLegacyPosStatus = async (params = {}) =>
+  (await http.get(`${BASE}/status`, { params: scopedParams(params) })).data;
 
 export const getLegacyPosBranches = async () => (await http.get(`${BASE}/branches`)).data;
 
-export const getLegacyPosProducts = async (params = {}) => (await http.get(`${BASE}/products`, { params })).data;
+export const getLegacyPosProducts = async (params = {}) =>
+  (await http.get(`${BASE}/products`, { params: scopedParams(params) })).data;
 
-export const getLegacyPosStock = async (params = {}) => (await http.get(`${BASE}/stock`, { params })).data;
+export const getLegacyPosStock = async (params = {}) =>
+  (await http.get(`${BASE}/stock`, { params: scopedParams(params) })).data;
 
 /**
  * Starts a job and returns straight away; poll the run for the report.
- * `warehouseId` scopes a stock sync to one showroom; omit it for all of them.
- * `warehouseName` is only so the run reads properly before its report lands.
+ * `warehouseIds` is the page-level showroom scope for either job.
+ * `scopeLabel` is only so the run reads properly before its report lands.
  */
-export const startLegacyPosRun = async ({ job, mode, warehouseId = null, warehouseName = null }) =>
-  (await http.post(`${BASE}/runs`, { job, mode, warehouseId, warehouseName })).data;
+export const startLegacyPosRun = async ({ job, mode, warehouseIds, scopeLabel }) =>
+  (await http.post(`${BASE}/runs`, { job, mode, warehouseIds, scopeLabel })).data;
 
 export const getLegacyPosRuns = async () => (await http.get(`${BASE}/runs`)).data;
 

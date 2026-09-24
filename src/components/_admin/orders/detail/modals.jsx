@@ -364,7 +364,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
     {
       onSuccess: (response) => {
         toast(response?.message || 'Shipment created');
-        onSent();
+        onSent(response);
       },
       onError: (error) => {
         const message = error?.response?.data?.message || 'The courier rejected the request.';

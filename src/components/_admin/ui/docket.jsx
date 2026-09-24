@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiSearch, FiTrash2, FiX } from 'react-icons/fi';
 
-import { money, qty } from './primitives';
+import { SHOW_PAGE_GUIDANCE, money, qty } from './primitives';
 
 /* ── header ──────────────────────────────────────────────────────────────── */
 
@@ -43,7 +43,7 @@ export function DocketField({ label, required = false, hint, children }) {
         {required ? <span className="ml-0.5 text-rose-500">*</span> : null}
       </span>
       {children}
-      {hint ? <span className="mt-1 block text-[11px] text-slate-400">{hint}</span> : null}
+      {hint && SHOW_PAGE_GUIDANCE ? <span className="mt-1 block text-[11px] text-slate-400">{hint}</span> : null}
     </label>
   );
 }

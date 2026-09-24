@@ -1,10 +1,16 @@
 'use client';
 
+import { SHOW_PAGE_GUIDANCE } from './primitives';
+
 /**
  * Consistent page/section header: title, optional subtitle (or count), and a right-aligned
  * actions slot. Keep it compact — used at the top of every admin page.
  */
 export default function PageHeader({ title, subtitle, icon: Icon, children }) {
+  // Titles are off for now (see SHOW_PAGE_GUIDANCE); the actions stay.
+  if (!SHOW_PAGE_GUIDANCE) {
+    return children ? <div className="flex flex-wrap items-center justify-end gap-2">{children}</div> : null;
+  }
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3">

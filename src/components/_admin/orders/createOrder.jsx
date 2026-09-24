@@ -5,8 +5,17 @@ import { useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Swal from 'sweetalert2';
 import Image from 'next/image';
+import { FiCopy, FiLock, FiTrash2 } from 'react-icons/fi';
 import * as api from 'src/services';
+import { usePermissions } from 'src/context/PermissionsContext';
 import { addressDistrict, addressUpazila, districts, upazilasForDistrict } from 'src/utils/bangladeshAddress';
+
+// Items, prices, discount and shipping can change only until packing starts —
+// the server refuses them afterwards (services/orderWorkflow EDITABLE_ORDER_STATUSES).
+const EDITABLE_ORDER_STATUSES = ['awaiting_payment', 'pending', 'confirmed', 'processing'];
+// The delivery address is fixed once the parcel has left.
+const ADDRESS_LOCKED_STATUSES = ['shipped', 'delivered', 'returned', 'cancelled'];
+const BD_PHONE = /^01[3-9]\d{8}$/;
 
 // ─── Delivery types — fixed labels, admin-configurable days ───────────────────
 function daysHint(d) {
@@ -25,7 +34,6 @@ const DEFAULT_DELIVERY_TYPES = buildDeliveryTypes(null);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => `৳${Number(n || 0).toLocaleString('en-BD')}`;
-const fmtPlain = (n) => Number(n || 0).toLocaleString('en-BD');
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 const addDays = (days) => {
@@ -129,8 +137,12 @@ const findVariation = (variations = [], attrs = {}) => {
   );
 };
 
+// "Type" (Standard / Custom) is this screen's switch for a custom piece; the
+// order carries it as isCustom. It is only sent as an attribute for items that
+// were saved with it before, so their stored selection still compares equal.
 const selectedAttributesForOrder = (item = {}) =>
   (item.attrDimensions || [])
+    .filter((dim) => dim.name !== 'Type' || item._serverHadType)
     .map((dim) => {
       const selected = item.selectedAttrs?.[dim.name];
       const option = (dim.options || []).find((opt) => opt.valueName === selected);
@@ -227,6 +239,8 @@ const buildItem = (product) => {
     baseDiscount: prices.baseDiscount,
     regularPrice: Number(prices.regularPrice || 0),
     discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
+    catalogRegular: Number(prices.regularPrice || 0),
+    catalogDiscount: prices.discountPrice != null ? Number(prices.discountPrice) : null,
     stock: Math.max(0, availableForVariation(firstVariation) - Number(firstVariation?.presaleAvailable || 0)),
     overSale: Boolean(firstVariation?.overSale ?? product.overSale),
     availableQuantity: availableForVariation(firstVariation),
@@ -249,6 +263,12 @@ const getCustomerAddress = (customer = {}, fallbackPhone = '') => {
     address: saved.address || customer.address || ''
   };
 };
+
+// A price other than the catalogue's for the chosen variation needs the
+// "override item prices" permission on the server.
+const isPriceOverridden = (item) =>
+  Number(item.regularPrice || 0) !== Number(item.catalogRegular ?? item.regularPrice ?? 0) ||
+  (item.discountPrice ?? null) !== (item.catalogDiscount ?? null);
 
 const getLineUnit = (item) => {
   const base =
@@ -302,6 +322,7 @@ function POSProductSearch({ onAdd }) {
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [active, setActive] = useState(0);
   const timer = useRef(null);
   const wrapRef = useRef(null);
 
@@ -321,6 +342,7 @@ function POSProductSearch({ onAdd }) {
       const params = new URLSearchParams({ search, limit: '10' }).toString();
       const res = await api.getProductsByAdmin(params);
       setResults(normalizeList(res));
+      setActive(0);
     } catch (e) {
       setResults([]);
       setError(e?.response?.data?.message || 'Could not search products');
@@ -355,6 +377,24 @@ function POSProductSearch({ onAdd }) {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setResults([]);
+      return;
+    }
+    if (!results.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive((i) => (i + 1) % results.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((i) => (i - 1 + results.length) % results.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      pick(results[active] || results[0]);
+    }
+  };
+
   useEffect(() => {
     const close = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setResults([]);
@@ -368,7 +408,14 @@ function POSProductSearch({ onAdd }) {
 
   return (
     <div ref={wrapRef} className="relative">
-      <input value={q} onChange={handleChange} placeholder="Search" className={inp} autoComplete="off" />
+      <input
+        value={q}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Search products by name or code — ↑↓ to choose, Enter to add"
+        className={inp}
+        autoComplete="off"
+      />
 
       {busy && <span className="absolute right-3 top-2.5 text-xs text-gray-400 animate-pulse">Searching…</span>}
 
@@ -376,7 +423,7 @@ function POSProductSearch({ onAdd }) {
 
       {results.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-[99] mt-1 max-h-80 overflow-auto rounded-md border border-gray-200 bg-white shadow-xl">
-          {results.map((product) => {
+          {results.map((product, index) => {
             const key = product.id || product.id || product.slug;
             const stock =
               product.stock ??
@@ -388,7 +435,10 @@ function POSProductSearch({ onAdd }) {
                 key={key}
                 type="button"
                 onClick={() => pick(product)}
-                className="flex w-full items-center justify-between gap-4 border-b border-gray-50 px-4 py-2.5 text-left text-sm hover:bg-[var(--brand-soft)] last:border-0"
+                onMouseEnter={() => setActive(index)}
+                className={`flex w-full items-center justify-between gap-4 border-b border-gray-50 px-4 py-2.5 text-left text-sm last:border-0 ${
+                  index === active ? 'bg-[var(--brand-soft)]' : 'hover:bg-[var(--brand-soft)]'
+                }`}
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-gray-800">{product.name || product.title}</p>
@@ -407,7 +457,7 @@ function POSProductSearch({ onAdd }) {
 }
 
 // ─── Products Table ──────────────────────────────────────────────────────────
-function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
+function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, canOverridePrice = true }) {
   const updateAttrs = (item, attrName, value) => {
     let selectedAttrs = { ...item.selectedAttrs, [attrName]: value };
     const isCustom = selectedAttrs['Type'] === 'Custom';
@@ -429,6 +479,8 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
       selectedVariationId: matched?.id || matched?.id || item.selectedVariationId || null,
       regularPrice: Number(prices.regularPrice || item.baseRegular || 0),
       discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
+      catalogRegular: Number(prices.regularPrice || item.baseRegular || 0),
+      catalogDiscount: prices.discountPrice != null ? Number(prices.discountPrice) : null,
       stock: isCustom ? 0 : Math.max(0, availableForVariation(matched) - Number(matched?.presaleAvailable || 0)),
       overSale: isCustom ? true : Boolean(matched?.overSale ?? item.overSale),
       isCustom,
@@ -441,50 +493,49 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
     return (
       <div className="rounded-md border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
         <p className="text-sm font-medium text-gray-500">No product added yet</p>
-        <p className="mt-1 text-xs text-gray-400">Start typing above, then click a product from the dropdown.</p>
+        <p className="mt-1 text-xs text-gray-400">Search above and press Enter, or click a product.</p>
       </div>
     );
   }
 
   return (
     <div className="overflow-x-auto rounded-md border border-gray-200">
-      <table className="w-full min-w-[1040px] border-collapse text-[10px]">
+      <table className="w-full min-w-[960px] border-collapse text-xs">
         <thead>
-          <tr className="bg-gray-50 text-[9px] uppercase tracking-wide text-gray-400">
-            <th className="w-32 px-1.5 py-1.5 text-left">Name</th>
-            <th className="w-[460px] px-1 py-1.5 text-left">Options</th>
-            <th className="w-12 px-1 py-1.5 text-center">Stock</th>
-            <th className="w-16 px-1 py-1.5 text-right">Regular</th>
-            <th className="w-16 px-1 py-1.5 text-right">D.Price</th>
-            <th className="w-16 px-1 py-1.5 text-right">Custom</th>
-            <th className="w-16 px-1 py-1.5 text-right">Subtotal</th>
-            <th className="w-10 px-1 py-1.5 text-center">Qty</th>
-            <th className="w-16 px-1 py-1.5 text-right">Total</th>
-            <th className="w-16 px-1 py-1.5 text-center">Action</th>
+          <tr className="bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            <th className="w-44 px-2 py-2 text-left">Product</th>
+            <th className="px-2 py-2 text-left">Options</th>
+            <th className="w-24 px-2 py-2 text-center">Stock</th>
+            <th className="w-20 px-2 py-2 text-right">Regular</th>
+            <th className="w-20 px-2 py-2 text-right">Sale</th>
+            <th className="w-20 px-2 py-2 text-right">Custom +</th>
+            <th className="w-16 px-2 py-2 text-center">Qty</th>
+            <th className="w-24 px-2 py-2 text-right">Total</th>
+            <th className="w-16 px-2 py-2" />
           </tr>
         </thead>
 
         <tbody>
           {items.map((item) => {
             const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
-            const baseUnit =
-              item.discountPrice != null && item.discountPrice !== ''
-                ? Number(item.discountPrice)
-                : Number(item.regularPrice || 0);
-            const subtotal = baseUnit * Number(item.qty || 1);
             const lineTotal = getLineUnit(item) * Number(item.qty || 1);
             const totalAvailable =
               item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
-            const stockLabel =
-              item.stock > 0
-                ? `${item.stock}${totalAvailable != null && totalAvailable > item.stock ? ` +${totalAvailable - item.stock}` : ''}`
+            // In stock now, and how many more production can make.
+            const stockLabel = isTypeCustom
+              ? 'Made to order'
+              : item.stock > 0
+                ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
                 : totalAvailable == null
-                  ? 'Pre'
+                  ? 'To make'
                   : totalAvailable > 0
-                    ? `Pre ${totalAvailable}`
-                    : 'Out';
-            const stockTone =
-              item.stock > 0
+                    ? `${totalAvailable} to make`
+                    : 'Out of stock';
+            const priceChanged = isPriceOverridden(item);
+            const priceLocked = locked || !canOverridePrice;
+            const stockTone = isTypeCustom
+              ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]'
+              : item.stock > 0
                 ? 'bg-green-50 text-green-700'
                 : item.overSale
                   ? 'bg-amber-50 text-amber-700'
@@ -493,27 +544,28 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
             return (
               <React.Fragment key={item._key}>
                 <tr className="border-t border-gray-100 align-top hover:bg-gray-50/40">
-                  <td rowSpan={2} className="px-1.5 py-2 align-top">
-                    <p className="font-semibold text-[15px] leading-tight text-gray-800">{item.productName}</p>
+                  <td rowSpan={2} className="px-2 py-2 align-top">
+                    <p className="text-sm font-semibold leading-tight text-gray-800">{item.productName}</p>
                     <button
                       type="button"
+                      disabled={locked}
                       onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
                       className={`mt-1 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${isTypeCustom ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]' : 'bg-gray-100 text-gray-400'}`}
                     >
                       <span
-                        className={`h-2 w-2 rounded-md transition-colors ${isTypeCustom ? 'bg-[var(--brand-soft)]0' : 'bg-gray-300'}`}
+                        className={`h-2 w-2 rounded-full transition-colors ${isTypeCustom ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
                       />
                       {isTypeCustom ? 'Custom' : 'Standard'}
                     </button>
                   </td>
 
-                  <td className="px-1.5 py-2 align-top">
+                  <td className="px-2 py-2 align-top">
                     {(() => {
                       const nonTypeDims = item.attrDimensions.filter((d) => d.name !== 'Type');
                       if (!nonTypeDims.length)
-                        return <span className="text-[10px] italic text-gray-300">No variant attributes</span>;
+                        return <span className="text-xs italic text-gray-300">No options</span>;
                       return (
-                        <div className="flex flex-nowrap items-center gap-1 overflow-x-auto">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {nonTypeDims.map((dim) => {
                             const values =
                               isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
@@ -523,7 +575,8 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
                                   value={item.selectedAttrs[dim.name] || ''}
                                   onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
                                   title={dim.name}
-                                  className={`${sm} h-7 min-w-[86px] px-1 py-0 text-[10px] font-semibold text-gray-700`}
+                                  disabled={locked}
+                                  className={`${sm} h-8 min-w-[96px] py-0 text-xs font-medium text-gray-700`}
                                 >
                                   {values.map((value) => (
                                     <option key={value} value={value}>
@@ -539,26 +592,25 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
                     })()}
                   </td>
 
-                  <td className="px-1.5 py-2 text-center align-top">
-                    <input
-                      readOnly
-                      disabled
-                      value={stockLabel}
-                      className={`${sm} h-7 w-full px-1 text-center text-[10px] font-semibold ${stockTone}`}
-                    />
+                  <td className="px-2 py-2 text-center align-top">
+                    <span className={`inline-block rounded-md px-2 py-1 text-[11px] font-semibold leading-tight ${stockTone}`}>
+                      {stockLabel}
+                    </span>
                   </td>
 
-                  <td className="px-1.5 py-2 text-right align-top">
+                  <td className="px-2 py-2 text-right align-top">
                     <input
                       type="number"
                       min="0"
                       value={item.regularPrice ?? ''}
                       onChange={(e) => onUpdate(item._key, { regularPrice: Number(e.target.value) || 0 })}
-                      className={`${sm} h-7 w-full px-1 text-right text-[10px]`}
+                      readOnly={priceLocked}
+                      title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
+                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-gray-50 text-gray-500' : ''}`}
                     />
                   </td>
 
-                  <td className="px-1.5 py-2 text-right align-top">
+                  <td className="px-2 py-2 text-right align-top">
                     <input
                       type="number"
                       min="0"
@@ -568,87 +620,83 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate }) {
                           discountPrice: e.target.value === '' ? null : Number(e.target.value) || 0
                         })
                       }
+                      readOnly={priceLocked}
                       placeholder="—"
-                      className={`${sm} h-7 w-full px-1 text-right text-[10px]`}
+                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-gray-50 text-gray-500' : ''}`}
                     />
+                    {priceChanged ? (
+                      <span className="mt-0.5 block text-[10px] font-semibold text-amber-600">Price changed</span>
+                    ) : null}
                   </td>
 
-                  <td className="px-1.5 py-2 text-right align-top">
+                  <td className="px-2 py-2 text-right align-top">
                     <input
                       type="number"
                       min="0"
                       value={item.customizePrice || ''}
                       onChange={(e) => onUpdate(item._key, { customizePrice: Number(e.target.value) || 0 })}
-                      placeholder="Extra"
-                      disabled={!isTypeCustom}
-                      className={`${sm} h-7 w-full px-1 text-right text-[10px]`}
+                      placeholder={isTypeCustom ? 'Extra' : '—'}
+                      disabled={!isTypeCustom || locked}
+                      className={`${sm} h-8 w-full text-right text-xs`}
                     />
                   </td>
 
-                  <td className="px-1.5 py-2 text-right align-top">
-                    <input
-                      readOnly
-                      disabled
-                      value={fmtPlain(subtotal)}
-                      className={`${sm} h-7 w-full px-1 text-right text-[10px] font-bold text-gray-700`}
-                    />
-                  </td>
-
-                  <td className="px-1.5 py-2 text-center align-top">
+                  <td className="px-2 py-2 text-center align-top">
                     <input
                       type="number"
                       min="1"
                       max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
                       value={item.qty}
                       onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                      className={`${sm} h-7 w-full px-1 text-center text-[10px]`}
+                      disabled={locked}
+                      className={`${sm} h-8 w-full text-center text-xs`}
                     />
                   </td>
 
-                  <td className="px-1.5 py-2 text-right align-top">
-                    <input
-                      readOnly
-                      disabled
-                      value={fmtPlain(lineTotal)}
-                      className={`${sm} h-7 w-full px-1 text-right text-[10px] font-bold text-gray-800`}
-                    />
+                  <td className="px-2 py-2 text-right align-top">
+                    <p className="pt-1.5 text-sm font-bold tabular-nums text-gray-800">{fmt(lineTotal)}</p>
+                    {Number(item.qty || 1) > 1 ? (
+                      <p className="text-[10px] text-gray-400">{fmt(getLineUnit(item))} each</p>
+                    ) : null}
                   </td>
 
-                  <td className="px-1.5 py-2 text-center align-top">
-                    <div className="flex  gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onDuplicate(item._key)}
-                        className={`${sm} h-6 w-full px-0 py-0 text-[13px] leading-none text-gray-400 hover:bg-blue-50 hover:text-blue-500`}
-                        title="Duplicate item"
-                      >
-                        ⧉
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onRemove(item._key)}
-                        className={`${sm} h-6 w-full px-0 py-0 text-base leading-none text-gray-300 hover:bg-red-50 hover:text-red-500`}
-                        title="Remove item"
-                      >
-                        ×
-                      </button>
-                    </div>
+                  <td className="px-2 py-2 text-center align-top">
+                    {locked ? null : (
+                      <div className="flex justify-center gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => onDuplicate(item._key)}
+                          className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                          title="Duplicate item"
+                          aria-label="Duplicate item"
+                        >
+                          <FiCopy size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(item._key)}
+                          className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          title="Remove item"
+                          aria-label="Remove item"
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
 
                 <tr className="border-b border-gray-100 bg-gray-50/30 align-top">
-                  <td colSpan={9} className="px-1.5 pb-2 pt-0">
-                    <input
-                      value={item.customizeDetails}
-                      onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
-                      disabled={!isTypeCustom}
-                      placeholder={
-                        isTypeCustom
-                          ? 'Customization note / measurement / instruction'
-                          : 'Set Type to Custom to add details'
-                      }
-                      className={`${sm} h-7 w-full px-1 text-[10px] placeholder:text-gray-300`}
-                    />
+                  <td colSpan={8} className="px-2 pb-2 pt-0">
+                    {isTypeCustom ? (
+                      <input
+                        value={item.customizeDetails}
+                        onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
+                        disabled={locked}
+                        placeholder="Measurements and instructions for production"
+                        className={`${sm} h-8 w-full text-xs placeholder:text-gray-300`}
+                      />
+                    ) : null}
                   </td>
                 </tr>
               </React.Fragment>
@@ -730,7 +778,7 @@ function AdminNote({ value, onChange, images, onImagesChange }) {
 }
 
 // ─── Customer Section ─────────────────────────────────────────────────────────
-function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudData, onShippingChange }) {
+function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudData, onShippingChange, addressLocked = false }) {
   const [phone, setPhone] = useState(address.phone || '');
   const [loading, setLoading] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -738,6 +786,10 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
   const [showAddrList, setShowAddrList] = useState(false);
   const requestRef = useRef(0);
   const addrWrapRef = useRef(null);
+  // The zone's shipping charge is filled in when someone picks a district or
+  // upazila — not when an existing order loads, which silently replaced the
+  // charge that order was saved with.
+  const areaChangedByUser = useRef(false);
   const upazilas = upazilasForDistrict(address.district);
 
   // Close address dropdown when clicking outside
@@ -752,6 +804,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
   // Auto-populate shipping charge when district + upazila are both set
   useEffect(() => {
     const { district, upazila } = address;
+    if (!areaChangedByUser.current) return;
     if (!district || !upazila || typeof onShippingChange !== 'function') return;
     let cancelled = false;
     api
@@ -766,12 +819,28 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
   }, [address.district, address.upazila]); // eslint-disable-line
 
   const handleDistrictChange = (district) => {
+    areaChangedByUser.current = true;
     onAddressChange({ ...address, district, upazila: '' });
   };
 
   const handleUpazilaChange = (upazila) => {
+    areaChangedByUser.current = true;
     onAddressChange({ ...address, upazila });
   };
+
+  // Courier delivery history for this number (Pathao / Steadfast / CarryBee).
+  // Slow third-party calls, so it loads beside the lookup rather than in it.
+  const loadCourierHistory = useCallback((q, id) => {
+    onFraudData({ loading: true });
+    api
+      .fraudCheck(encodeURIComponent(q))
+      .then((res) => {
+        if (id === requestRef.current) onFraudData(res || null);
+      })
+      .catch((err) => {
+        if (id === requestRef.current) onFraudData({ errors: err?.response?.data?.errors || { all: 'Courier check failed' } });
+      });
+  }, [onFraudData]);
 
   const doLookup = useCallback(
     async (phoneOverride) => {
@@ -788,13 +857,13 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
       setSelectedAddrIdx(-1);
       setShowAddrList(false);
 
+      loadCourierHistory(q, id);
       try {
         const res = await api.lookupCustomerByAdmin(q);
         if (id !== requestRef.current) return;
 
         const c = res?.data;
         onCustomerChange(c);
-        onFraudData(c?.fraud ?? null);
         const addrs = c?.addresses || [];
         setSavedAddresses(addrs);
         setSelectedAddrIdx(-1); // nothing selected yet
@@ -803,21 +872,19 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
         // branch below already does this; leaving the found branch blank is how
         // an order reached the courier with no phone on it.
         onAddressChange({ name: c?.name || '', phone: q, district: '', upazila: '', address: '' });
-      } catch (err) {
+      } catch {
         if (id !== requestRef.current) return;
-        // Backend returns fraud data even on 404 (new customer) — read it from the error body
-        const fraudFromError = err?.response?.data?.fraud ?? null;
         onCustomerChange({ phone: q, isNew: true });
         onAddressChange({ name: '', phone: q, district: '', upazila: '', address: '' });
-        onFraudData(fraudFromError);
       } finally {
         if (id === requestRef.current) setLoading(false);
       }
     },
-    [phone, onCustomerChange, onAddressChange, onFraudData]
+    [phone, onCustomerChange, onAddressChange, onFraudData, loadCourierHistory]
   );
 
   const handleSelectSavedAddress = (addr, idx) => {
+    areaChangedByUser.current = true;
     setSelectedAddrIdx(idx);
     setShowAddrList(false);
     // A saved address recorded before the phone was required can have none;
@@ -831,8 +898,23 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
     setPhone(val);
     if (val.replace(/\D/g, '').length === 11) doLookup(val);
   };
+  const phoneDigits = phone.replace(/\D/g, '');
+  const phoneLooksWrong = phoneDigits.length >= 11 && !BD_PHONE.test(phoneDigits);
 
   const updateAddress = (key, val) => onAddressChange({ ...address, [key]: val });
+
+  if (addressLocked) {
+    return (
+      <div className="space-y-1 text-sm text-gray-700">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+          <FiLock size={12} /> The parcel has left — the delivery address can no longer change.
+        </p>
+        <p className="font-semibold">{address.name}</p>
+        <p>{address.phone}</p>
+        <p className="text-gray-500">{[address.address, address.upazila, address.district].filter(Boolean).join(', ')}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -898,6 +980,9 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             </div>
           )}
         </div>
+        {phoneLooksWrong ? (
+          <p className="mt-1 text-[11px] font-medium text-amber-600">This does not look like a Bangladeshi mobile number (01XXXXXXXXX).</p>
+        ) : null}
       </div>
 
       {/* Name (4) · District (3) · Upazila (3) · Address (10) */}
@@ -907,7 +992,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
           <input value={address.name || ''} onChange={(e) => updateAddress('name', e.target.value)} className={inp} />
         </div>
         <div className="col-span-3">
-          <Label>District</Label>
+          <Label required>District</Label>
           <select value={address.district || ''} onChange={(e) => handleDistrictChange(e.target.value)} className={inp}>
             <option value="">Select district...</option>
             {districts.map((district) => (
@@ -918,7 +1003,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
           </select>
         </div>
         <div className="col-span-3">
-          <Label>Upazila</Label>
+          <Label required>Upazila</Label>
           <select
             value={address.upazila || ''}
             onChange={(e) => handleUpazilaChange(e.target.value)}
@@ -958,6 +1043,7 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
     pending: customer?.pending ?? 0,
     returned: customer?.returned ?? 0
   };
+  const courierLoading = fraudData?.loading === true;
   const pathao = fraudData?.pathao ?? null;
   const sf = fraudData?.steadFast ?? null;
   const carryBee = fraudData?.carryBee ?? null;
@@ -971,8 +1057,8 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
   const ErrRow = ({ label, msg }) => (
     <tr>
       <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">{label}</td>
-      <td colSpan={4} className="py-2 pr-3 text-[10px] italic text-red-400">
-        {msg}
+      <td colSpan={4} className={`py-2 pr-3 text-[10px] italic ${courierLoading ? 'text-gray-400' : 'text-red-400'}`}>
+        {courierLoading ? 'Checking…' : msg}
       </td>
     </tr>
   );
@@ -1026,7 +1112,7 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
                   <N v={pathao.returned} color="text-red-500" />
                 </tr>
               ) : (
-                <ErrRow label="Pathao" msg={fraudData?.errors?.pathao || '—'} />
+                <ErrRow label="Pathao" msg={fraudData?.errors?.pathao || fraudData?.errors?.all || '—'} />
               )}
               {/* Steadfast */}
               {sf ? (
@@ -1038,7 +1124,7 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
                   <N v={sf.returned} color="text-red-500" />
                 </tr>
               ) : (
-                <ErrRow label="Steadfast" msg={fraudData?.errors?.steadFast || '—'} />
+                <ErrRow label="Steadfast" msg={fraudData?.errors?.steadFast || fraudData?.errors?.all || '—'} />
               )}
               {carryBee ? (
                 <tr>
@@ -1049,7 +1135,7 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
                   <N v={carryBee.returned} color="text-red-500" />
                 </tr>
               ) : (
-                <ErrRow label="CarryBee" msg={fraudData?.errors?.carryBee || '—'} />
+                <ErrRow label="CarryBee" msg={fraudData?.errors?.carryBee || fraudData?.errors?.all || '—'} />
               )}
             </tbody>
           </table>
@@ -1164,16 +1250,14 @@ function TrxLookupSection({ linked, onChange }) {
       const res = await api.getPaymentByTrxId(val);
       const payment = res?.data;
       if (!payment) return Swal.fire('Not found', 'No payment with that TrxID', 'warning');
+      // One payment pays one order. The server refuses a second link, so say
+      // so here instead of letting the whole order fail on submit.
       if (payment.orderId) {
-        const go = await Swal.fire({
-          title: 'Already assigned',
-          html: `This payment is already assigned to order <b>#${payment.orderNo}</b>.<br/>Do you still want to link it?`,
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonText: 'Link anyway',
-          confirmButtonColor: '#f59e0b'
-        });
-        if (!go.isConfirmed) return;
+        return Swal.fire(
+          'Already used',
+          `This payment is already linked to order #${payment.orderNo}. Unlink it from that order first.`,
+          'warning'
+        );
       }
       onChange([...linked, payment]);
       setTrxInput('');
@@ -1241,7 +1325,7 @@ function TrxLookupSection({ linked, onChange }) {
                   Total Linked
                 </td>
                 <td className="px-3 py-2 text-right font-bold text-gray-800">
-                  {fmt(linked.reduce((s, p) => s + p.amount, 0))}
+                  {fmt(linked.reduce((s, p) => s + Number(p.amount || 0), 0))}
                 </td>
                 <td />
               </tr>
@@ -1260,7 +1344,7 @@ function TrxLookupSection({ linked, onChange }) {
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
-function OrderSummary({ items, linkedPayments, shipping, discount, onShippingChange, onDiscountChange }) {
+function OrderSummary({ items, linkedPayments, shipping, discount, onShippingChange, onDiscountChange, locked = false }) {
   const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
   const totalPaid = linkedPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const total = Math.max(0, subTotal + Number(shipping || 0) - Number(discount || 0));
@@ -1276,6 +1360,7 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
             min="0"
             value={shipping}
             onChange={(e) => onShippingChange(e.target.value)}
+            disabled={locked}
             className={`${sm} w-full text-right`}
           />
         </div>
@@ -1286,6 +1371,7 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
             min="0"
             value={discount}
             onChange={(e) => onDiscountChange(e.target.value)}
+            disabled={locked}
             className={`${sm} w-full text-right`}
           />
         </div>
@@ -1316,6 +1402,9 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
           <span>Due</span>
           <span>{fmt(due)}</span>
         </div>
+        {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
+          <p className="text-[11px] font-medium text-red-500">The discount is larger than the order.</p>
+        ) : null}
       </div>
     </div>
   );
@@ -1325,6 +1414,8 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
 export default function CreateOrder({ orderNo = null }) {
   const isEdit = Boolean(orderNo);
   const router = useRouter();
+  const { can } = usePermissions();
+  const canOverridePrice = can('overridePrice', 'OrderItem');
 
   const [items, setItems] = useState([]);
   const [customer, setCustomer] = useState(null);
@@ -1369,6 +1460,9 @@ export default function CreateOrder({ orderNo = null }) {
     enabled: isEdit,
     refetchOnWindowFocus: false
   });
+  const orderStatus = existingOrderData?.data?.status || null;
+  const itemsLocked = isEdit && Boolean(orderStatus) && !EDITABLE_ORDER_STATUSES.includes(orderStatus);
+  const addressLocked = isEdit && ADDRESS_LOCKED_STATUSES.includes(orderStatus);
 
   useEffect(() => {
     if (!isEdit || initialized || !existingOrderData?.data) return;
@@ -1392,12 +1486,13 @@ export default function CreateOrder({ orderNo = null }) {
     });
     setTags((o.tags || []).map((tag) => (typeof tag === 'object' && tag !== null ? tag.id || tag.id : tag)).filter(Boolean));
 
-    // Customer
+    // Customer — the API returns the id as userId and the account as user.
     if (o.userId) {
+      const account = o.user && typeof o.user === 'object' ? o.user : {};
       setCustomer({
-        id: o.userId.id || o.userId,
-        name: o.userId.name || '',
-        phone: addr.phone || o.userId.phone || ''
+        id: o.userId,
+        name: account.name || '',
+        phone: account.phone || addr.phone || ''
       });
     }
 
@@ -1434,9 +1529,10 @@ export default function CreateOrder({ orderNo = null }) {
           base._serverId = si.id;
           base._serverStatus = si.status;
           base._serverIsCustom = Boolean(si.isCustom);
-          base._serverProductionBatch = si.productionBatch || null;
+          base._serverProductionBatch = si.productionBatchId || si.productionBatch || null;
 
           // Restore saved attribute selection
+          base._serverHadType = (si.attributes || []).some((a) => a.attributeName === 'Type');
           const savedAttrs = {};
           (si.attributes || []).forEach((a) => {
             savedAttrs[a.attributeName] = a.valueName;
@@ -1456,6 +1552,9 @@ export default function CreateOrder({ orderNo = null }) {
           base.selectedAttrs.Type = base.isCustom ? 'Custom' : 'Standard';
           base.regularPrice = si.regularPrice ?? base.regularPrice;
           base.discountPrice = si.salePrice != null ? si.salePrice : base.discountPrice;
+          // What was saved is this item's baseline: unchanged, it is not an override.
+          base.catalogRegular = base.regularPrice;
+          base.catalogDiscount = base.discountPrice;
           base._serverSignature = orderItemSignature(base);
           return base;
         } catch {
@@ -1467,6 +1566,18 @@ export default function CreateOrder({ orderNo = null }) {
       setInitialized(true);
     });
   }, [existingOrderData, isEdit, initialized]); // eslint-disable-line
+
+  // Warn before leaving with work on screen: a half-built order is easy to lose.
+  const hasWork = !isEdit && (items.length > 0 || Boolean(address.phone));
+  useEffect(() => {
+    if (!hasWork || submitting) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasWork, submitting]);
 
   const addItem = (item) => setItems((prev) => [...prev, item]);
   const removeItem = (key) => setItems((prev) => prev.filter((item) => item._key !== key));
@@ -1492,11 +1603,40 @@ export default function CreateOrder({ orderNo = null }) {
     if (!address.address) return Swal.fire('Enter customer address', '', 'warning');
     if (!items.length) return Swal.fire('Add at least one product', '', 'warning');
 
+    const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
+    if (Number(discount || 0) < 0 || Number(shipping || 0) < 0) {
+      return Swal.fire('Shipping and discount cannot be negative', '', 'warning');
+    }
+    if (Number(discount || 0) > subTotal + Number(shipping || 0)) {
+      return Swal.fire('The discount is larger than the order', 'Lower the discount before saving.', 'warning');
+    }
+    if (!canOverridePrice && !itemsLocked && items.some(isPriceOverridden)) {
+      return Swal.fire('Price change not allowed', 'You do not have permission to change product prices.', 'warning');
+    }
+    const warnings = [];
+    if (!addressLocked && (!address.district || !address.upazila)) {
+      warnings.push('No district or upazila — the shipping charge and courier booking need them.');
+    }
+    const digits = String(address.phone || '').replace(/\D/g, '');
+    if (!BD_PHONE.test(digits)) warnings.push(`"${address.phone}" does not look like a Bangladeshi mobile number.`);
+    if (warnings.length) {
+      const go = await Swal.fire({
+        title: 'Check before saving',
+        html: warnings.map((w) => `<p style="margin:4px 0">${w}</p>`).join(''),
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Save anyway',
+        cancelButtonText: 'Go back'
+      });
+      if (!go.isConfirmed) return;
+    }
+
     setSubmitting(true);
 
     // ── Edit mode ──────────────────────────────────────────────────────────────
     if (isEdit) {
       try {
+        if (!itemsLocked) {
         // 1. Remove items that were deleted from the list
         const currentServerIds = new Set(items.filter((i) => i._serverId).map((i) => i._serverId));
         for (const id of originalServerItemIds) {
@@ -1581,6 +1721,7 @@ export default function CreateOrder({ orderNo = null }) {
             ...orderItemPayload(item)
           });
         }
+        }
 
         // 4. Link newly added payments (those not already on this order)
         const orderId = existingOrderData?.data?.id?.toString();
@@ -1593,11 +1734,11 @@ export default function CreateOrder({ orderNo = null }) {
         }
 
         // 5. Update order fields
+        // Only what the order's stage still allows (the server refuses the rest).
         await api.updateOrderStatus({
           id: orderNo,
-          shippingAddress: address,
-          shipping: Number(shipping || 0),
-          discount: Number(discount || 0),
+          ...(addressLocked ? {} : { shippingAddress: address }),
+          ...(itemsLocked ? {} : { shipping: Number(shipping || 0), discount: Number(discount || 0) }),
           deliveryType: delivery.deliveryType,
           estimatedDelivery: delivery.estimatedDelivery || null,
           tags
@@ -1655,12 +1796,9 @@ export default function CreateOrder({ orderNo = null }) {
       };
 
       const res = await api.createAdminOrder(payload);
-      await Swal.fire(
-        'Order Created',
-        `Order No: ${res?.data?.orderNo || res?.data?.orderNumber || 'Created'}`,
-        'success'
-      );
-      router.push('/orders');
+      const createdNo = res?.data?.orderNo || res?.data?.orderNumber;
+      await Swal.fire('Order Created', `Order No: ${createdNo || 'Created'}`, 'success');
+      router.push(createdNo ? `/orders/${createdNo}` : '/orders');
     } catch (e) {
       Swal.fire(e?.response?.data?.message || e?.message || 'Failed to create order', '', 'error');
     } finally {
@@ -1714,6 +1852,7 @@ export default function CreateOrder({ orderNo = null }) {
                 onAddressChange={setAddress}
                 onFraudData={setFraudData}
                 onShippingChange={setShipping}
+                addressLocked={addressLocked}
               />
             </Card>
             <CustomerStatsCard customer={customer} fraudData={fraudData} />
@@ -1734,8 +1873,22 @@ export default function CreateOrder({ orderNo = null }) {
 
           <Card title="Products">
             <div className="space-y-3">
-              <POSProductSearch onAdd={addItem} />
-              <ItemsTable items={items} onUpdate={updateItem} onRemove={removeItem} onDuplicate={duplicateItem} />
+              {itemsLocked ? (
+                <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  <FiLock size={13} /> This order is {orderStatus}. Products, prices, shipping and discount are locked
+                  once packing starts — use Return items or Finance review on the order page instead.
+                </p>
+              ) : (
+                <POSProductSearch onAdd={addItem} />
+              )}
+              <ItemsTable
+                items={items}
+                onUpdate={updateItem}
+                onRemove={removeItem}
+                onDuplicate={duplicateItem}
+                locked={itemsLocked}
+                canOverridePrice={canOverridePrice}
+              />
             </div>
           </Card>
           {!isEdit && (
@@ -1760,6 +1913,7 @@ export default function CreateOrder({ orderNo = null }) {
               discount={discount}
               onShippingChange={setShipping}
               onDiscountChange={setDiscount}
+              locked={itemsLocked}
             />
           </Card>
 
@@ -1773,7 +1927,20 @@ export default function CreateOrder({ orderNo = null }) {
             disabled={submitting || !items.length}
             className="mt-4 w-full rounded-md bg-[var(--brand)] py-3 text-sm font-bold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? (isEdit ? 'Saving…' : 'Placing Order…') : isEdit ? 'Save Changes' : 'Place Order'}
+            {submitting
+              ? isEdit
+                ? 'Saving…'
+                : 'Placing Order…'
+              : isEdit
+                ? 'Save Changes'
+                : `Place Order · ${fmt(
+                    Math.max(
+                      0,
+                      items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0) +
+                        Number(shipping || 0) -
+                        Number(discount || 0)
+                    )
+                  )}`}
           </button>
         </div>
       </div>

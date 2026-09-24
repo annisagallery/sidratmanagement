@@ -11,7 +11,6 @@ export default function EditCouponPage({ params }) {
   if (isLoading) return <div className="p-8 text-gray-400">Loading…</div>;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-gray-800">Edit Coupon Code</h1>
       <CouponCodeForm data={data?.data} />
     </div>
   );

@@ -20,6 +20,7 @@ import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.css';
 import {
   FiAlertTriangle,
+  FiCornerDownLeft,
   FiEdit2,
   FiMessageCircle,
   FiPackage,
@@ -39,6 +40,8 @@ import ItemsCard from 'src/components/_admin/orders/detail/ItemsCard';
 import OrderHeader from 'src/components/_admin/orders/detail/OrderHeader';
 import PackDrawer from 'src/components/_admin/orders/detail/PackDrawer';
 import PaymentsCard from 'src/components/_admin/orders/detail/PaymentsCard';
+import ReturnReceiptCard, { pendingReturnItems } from 'src/components/_admin/orders/detail/ReturnReceiptCard';
+import ReturnItemsModal from 'src/components/_admin/orders/detail/ReturnItemsModal';
 import ShipmentsCard from 'src/components/_admin/orders/detail/ShipmentsCard';
 import { AddressPanel, BillPanel, CustomerPanel, MetaPanel } from 'src/components/_admin/orders/detail/SidePanels';
 import {
@@ -123,6 +126,17 @@ export default function OrderDetail({ params }) {
     onError: (error) => errorAlert('Could not remove payment', error)
   });
 
+  const { mutate: verifyPayment } = useMutation(
+    ({ paymentId, status }) => api.verifyOrderPayment({ orderNo, paymentId, status }),
+    {
+      onSuccess: (_, { status }) => {
+        refetch();
+        toast(status === 'verified' ? 'Payment verified' : 'Payment rejected');
+      },
+      onError: (error) => errorAlert('Could not update the payment', error)
+    }
+  );
+
   /* ── handlers ──────────────────────────────────────────────────────────── */
 
   /**
@@ -185,18 +199,18 @@ export default function OrderDetail({ params }) {
     }
   }
 
-  function afterShipmentSent() {
+  // Creating the consignment ships the order on the server. If that step
+  // failed the consignment still stands, so say why instead of asking again.
+  function afterShipmentSent(response) {
     setModal(null);
+    refetch();
     refetchShipments();
-    if (!CLOSED_STATUSES.includes(order.status)) {
+    const advanceError = response?.meta?.orderAdvanceError;
+    if (advanceError) {
       Swal.fire({
-        title: 'Mark the order as shipped?',
-        text: 'The parcel has been handed to the courier.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, mark shipped'
-      }).then((result) => {
-        if (result.isConfirmed) updateStatus('shipped');
+        title: 'Parcel booked, but the order is not marked shipped',
+        text: advanceError,
+        icon: 'warning'
       });
     }
   }
@@ -226,7 +240,16 @@ export default function OrderDetail({ params }) {
     );
   }
 
-  const paid = (order.payments || []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  // Only verified money counts — the same rule the server uses for payment status.
+  const paid = (order.payments || [])
+    .filter((payment) => payment.status === 'verified')
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const returnPending = pendingReturnItems(order).length > 0;
+  // Cash a courier collected on delivery, not yet paid out to us.
+  const codAwaiting = (order.payments || [])
+    .filter((payment) => payment.method === 'cod' && payment.status === 'pending')
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const canReturnItems = ['shipped', 'delivered'].includes(order.status);
   const due = Math.max(0, Math.round((order.total || 0) - paid));
   const activeShipment = shipments.find((shipment) => shipment.isActive) || null;
   const packing = order.packingProgress || { total: 0, verified: 0, remaining: 0 };
@@ -247,7 +270,7 @@ export default function OrderDetail({ params }) {
     const next = active[active.findIndex((entry) => entry.value === order.status) + 1];
     if (next && next.value !== 'packed') values.add(next.value);
     if (!CLOSED_STATUSES.includes(order.status)) values.add('cancelled');
-    if (order.status === 'delivered') values.add('returned');
+    if (['shipped', 'delivered'].includes(order.status)) values.add('returned');
     return active.filter((entry) => values.has(entry.value));
   })();
 
@@ -275,9 +298,17 @@ export default function OrderDetail({ params }) {
       />
 
       {/* Things that need a decision, stated plainly and never hidden. */}
-      {order.status === 'cancelled' || order.status === 'returned' ? (
-        <Notice tone="bad" icon={FiAlertTriangle} title={`This order was ${order.status}.`}>
-          Reserved stock has been released. Any refund is handled in Finance review.
+      {order.status === 'cancelled' ? (
+        <Notice tone="bad" icon={FiAlertTriangle} title="This order was cancelled.">
+          Reserved stock, materials, coupon and Sidrat Cash have been released. Any payment is settled in Finance review.
+        </Notice>
+      ) : null}
+
+      {order.status === 'returned' ? (
+        <Notice tone="bad" icon={FiAlertTriangle} title="This order was returned.">
+          {returnPending
+            ? 'Receive the parcel below to put its pieces back into stock or write them off. Refunds are handled in Finance review.'
+            : 'The parcel has been received. Refunds are handled in Finance review.'}
         </Notice>
       ) : null}
 
@@ -297,9 +328,15 @@ export default function OrderDetail({ params }) {
       ) : null}
 
       {due > 0 && COMPLETED_STATUSES.includes(order.status) ? (
-        <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} is still unpaid on a delivered order.`}>
-          Record the collected amount under Payments, or raise it in Finance review.
-        </Notice>
+        codAwaiting > 0 ? (
+          <Notice tone="info" icon={FiAlertTriangle} title={`${money(codAwaiting)} was collected by the courier.`}>
+            It is verified when the courier's payout is matched under Shipping → COD payouts.
+          </Notice>
+        ) : (
+          <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} is still unpaid on a delivered order.`}>
+            Record the collected amount under Payments, or raise it in Finance review.
+          </Notice>
+        )
       ) : null}
 
       {order.note ? (
@@ -356,6 +393,13 @@ export default function OrderDetail({ params }) {
                 <FiEdit2 size={15} /> Edit details &amp; address
               </button>
 
+              {canReturnItems ? (
+                <button type="button" onClick={() => setModal('return-items')} className="btn-ghost w-full">
+                  <FiCornerDownLeft size={15} />{' '}
+                  {order.status === 'shipped' ? 'Partial delivery / returns' : 'Return items'}
+                </button>
+              ) : null}
+
               {blockedActions.length ? (
                 <ul className="space-y-1 pt-1">
                   {blockedActions.map((action) => (
@@ -375,6 +419,10 @@ export default function OrderDetail({ params }) {
         </aside>
 
         <div className="space-y-4 lg:order-1 lg:col-span-2">
+          {order.status === 'returned' && returnPending ? (
+            <ReturnReceiptCard key={order.updatedAt} order={order} orderNo={orderNo} onReceived={refetch} />
+          ) : null}
+
           <ItemsCard
             order={order}
             onComplain={setComplaintItem}
@@ -388,6 +436,7 @@ export default function OrderDetail({ params }) {
             due={due}
             onAdd={() => setModal('payment')}
             onRemove={handleRemovePayment}
+            onVerify={(paymentId, status) => verifyPayment({ paymentId, status })}
           />
 
           <ShipmentsCard
@@ -411,6 +460,19 @@ export default function OrderDetail({ params }) {
           onClose={() => setModal(null)}
           onChanged={async () => {
             await refetch();
+            refetchShipments();
+          }}
+        />
+      ) : null}
+
+      {modal === 'return-items' ? (
+        <ReturnItemsModal
+          order={order}
+          orderNo={orderNo}
+          onClose={() => setModal(null)}
+          onDone={() => {
+            setModal(null);
+            refetch();
             refetchShipments();
           }}
         />

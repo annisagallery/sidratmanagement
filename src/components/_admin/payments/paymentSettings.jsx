@@ -310,6 +310,15 @@ function PaymentMethodsSection() {
 
   const { data, isLoading } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, { staleTime: 0 });
   const types = data?.data || [];
+  const { data: checkoutSettingsData, isLoading: settingsLoading } = useQuery(
+    ['checkout-payment-settings'],
+    api.getCheckoutPaymentSettings,
+    { staleTime: 0 }
+  );
+  const checkoutSettings = checkoutSettingsData?.data || {
+    cashOnDeliveryEnabled: true,
+    onlinePaymentEnabled: true
+  };
 
   const { mutate: create, isLoading: creating } = useMutation(api.createPaymentTypeByAdmin, {
     onSuccess: () => {
@@ -321,6 +330,17 @@ function PaymentMethodsSection() {
   });
   const { mutate: update } = useMutation(api.updatePaymentTypeByAdmin, { onSuccess: invalidate, onError });
   const { mutate: remove } = useMutation(api.deletePaymentTypeByAdmin, { onSuccess: invalidate, onError });
+  const { mutate: updateCheckoutSettings, isLoading: savingCheckoutSettings } = useMutation(
+    api.updateCheckoutPaymentSettings,
+    {
+      onSuccess: (response) => qc.setQueryData(['checkout-payment-settings'], response),
+      onError
+    }
+  );
+
+  const setCheckoutOption = (key, checked) => {
+    updateCheckoutSettings({ ...checkoutSettings, [key]: checked });
+  };
 
   const handleDelete = async (type) => {
     const confirmed = await confirmDelete({
@@ -336,6 +356,42 @@ function PaymentMethodsSection() {
       title="Payment methods"
       description="What a customer is offered at checkout, and the exact instruction they are given. The account kind decides that instruction — a personal number takes Send Money, a merchant till takes Payment, and getting it wrong sends real money to the wrong place."
     >
+      <div className="mb-4 grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+        {[
+          {
+            key: 'cashOnDeliveryEnabled',
+            label: 'Cash on Delivery',
+            description: 'Show Cash on Delivery at ecommerce checkout.'
+          },
+          {
+            key: 'onlinePaymentEnabled',
+            label: 'Online payment',
+            description: 'Show the online payment option at ecommerce checkout.'
+          }
+        ].map((option) => (
+          <label
+            key={option.key}
+            className="flex cursor-pointer items-center justify-between gap-4 rounded-md border border-slate-200 bg-white px-3 py-3"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">{option.label}</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{option.description}</span>
+            </span>
+            <span className="relative shrink-0">
+              <input
+                type="checkbox"
+                checked={checkoutSettings[option.key] !== false}
+                disabled={settingsLoading || savingCheckoutSettings}
+                onChange={(event) => setCheckoutOption(option.key, event.target.checked)}
+                className="peer sr-only"
+              />
+              <span className="block h-6 w-10 rounded-full bg-slate-300 transition-colors peer-checked:bg-emerald-600 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-600 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50" />
+              <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
+            </span>
+          </label>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="grid gap-3 lg:grid-cols-2">
           {[0, 1].map((key) => (

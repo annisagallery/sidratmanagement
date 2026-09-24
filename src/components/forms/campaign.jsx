@@ -146,13 +146,7 @@ export default function CampaignForm({ data: existing }) {
 
   return (
     <form onSubmit={handleSubmit} className="p-6 w-full space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">{existing ? 'Edit Campaign' : 'New Campaign'}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {existing ? `Editing: ${existing.name}` : 'Create a discount rule, flash sale or event'}
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <button
           type="submit"
           disabled={saveMut.isLoading}

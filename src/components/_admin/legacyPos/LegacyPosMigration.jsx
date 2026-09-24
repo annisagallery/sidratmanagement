@@ -16,15 +16,17 @@
  * browser timeout, so this page starts a run and then polls it.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import {
   FiAlertTriangle,
   FiCheckCircle,
+  FiChevronDown,
   FiDatabase,
   FiEye,
   FiLayers,
+  FiMapPin,
   FiPackage,
   FiPlay,
   FiRefreshCw,
@@ -42,7 +44,6 @@ import {
 } from 'src/services/legacyPos';
 import {
   EmptyRow,
-  Field,
   Notice,
   PageBar,
   Pill,
@@ -62,7 +63,7 @@ const JOBS = {
     label: 'Branches & products',
     icon: FiLayers,
     blurb:
-      'Reads the five live showrooms and the products they actually stock, then creates whatever is missing here — branches, categories, products and variations — linking each variation to its old barcode so stock can find it. Deprecated showrooms and anything only they held are ignored. Nothing already in this system is renamed or re-priced.',
+      'Reads the showrooms selected above and the products they stock, then creates whatever is missing here — branches, categories, products and variations — linking each variation to its old barcode so stock can find it. Nothing already in this system is renamed or re-priced.',
     confirm:
       'Missing branches, categories, products and variations will be created from the old POS. Existing ones are left alone.',
     runLabel: 'Import catalog'
@@ -71,7 +72,7 @@ const JOBS = {
     label: 'Branch stock',
     icon: FiPackage,
     blurb:
-      'Compares what each live showroom holds right now against what has already been pulled from it, and moves only the difference. Branches outside the five are left exactly as they are. Stock this system produced or sold is never touched, and stock reserved for an order is never taken back.',
+      'Compares what the selected showrooms hold right now against what has already been pulled from them, and moves only the difference. Every branch outside the selection is left exactly as it is. Stock this system produced or sold is never touched, and reserved stock is never taken back.',
     confirm: 'Branch stock will be moved to match the old POS. Only the difference is applied.',
     runLabel: 'Sync stock'
   }
@@ -103,6 +104,144 @@ function Messages({ title, tone, items }) {
 }
 
 /* ── report rendering ─────────────────────────────────────────────────────── */
+
+function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled, missingDefaults = [] }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const selected = new Set(selectedIds.map(String));
+  const selectedRows = rows.filter((row) => selected.has(String(row.id)));
+  const defaultIds = rows.filter((row) => row.defaultSelected).map((row) => row.id);
+
+  const toggle = (id) => {
+    const key = String(id);
+    onChange(selected.has(key) ? selectedIds.filter((value) => String(value) !== key) : [...selectedIds, id]);
+  };
+
+  return (
+    <Section
+      title="Showroom scope"
+      icon={FiMapPin}
+      hint={`${qty(selectedIds.length)} of ${qty(rows.length)} selected`}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          {!collapsed ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onChange(defaultIds)}
+                className="btn-ghost h-11 !text-xs"
+                disabled={disabled || !defaultIds.length}
+              >
+                Use default
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(rows.map((row) => row.id))}
+                className="btn-ghost h-11 !text-xs"
+                disabled={disabled || !rows.length || selectedIds.length === rows.length}
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="btn-ghost h-11 !text-xs"
+                disabled={disabled || !selectedIds.length}
+              >
+                Clear
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="btn-ghost h-11 !text-xs"
+            aria-expanded={!collapsed}
+            aria-controls="legacy-pos-scope-panel"
+          >
+            {collapsed ? 'Expand' : 'Collapse'}
+            <FiChevronDown
+              size={14}
+              aria-hidden="true"
+              className={`transition-transform duration-200 motion-reduce:transition-none ${collapsed ? '' : 'rotate-180'}`}
+            />
+          </button>
+        </div>
+      }
+    >
+      {collapsed ? (
+        <SectionBody id="legacy-pos-scope-panel" className="p-4">
+          {isLoading ? <p className="text-xs text-slate-400">Reading showrooms…</p> : null}
+          {error ? <Notice tone="bad" title="Showrooms could not be loaded">{errorText(error)}</Notice> : null}
+          {!isLoading && !error ? (
+            <p className="text-xs leading-relaxed text-slate-500">
+              <span className="font-semibold text-slate-700">Active:</span>{' '}
+              {selectedRows.length ? selectedRows.map((row) => row.name).join(' · ') : 'No showrooms selected'}
+            </p>
+          ) : null}
+        </SectionBody>
+      ) : (
+      <SectionBody id="legacy-pos-scope-panel" className="space-y-3 p-4">
+        <p id="legacy-pos-scope-help" className="text-xs leading-relaxed text-slate-500">
+          This selection controls the showroom, product and stock views below, plus every preview and migration run.
+          Unselected branches are never read or changed.
+        </p>
+
+        {isLoading ? <p className="text-sm text-slate-400">Reading showrooms…</p> : null}
+        {error ? <Notice tone="bad" title="Showrooms could not be loaded">{errorText(error)}</Notice> : null}
+        {missingDefaults.length ? (
+          <Notice tone="warn" title="Some default showrooms were not found">
+            {missingDefaults.join(', ')}
+          </Notice>
+        ) : null}
+
+        {!isLoading && !error && rows.length ? (
+          <fieldset
+            aria-describedby="legacy-pos-scope-help"
+            disabled={disabled}
+            className="grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3"
+          >
+            <legend className="sr-only">Select showrooms in the migration scope</legend>
+            {rows.map((row) => {
+              const checked = selected.has(String(row.id));
+              return (
+                <label
+                  key={row.id}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition focus-within:ring-2 focus-within:ring-slate-900 focus-within:ring-offset-2 ${
+                    checked ? 'border-slate-900 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                  } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(row.id)}
+                    className="h-4 w-4 shrink-0 accent-slate-900"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-slate-800">{row.name}</span>
+                    <span className="block text-[11px] text-slate-400">
+                      {row.code || 'No code'} · {qty(row.stockQuantity)} pcs
+                      {row.branch ? ` · ${row.branch.name}` : ' · branch will be created by catalog import'}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+        ) : null}
+
+        {!isLoading && !error && !rows.length ? (
+          <Notice tone="warn" title="No showrooms found">The old POS did not return any warehouses.</Notice>
+        ) : null}
+        {!isLoading && !error && rows.length && !selectedIds.length ? (
+          <Notice tone="warn" icon={FiAlertTriangle} title="Select at least one showroom">
+            Browsing, previews and migration runs stay paused until a showroom is selected.
+          </Notice>
+        ) : null}
+      </SectionBody>
+      )}
+    </Section>
+  );
+}
 
 function SummaryTiles({ tiles }) {
   return (
@@ -400,9 +539,7 @@ function RunPanel({ run }) {
 
 /* ── read-only browsing ───────────────────────────────────────────────────── */
 
-function BranchesTab() {
-  const { data, isLoading, error } = useQuery('legacy-pos-branches', getLegacyPosBranches, { retry: false });
-  const rows = data?.data || [];
+function BranchesTab({ rows, isLoading, error }) {
   return (
     <div className="max-h-[32rem] overflow-auto">
       <table className="w-full border-collapse text-left text-xs">
@@ -440,11 +577,12 @@ function BranchesTab() {
   );
 }
 
-function ProductsTab({ search }) {
+function ProductsTab({ search, warehouseIds }) {
+  const scopeKey = warehouseIds.join(',');
   const { data, isLoading, error } = useQuery(
-    ['legacy-pos-products', search],
-    () => getLegacyPosProducts({ search, limit: 200 }),
-    { retry: false, keepPreviousData: true }
+    ['legacy-pos-products', scopeKey, search],
+    () => getLegacyPosProducts({ search, limit: 200, warehouseIds }),
+    { retry: false, enabled: Boolean(warehouseIds.length) }
   );
   const rows = data?.data || [];
   const meta = data?.meta || {};
@@ -503,11 +641,12 @@ function ProductsTab({ search }) {
   );
 }
 
-function StockTab({ search }) {
+function StockTab({ search, warehouseIds }) {
+  const scopeKey = warehouseIds.join(',');
   const { data, isLoading, error } = useQuery(
-    ['legacy-pos-stock', search],
-    () => getLegacyPosStock({ search, limit: 300 }),
-    { retry: false, keepPreviousData: true }
+    ['legacy-pos-stock', scopeKey, search],
+    () => getLegacyPosStock({ search, limit: 300, warehouseIds }),
+    { retry: false, enabled: Boolean(warehouseIds.length) }
   );
   const rows = data?.data || [];
   const meta = data?.meta || {};
@@ -567,21 +706,40 @@ export default function LegacyPosMigration() {
   const queryClient = useQueryClient();
   const [activeRunId, setActiveRunId] = useState(null);
   const [tab, setTab] = useState('branches');
-  // '' means all five. Stock is counted and signed off shop by shop, so the
-  // picker is part of starting the run, not a filter on its result.
-  const [warehouseId, setWarehouseId] = useState('');
+  const [warehouseScope, setWarehouseScope] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
 
-  const statusQuery = useQuery('legacy-pos-status', getLegacyPosStatus, { retry: false });
-  const status = statusQuery.data?.data;
+  const connectionQuery = useQuery('legacy-pos-status-connection', () => getLegacyPosStatus(), { retry: false });
+  const connectionStatus = connectionQuery.data?.data;
+  const connected = connectionStatus?.connected;
 
-  // The showroom picker needs the warehouse ids, which only /branches carries.
   const showroomsQuery = useQuery('legacy-pos-branches', getLegacyPosBranches, {
     retry: false,
-    enabled: Boolean(status?.connected)
+    enabled: Boolean(connected)
   });
-  const showrooms = showroomsQuery.data?.data || [];
+  const showrooms = useMemo(() => showroomsQuery.data?.data || [], [showroomsQuery.data]);
+  const defaultWarehouseIds = useMemo(
+    () => showrooms.filter((row) => row.defaultSelected).map((row) => row.id),
+    [showrooms]
+  );
+  const selectedWarehouseIds = warehouseScope ?? (defaultWarehouseIds.length ? defaultWarehouseIds : showrooms.map((row) => row.id));
+  const scopeKey = useMemo(
+    () => [...selectedWarehouseIds].map(Number).sort((a, b) => a - b).join(','),
+    [selectedWarehouseIds]
+  );
+  const scopeReady = selectedWarehouseIds.length > 0;
+  const scopedShowrooms = useMemo(() => {
+    const selected = new Set(selectedWarehouseIds.map(String));
+    return showrooms.filter((row) => selected.has(String(row.id)));
+  }, [selectedWarehouseIds, showrooms]);
+
+  const statusQuery = useQuery(
+    ['legacy-pos-status', scopeKey],
+    () => getLegacyPosStatus({ warehouseIds: selectedWarehouseIds }),
+    { retry: false, enabled: Boolean(connected && scopeReady) }
+  );
+  const status = scopeReady ? statusQuery.data?.data : connectionStatus;
 
   const runsQuery = useQuery('legacy-pos-runs', getLegacyPosRuns, { retry: false });
   const recentRuns = runsQuery.data?.data || [];
@@ -614,16 +772,13 @@ export default function LegacyPosMigration() {
   });
 
   const trigger = async (job, mode) => {
-    // Stock runs one showroom at a time; the catalog never does.
-    const warehouse = job === 'stock' ? showrooms.find((row) => String(row.id) === warehouseId) : null;
-    const scopeLabel = job === 'stock' ? warehouse?.name || 'all five showrooms' : null;
+    if (!scopeReady) return;
+    const scopeLabel = scopedShowrooms.length === 1 ? scopedShowrooms[0].name : `${scopedShowrooms.length} showrooms`;
 
     if (mode === 'apply') {
       const confirmed = await Swal.fire({
         title: `${JOBS[job].runLabel}?`,
-        // Naming the shop in the confirmation is the point of a branch-by-branch
-        // sync: it is the last chance to notice you picked the wrong one.
-        text: scopeLabel ? `${JOBS[job].confirm} This run covers ${scopeLabel}.` : JOBS[job].confirm,
+        text: `${JOBS[job].confirm} This run covers ${scopeLabel}.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: JOBS[job].runLabel,
@@ -634,8 +789,8 @@ export default function LegacyPosMigration() {
     start.mutate({
       job,
       mode,
-      warehouseId: warehouse ? warehouse.id : null,
-      warehouseName: warehouse ? warehouse.name : null
+      warehouseIds: selectedWarehouseIds,
+      scopeLabel
     });
     if (mode === 'preview') toast('Preview started');
   };
@@ -644,8 +799,6 @@ export default function LegacyPosMigration() {
     event.preventDefault();
     setSearch(searchInput.trim());
   };
-
-  const connected = status?.connected;
 
   return (
     <div className="space-y-4">
@@ -656,37 +809,54 @@ export default function LegacyPosMigration() {
       >
         <button
           type="button"
-          onClick={() => statusQuery.refetch()}
+          onClick={() => {
+            connectionQuery.refetch();
+            showroomsQuery.refetch();
+            if (scopeReady) statusQuery.refetch();
+          }}
           className="btn-ghost h-9 !text-xs"
-          disabled={statusQuery.isFetching}
+          disabled={connectionQuery.isFetching || statusQuery.isFetching}
         >
-          <FiRefreshCw size={13} className={statusQuery.isFetching ? 'animate-spin' : ''} /> Check connection
+          <FiRefreshCw size={13} className={connectionQuery.isFetching || statusQuery.isFetching ? 'animate-spin' : ''} /> Check connection
         </button>
       </PageBar>
+
+      {connected ? (
+        <ScopeSelector
+          rows={showrooms}
+          selectedIds={selectedWarehouseIds}
+          onChange={setWarehouseScope}
+          isLoading={showroomsQuery.isLoading}
+          error={showroomsQuery.error}
+          disabled={busy || start.isLoading}
+          missingDefaults={showroomsQuery.data?.meta?.missingDefaultWarehouses || []}
+        />
+      ) : null}
 
       <Section
         title="Old POS"
         icon={FiDatabase}
         hint={status?.connection ? `${status.connection.host} · ${status.connection.database}` : undefined}
         actions={
-          <Pill tone={connected ? 'good' : status?.configured ? 'bad' : 'warn'}>
-            {connected ? 'connected' : status?.configured ? 'unreachable' : 'not configured'}
+          <Pill tone={connected ? 'good' : connectionStatus?.configured ? 'bad' : 'warn'}>
+            {connected ? 'connected' : connectionStatus?.configured ? 'unreachable' : 'not configured'}
           </Pill>
         }
       >
         <SectionBody className="space-y-3 p-4">
-          {statusQuery.isLoading ? <p className="text-sm text-slate-400">Checking…</p> : null}
-          {status && !connected ? (
-            <Notice tone={status.configured ? 'bad' : 'warn'} icon={FiAlertTriangle} title="The old POS cannot be read">
-              {status.message || 'The connection was refused.'}
+          {connectionQuery.isLoading || (scopeReady && statusQuery.isLoading) ? (
+            <p className="text-sm text-slate-400">Checking…</p>
+          ) : null}
+          {scopeReady && statusQuery.error ? (
+            <Notice tone="bad" title="Scoped totals could not be loaded">{errorText(statusQuery.error)}</Notice>
+          ) : null}
+          {connectionStatus && !connected ? (
+            <Notice tone={connectionStatus.configured ? 'bad' : 'warn'} icon={FiAlertTriangle} title="The old POS cannot be read">
+              {connectionStatus.message || 'The connection was refused.'}
             </Notice>
           ) : null}
-          {connected ? (
+          {connected && scopeReady && status?.source ? (
             <>
-              {/* Every figure below counts the live showrooms only. Saying so
-                  next to them is the difference between "the old POS has 127
-                  products" and "127 products still trade" — a reader who
-                  assumes the first will think the import lost things. */}
               <Notice
                 tone={status.source.missingWarehouses?.length ? 'bad' : 'neutral'}
                 icon={status.source.missingWarehouses?.length ? FiAlertTriangle : FiLayers}
@@ -700,7 +870,7 @@ export default function LegacyPosMigration() {
                   </p>
                 ) : (
                   <p className="mt-1 opacity-80">
-                    Deprecated showrooms are ignored — their products and stock are never read or synced.
+                    Only these showrooms contribute to the products, stock and migration actions on this page.
                   </p>
                 )}
               </Notice>
@@ -717,6 +887,11 @@ export default function LegacyPosMigration() {
                 ]}
               />
             </>
+          ) : null}
+          {connected && !scopeReady ? (
+            <Notice tone="warn" icon={FiAlertTriangle} title="Migration scope is empty">
+              Select at least one showroom above to load scoped totals.
+            </Notice>
           ) : null}
           {status?.lastStockMovementAt ? (
             <p className="text-[11px] text-slate-400">
@@ -737,34 +912,12 @@ export default function LegacyPosMigration() {
             <SectionBody className="flex min-h-[7.5rem] flex-col gap-3 p-4">
               <p className="text-xs leading-relaxed text-slate-500">{definition.blurb}</p>
 
-              {job === 'stock' ? (
-                <Field
-                  label="Showroom to sync"
-                  hint="One shop at a time is how stock is counted and signed off. Pick all five only to settle everything at once."
-                >
-                  <select
-                    value={warehouseId}
-                    onChange={(event) => setWarehouseId(event.target.value)}
-                    className={`${fieldClass} h-9 !py-1 !text-xs`}
-                    disabled={!connected || busy || start.isLoading}
-                  >
-                    <option value="">All five showrooms</option>
-                    {showrooms.map((row) => (
-                      <option key={row.id} value={String(row.id)} disabled={!row.mapped}>
-                        {row.name}
-                        {row.mapped ? ` — ${qty(row.stockQuantity)} pcs` : ' — no branch here yet'}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              ) : null}
-
               <div className="mt-auto flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => trigger(job, 'preview')}
                   className="btn-ghost h-9 !text-xs"
-                  disabled={!connected || busy || start.isLoading}
+                  disabled={!connected || !scopeReady || busy || start.isLoading}
                 >
                   <FiEye size={13} /> Preview
                 </button>
@@ -772,7 +925,7 @@ export default function LegacyPosMigration() {
                   type="button"
                   onClick={() => trigger(job, 'apply')}
                   className="btn-brand h-9 !text-xs"
-                  disabled={!connected || busy || start.isLoading}
+                  disabled={!connected || !scopeReady || busy || start.isLoading}
                 >
                   <FiPlay size={13} /> {definition.runLabel}
                 </button>
@@ -817,12 +970,12 @@ export default function LegacyPosMigration() {
       ) : null}
 
       <Section
-        title="What the live showrooms hold"
+        title="What the selected showrooms hold"
         icon={FiSearch}
         actions={
           <Toolbar>
             {[
-              { key: 'branches', label: 'Branches' },
+              { key: 'branches', label: 'Showrooms' },
               { key: 'products', label: 'Products' },
               { key: 'stock', label: 'Stock' }
             ].map((entry) => (
@@ -857,11 +1010,17 @@ export default function LegacyPosMigration() {
           <SectionBody className="p-6 text-center text-sm text-slate-400">
             Connect to the old POS to browse what it holds.
           </SectionBody>
+        ) : !scopeReady ? (
+          <SectionBody className="p-6 text-center text-sm text-slate-400">
+            Select at least one showroom above to browse its products and stock.
+          </SectionBody>
         ) : (
           <>
-            {tab === 'branches' ? <BranchesTab /> : null}
-            {tab === 'products' ? <ProductsTab search={search} /> : null}
-            {tab === 'stock' ? <StockTab search={search} /> : null}
+            {tab === 'branches' ? (
+              <BranchesTab rows={scopedShowrooms} isLoading={showroomsQuery.isLoading} error={showroomsQuery.error} />
+            ) : null}
+            {tab === 'products' ? <ProductsTab search={search} warehouseIds={selectedWarehouseIds} /> : null}
+            {tab === 'stock' ? <StockTab search={search} warehouseIds={selectedWarehouseIds} /> : null}
           </>
         )}
       </Section>

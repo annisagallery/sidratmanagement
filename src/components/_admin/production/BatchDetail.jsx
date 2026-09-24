@@ -16,11 +16,12 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
 import Swal from 'sweetalert2';
-import { FiEdit2, FiPlay, FiPrinter, FiXCircle } from 'react-icons/fi';
+import { FiCheckSquare, FiEdit2, FiPlay, FiPrinter, FiTag, FiXCircle } from 'react-icons/fi';
 import { LuFactory } from 'react-icons/lu';
 
 import {
   cancelProductionBatch,
+  closeProductionBatch,
   getProductionBatchUnits,
   getProductionBatches,
   startProductionBatch
@@ -41,7 +42,13 @@ import {
   qty,
   toast
 } from 'src/components/_admin/ui/primitives';
-import { BatchStatusPill, catalogCode, variationLabel } from 'src/components/_admin/inventory/shared';
+import {
+  BatchStatusPill,
+  MATERIAL_STATUS,
+  UnitStatusPill,
+  catalogCode,
+  variationLabel
+} from 'src/components/_admin/inventory/shared';
 import { openLabelSheet, productionStickerLabels } from 'src/components/_admin/labels/openLabelSheet';
 import BatchEditModal from './BatchEditModal';
 
@@ -116,6 +123,20 @@ export default function BatchDetail({ batchNo }) {
     onError: (error) => errorAlert('The batch could not be cancelled', error)
   });
 
+  const close = useMutation(closeProductionBatch, {
+    onSuccess: (response) => {
+      const { voidedUnits = 0, requeuedItems = 0 } = response?.data || {};
+      toast(
+        `Batch closed — ${voidedUnits} unmade piece${voidedUnits === 1 ? '' : 's'} voided${
+          requeuedItems ? `, ${requeuedItems} order${requeuedItems === 1 ? '' : 's'} back in the queue` : ''
+        }`
+      );
+      refresh();
+      unitsQuery.refetch();
+    },
+    onError: (error) => errorAlert('The batch could not be closed', error)
+  });
+
   if (batchQuery.isLoading) return <div className="h-64 animate-pulse rounded-md bg-slate-100" />;
 
   if (!batch) {
@@ -153,6 +174,25 @@ export default function BatchDetail({ batchNo }) {
   ]
     .filter((entry) => entry.at)
     .sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  // Once something has been received a batch cannot be cancelled; it is closed
+  // short instead, and the reason is kept on the batch.
+  const confirmClose = async () => {
+    const left = totalPlanned - totalMade;
+    const result = await Swal.fire({
+      title: `Close ${batch.batchNo} early?`,
+      html: `${totalMade} of ${totalPlanned} pieces were received. The ${left} not made will be voided, and any customer waiting on one goes back to the production queue.`,
+      input: 'text',
+      inputLabel: 'Why is it closing early?',
+      inputPlaceholder: 'e.g. fabric ran out',
+      inputValidator: (value) => (!String(value || '').trim() ? 'A reason is required.' : undefined),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Close batch',
+      confirmButtonColor: '#e11d48'
+    });
+    if (result.isConfirmed) close.mutate({ id: batchId, note: result.value });
+  };
 
   const confirmCancel = async () => {
     const result = await Swal.fire({
@@ -192,7 +232,16 @@ export default function BatchDetail({ batchNo }) {
             <FiPrinter size={14} /> {building ? 'Building PDF…' : 'Stickers'}
           </button>
         )}
-        {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
+        {batch.status === 'IN_PRODUCTION' && totalMade > 0 ? (
+          <button
+            type="button"
+            onClick={confirmClose}
+            disabled={close.isLoading}
+            className="btn-ghost !border-amber-200 !text-amber-700 hover:!bg-amber-50"
+          >
+            <FiCheckSquare size={14} /> Close early
+          </button>
+        ) : ['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
           <button
             type="button"
             onClick={confirmCancel}
@@ -253,12 +302,19 @@ export default function BatchDetail({ batchNo }) {
                         </td>
                         <td>
                           {item.orderItem?.orderNo ? (
-                            <Link
-                              href={`/orders/${item.orderItem.orderNo}`}
-                              className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline"
-                            >
-                              #{item.orderItem.orderNo}
-                            </Link>
+                            <div className="space-y-1">
+                              <Link
+                                href={`/orders/${item.orderItem.orderNo}`}
+                                className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline"
+                              >
+                                #{item.orderItem.orderNo}
+                              </Link>
+                              {MATERIAL_STATUS[item.orderItem.materialStatus] ? (
+                                <Pill tone={MATERIAL_STATUS[item.orderItem.materialStatus].tone}>
+                                  {MATERIAL_STATUS[item.orderItem.materialStatus].label}
+                                </Pill>
+                              ) : null}
+                            </div>
                           ) : (
                             <Pill tone="neutral">Stock</Pill>
                           )}
@@ -299,6 +355,67 @@ export default function BatchDetail({ batchNo }) {
               </tbody>
             </GlobalTable>
           </Section>
+
+          {batch.status !== 'DRAFT' ? (
+            <Section title="Pieces" icon={FiTag} hint={`${(unitsQuery.data?.data || []).length} barcodes`}>
+              <GlobalTable>
+                <thead>
+                  <tr>
+                    <th>Barcode</th>
+                    <th>Product</th>
+                    <th>Status</th>
+                    <th>Made by</th>
+                    <th>For</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unitsQuery.isLoading ? (
+                    <EmptyRow colSpan={5} title="Loading pieces…" />
+                  ) : (unitsQuery.data?.data || []).length ? (
+                    (unitsQuery.data?.data || []).map((unit) => (
+                      <tr key={oid(unit)}>
+                        <td>
+                          <Code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">{unit.barcode}</Code>
+                        </td>
+                        <td className="text-[12px] text-slate-700">
+                          {unit.product?.name}
+                          <span className="block text-[11px] text-slate-400">{variationLabel(unit.variation)}</span>
+                        </td>
+                        <td>
+                          <UnitStatusPill status={unit.status} />
+                          {unit.reversalNote ? (
+                            <span className="mt-0.5 block text-[10px] text-slate-400">{unit.reversalNote}</span>
+                          ) : null}
+                        </td>
+                        <td className="text-[12px] text-slate-600">
+                          {unit.producedBy?.name || '—'}
+                          {unit.submittedAt ? (
+                            <span className="block text-[11px] text-slate-400">
+                              {format(new Date(unit.submittedAt), 'dd MMM, hh:mm a')}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>
+                          {unit.orderItem?.orderNo ? (
+                            <Link
+                              href={`/orders/${unit.orderItem.orderNo}`}
+                              className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline"
+                            >
+                              #{unit.orderItem.orderNo}
+                            </Link>
+                          ) : (
+                            <Pill tone="neutral">Stock</Pill>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <EmptyRow colSpan={5} title="No pieces issued" />
+                  )}
+                </tbody>
+              </GlobalTable>
+            </Section>
+          ) : null}
 
           {batch.note ? (
             <Section title="Batch note" icon={FiEdit2}>

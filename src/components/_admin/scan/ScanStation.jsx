@@ -47,7 +47,7 @@ function useScanTone() {
         oscillator.start(start);
         oscillator.stop(start + 0.12);
       });
-    } catch (_) {
+    } catch {
       // Audio is an enhancement; a station with no sound device still works.
     }
   }, []);
@@ -61,7 +61,8 @@ export default function ScanStation({
   disabled = false,
   disabledReason = null,
   autoFocus = true,
-  historyLimit = 8
+  historyLimit = 8,
+  appearance = 'default'
 }) {
   const inputRef = useRef(null);
   const [code, setCode] = useState('');
@@ -69,6 +70,7 @@ export default function ScanStation({
   const [feedback, setFeedback] = useState(null);
   const [history, setHistory] = useState([]);
   const tone = useScanTone();
+  const isDesk = appearance === 'desk';
 
   const focus = useCallback(() => {
     if (!disabled) requestAnimationFrame(() => inputRef.current?.focus());
@@ -130,11 +132,23 @@ export default function ScanStation({
   };
 
   return (
-    <div className="space-y-3">
+    <div className={isDesk ? 'space-y-4' : 'space-y-3'}>
       <form onSubmit={submit}>
-        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</label>
+        <label
+          className={
+            isDesk
+              ? 'mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-slate-300'
+              : 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500'
+          }
+        >
+          {label}
+        </label>
         <div className="relative">
-          <MdQrCodeScanner className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400" />
+          <MdQrCodeScanner
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${
+              isDesk ? 'text-2xl text-slate-400' : 'text-lg text-slate-400'
+            }`}
+          />
           <input
             ref={inputRef}
             value={code}
@@ -143,15 +157,21 @@ export default function ScanStation({
             placeholder={disabled ? disabledReason || 'Scanning unavailable' : placeholder}
             autoComplete="off"
             spellCheck={false}
-            className="input-ui ops-code h-11 pl-10 text-base uppercase"
+            className={
+              isDesk
+                ? 'ops-code h-16 w-full rounded-xl border-2 border-slate-500 bg-white pl-14 pr-12 text-lg font-bold uppercase text-slate-950 shadow-[0_8px_24px_rgba(2,6,23,0.28)] outline-none transition placeholder:font-medium placeholder:normal-case placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
+                : 'input-ui ops-code h-11 pl-10 text-base uppercase'
+            }
           />
           {busy ? (
             <FiLoader className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
           ) : null}
         </div>
-        {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+        {hint ? <p className={`mt-1.5 text-xs ${isDesk ? 'text-slate-400' : 'text-slate-500'}`}>{hint}</p> : null}
         {disabled && disabledReason ? (
-          <p className="mt-1 text-xs font-medium text-amber-700">{disabledReason}</p>
+          <p className={`mt-1.5 text-xs font-semibold ${isDesk ? 'text-amber-300' : 'text-amber-700'}`}>
+            {disabledReason}
+          </p>
         ) : null}
       </form>
 
@@ -159,17 +179,21 @@ export default function ScanStation({
         <div
           role="status"
           aria-live="assertive"
-          className={`flex items-start gap-2 rounded-md border px-3 py-2 ${
+          className={`flex items-start gap-3 border ${isDesk ? 'rounded-xl px-4 py-3' : 'rounded-md px-3 py-2'} ${
             feedback.ok ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
           }`}
         >
           {feedback.ok ? (
-            <FiCheckCircle className="mt-0.5 shrink-0 text-emerald-600" />
+            <FiCheckCircle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-emerald-600`} />
           ) : (
-            <FiAlertTriangle className="mt-0.5 shrink-0 text-rose-600" />
+            <FiAlertTriangle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-rose-600`} />
           )}
           <div className="min-w-0">
-            <p className={`text-[13px] font-semibold ${feedback.ok ? 'text-emerald-800' : 'text-rose-800'}`}>
+            <p
+              className={`${isDesk ? 'text-sm font-bold' : 'text-[13px] font-semibold'} ${
+                feedback.ok ? 'text-emerald-800' : 'text-rose-800'
+              }`}
+            >
               {feedback.message}
             </p>
             <p className="ops-code text-xs text-slate-500">{feedback.code}</p>
@@ -179,13 +203,17 @@ export default function ScanStation({
       ) : null}
 
       {history.length ? (
-        <ul className="card-ui divide-y divide-slate-100">
+        <ul
+          className={`${
+            isDesk ? 'overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60 divide-slate-700' : 'card-ui divide-slate-100'
+          } divide-y`}
+        >
           {history.map((entry, index) => (
-            <li key={`${entry.code}-${index}`} className="flex items-center gap-2 px-3 py-1.5">
+            <li key={`${entry.code}-${index}`} className={`flex items-center gap-2 px-3 ${isDesk ? 'py-2.5' : 'py-1.5'}`}>
               <span className={`h-2 w-2 shrink-0 rounded-full ${entry.ok ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span className="ops-code text-xs font-semibold text-slate-700">{entry.code}</span>
-              <span className="truncate text-xs text-slate-500">{entry.message}</span>
-              <span className="ml-auto shrink-0 text-[10px] font-semibold text-slate-400">
+              <span className={`ops-code text-xs font-semibold ${isDesk ? 'text-slate-100' : 'text-slate-700'}`}>{entry.code}</span>
+              <span className={`truncate text-xs ${isDesk ? 'text-slate-400' : 'text-slate-500'}`}>{entry.message}</span>
+              <span className={`ml-auto shrink-0 text-[10px] font-semibold ${isDesk ? 'text-slate-500' : 'text-slate-400'}`}>
                 {entry.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </li>

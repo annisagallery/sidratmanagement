@@ -106,20 +106,10 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
       onClose={onClose}
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={save.isLoading}
-            className="rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-          >
+          <button type="button" onClick={onClose} disabled={save.isLoading} className="btn-ghost">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={() => save.mutate()}
-            disabled={save.isLoading || !items.length}
-            className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-40"
-          >
+          <button type="button" onClick={() => save.mutate()} disabled={save.isLoading || !items.length} className="btn-brand">
             {save.isLoading ? 'Saving…' : 'Save changes'}
           </button>
         </>

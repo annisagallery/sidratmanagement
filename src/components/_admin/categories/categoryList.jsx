@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Image from 'next/image';
-import { MdAdd, MdDelete, MdEdit, MdInbox, MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import { MdAdd, MdDelete, MdEdit, MdInbox, MdLock, MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import * as api from 'src/services';
 import { alertError, confirmAction, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
@@ -78,6 +78,8 @@ export default function CategoryList() {
       tone: 'success',
       action: 'Published',
       unit: 'categories',
+      disabled: (rows) => rows.some((category) => category.isSystem),
+      hint: 'System categories keep their fixed visibility.',
       confirm: (rows) =>
         confirmAction({
           tone: 'success',
@@ -94,6 +96,8 @@ export default function CategoryList() {
       tone: 'warning',
       action: 'Hidden',
       unit: 'categories',
+      disabled: (rows) => rows.some((category) => category.isSystem),
+      hint: 'System categories keep their fixed visibility.',
       confirm: (rows) =>
         confirmAction({
           tone: 'warning',
@@ -110,6 +114,8 @@ export default function CategoryList() {
       tone: 'danger',
       action: 'Deleted',
       unit: 'categories',
+      disabled: (rows) => rows.some((category) => category.isSystem),
+      hint: 'Permanent system categories cannot be deleted.',
       confirm: (rows) =>
         confirmDelete({
           count: rows.length,
@@ -145,7 +151,14 @@ export default function CategoryList() {
               </div>
             )}
           </div>
-          <p className="text-[13px] font-semibold text-slate-800">{c.name}</p>
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-slate-800">{c.name}</p>
+            {c.isSystem && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                <MdLock size={11} aria-hidden="true" /> Permanent POS category
+              </span>
+            )}
+          </div>
         </div>
       )
     },

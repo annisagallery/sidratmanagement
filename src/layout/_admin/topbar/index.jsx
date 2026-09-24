@@ -74,19 +74,18 @@ export default function Topbar({ handleDrawerOpen }) {
               <span className="hidden lg:inline">Add Payment</span>
             </button>
 
-            {/* The scan desk is not a page anyone browses to — it is picked up
-                mid-task, at a bench, usually with a scanner already in hand. It
-                sat in the sidebar next to planning screens nobody on the floor
-                opens; here it is one reach away from wherever they are. */}
+            {/* Like POS, the scan desk opens in its own tab and stays clear of
+                admin navigation while an operator works at the bench. */}
             {can('read', 'Production') && (
-              <Link
-                href="/production/scan"
+              <button
+                type="button"
+                onClick={() => window.open('/production/scan', '_blank', 'noopener')}
                 className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                title="Production scan desk"
+                title="Open Production scan desk in a new tab"
               >
                 <MdQrCodeScanner size={16} />
                 <span className="hidden lg:inline">Scan</span>
-              </Link>
+              </button>
             )}
 
             <Link
