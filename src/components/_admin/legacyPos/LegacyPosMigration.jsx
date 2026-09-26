@@ -1,19 +1,21 @@
 'use client';
 
 /**
- * Old POS migration desk — TEMPORARY, removed when the old POS is switched off.
+ * Catalog migration desk — TEMPORARY, removed when the old POS is switched off.
  *
- * Two jobs, and the whole page is built around the difference between them:
+ * The page is a line, because the order is the point:
  *
- *   Catalog — run rarely. Brings branches, products and variations across and
- *             links each variation to its old barcode. Nothing can be synced
- *             until this has matched it.
- *   Stock   — run often. Moves only the difference between what the old POS
- *             holds now and what has already been pulled from it.
+ *   1 Website   — the old website's products, text, images and prices. Runs
+ *                 first so it owns every product customers see.
+ *   2 Old POS   — showroom products merged onto those, adding old barcodes and
+ *                 anything the website never sold.
+ *   3 Stock     — run as often as needed; moves only the difference.
  *
- * Every job is previewed first and previewing writes nothing, so the operator
- * reads what will happen before agreeing to it. Both run on the server past any
- * browser timeout, so this page starts a run and then polls it.
+ * Above the line sits "Start over", which deletes the whole catalog so the line
+ * can be run again from nothing. It exists only until launch.
+ *
+ * Every job is previewed first and previewing writes nothing. All of them run on
+ * the server past any browser timeout, so this page starts a run and polls it.
  */
 
 import { useMemo, useState } from 'react';
@@ -25,12 +27,14 @@ import {
   FiChevronDown,
   FiDatabase,
   FiEye,
+  FiGlobe,
   FiLayers,
   FiMapPin,
   FiPackage,
   FiPlay,
   FiRefreshCw,
-  FiSearch
+  FiSearch,
+  FiTrash2
 } from 'react-icons/fi';
 
 import {
@@ -59,24 +63,48 @@ import {
 } from 'src/components/_admin/ui/primitives';
 
 const JOBS = {
-  catalog: {
-    label: 'Branches & products',
-    icon: FiLayers,
+  reset: {
+    label: 'Start over',
+    icon: FiTrash2,
+    runLabel: 'Delete the catalog'
+  },
+  website: {
+    step: 1,
+    label: 'Website products',
+    icon: FiGlobe,
+    source: 'website',
     blurb:
-      'Reads the showrooms selected above and the products they stock, then creates whatever is missing here — branches, categories, products and variations — linking each variation to its old barcode so stock can find it. Nothing already in this system is renamed or re-priced.',
-    confirm:
-      'Missing branches, categories, products and variations will be created from the old POS. Existing ones are left alone.',
-    runLabel: 'Import catalog'
+      'Brings every product from the old website with its description, images, SEO text, category and prices. Where a product is already here, the website’s values replace what is there; its barcodes and stock stay.',
+    confirm: 'Website products will be created, or updated to match the website. Stock and barcodes are not touched.',
+    runLabel: 'Import website'
+  },
+  catalog: {
+    step: 2,
+    label: 'Showroom products',
+    icon: FiLayers,
+    source: 'pos',
+    usesScope: true,
+    blurb:
+      'Matches each old-POS product onto the website product of the same name and adds its old barcodes, so showroom stock can find it. Only what the website never had is created. Nothing is renamed or re-priced.',
+    confirm: 'Old barcodes will be attached, and products the website never had will be created.',
+    runLabel: 'Import showroom products'
   },
   stock: {
-    label: 'Branch stock',
+    step: 3,
+    label: 'Showroom stock',
     icon: FiPackage,
+    source: 'pos',
+    usesScope: true,
+    repeatable: true,
     blurb:
-      'Compares what the selected showrooms hold right now against what has already been pulled from them, and moves only the difference. Every branch outside the selection is left exactly as it is. Stock this system produced or sold is never touched, and reserved stock is never taken back.',
+      'Moves only the difference between what the selected showrooms hold now and what has already been pulled. Stock made or sold here is never touched, and reserved stock is never taken back.',
     confirm: 'Branch stock will be moved to match the old POS. Only the difference is applied.',
     runLabel: 'Sync stock'
   }
 };
+
+const STEPS = ['website', 'catalog', 'stock'];
+const RESET_PHRASE = 'DELETE ALL PRODUCTS';
 
 const RUN_TONE = { running: 'info', succeeded: 'good', failed: 'bad' };
 
@@ -84,8 +112,8 @@ const deltaTone = (delta) => (delta > 0 ? 'good' : delta < 0 ? 'bad' : 'neutral'
 const signed = (value) => `${value > 0 ? '+' : ''}${qty(value)}`;
 
 function ActionPill({ action }) {
-  const tone = { create: 'good', link: 'info', matched: 'neutral' }[action] || 'neutral';
-  const label = { create: 'New', link: 'Link', matched: 'Already here' }[action] || action;
+  const tone = { create: 'good', link: 'info', update: 'info', matched: 'neutral' }[action] || 'neutral';
+  const label = { create: 'New', link: 'Link', update: 'Update', matched: 'Already here' }[action] || action;
   return <Pill tone={tone}>{label}</Pill>;
 }
 
@@ -496,6 +524,152 @@ function StockReport({ report }) {
   );
 }
 
+function WebsiteReport({ report }) {
+  const summary = report.summary || {};
+  const created = report.created;
+  const tiles = created
+    ? [
+        { label: 'Products created', value: qty(created.products), tone: created.products ? 'good' : 'muted' },
+        { label: 'Products updated', value: qty(report.updated?.products), tone: report.updated?.products ? 'info' : 'muted' },
+        { label: 'Variations created', value: qty(created.variations), tone: created.variations ? 'good' : 'muted' },
+        { label: 'Images added', value: qty(created.images), note: `${qty(created.categories)} categories created`, tone: created.images ? 'good' : 'muted' }
+      ]
+    : [
+        {
+          label: 'Products',
+          value: qty(summary.productsToCreate),
+          note: `to create · ${qty(summary.productsToUpdate)} to update · ${qty(summary.productsMatched)} already match`,
+          tone: summary.productsToCreate ? 'good' : 'muted'
+        },
+        {
+          label: 'Variations',
+          value: qty(summary.variationsToCreate),
+          note: `to create · ${qty(summary.variationsToUpdate)} to update`,
+          tone: summary.variationsToCreate ? 'good' : 'muted'
+        },
+        { label: 'Categories', value: qty(summary.categoriesToCreate), note: 'to create', tone: summary.categoriesToCreate ? 'good' : 'muted' },
+        { label: 'Images', value: qty(summary.imagesToCreate), note: 'to add', tone: summary.imagesToCreate ? 'good' : 'muted' }
+      ];
+
+  return (
+    <div className="space-y-4">
+      <SummaryTiles tiles={tiles} />
+      <Messages title="Must be resolved first" tone="bad" items={report.conflicts} />
+      <Messages title="Worth knowing" tone="warn" items={report.warnings} />
+      {report.products?.length ? (
+        <Section title="Products" hint={`${qty(report.products.length)} on the website`}>
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Product</th>
+                  <th className="px-3 py-2 font-semibold">Category</th>
+                  <th className="px-3 py-2 font-semibold">Slug</th>
+                  <th className="px-3 py-2 text-right font-semibold">Variations</th>
+                  <th className="px-3 py-2 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.products.map((row) => (
+                  <tr key={`${row.slug}-${row.code}`} className="border-b border-slate-100">
+                    <td className="px-3 py-1.5">
+                      <span className="font-semibold text-slate-800">{row.name}</span>{' '}
+                      <span className="ops-code text-[11px] text-slate-400">#{row.code}</span>
+                      {row.replaces ? <span className="block text-[11px] text-slate-400">here as “{row.replaces}”</span> : null}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-500">
+                      {row.category} {row.newCategory ? <Pill tone="good">new</Pill> : null}
+                    </td>
+                    <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.slug}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                      {row.variationsToCreate ? <span className="font-semibold text-emerald-700">+{row.variationsToCreate}</span> : null}
+                      {row.variationsToCreate && (row.variationsMatched || row.variationsToLink) ? ' / ' : null}
+                      {row.variationsMatched || row.variationsToLink ? (
+                        <span className="text-slate-400">{row.variationsMatched + row.variationsToLink} here</span>
+                      ) : null}
+                      {!row.variationsToCreate && !row.variationsMatched && !row.variationsToLink ? '—' : null}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <ActionPill action={row.action} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      ) : null}
+    </div>
+  );
+}
+
+function ResetReport({ report }) {
+  const applied = report.mode === 'apply';
+  const total = (report.deleted || []).reduce((sum, row) => sum + row.rows, 0);
+  const products = report.deleted?.find((row) => row.table === 'Product')?.rows || 0;
+  const orders = report.deleted?.find((row) => row.table === 'Order')?.rows || 0;
+  return (
+    <div className="space-y-4">
+      <SummaryTiles
+        tiles={[
+          { label: applied ? 'Products deleted' : 'Products', value: qty(products), tone: products ? 'bad' : 'muted' },
+          { label: applied ? 'Orders deleted' : 'Orders', value: qty(orders), note: 'left with no items', tone: orders ? 'bad' : 'muted' },
+          { label: applied ? 'Rows deleted' : 'Rows in all', value: qty(total), note: `across ${qty(report.deleted?.length)} tables`, tone: total ? 'bad' : 'muted' },
+          {
+            label: 'Kept, unlinked',
+            value: qty((report.detached || []).reduce((sum, row) => sum + row.rows, 0)),
+            note: 'e.g. payments of a deleted order',
+            tone: report.detached?.length ? 'warn' : 'muted'
+          }
+        ]}
+      />
+      {report.deleted?.length ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Section title={applied ? 'Deleted' : 'Will be deleted'} hint="table by table">
+            <div className="max-h-80 overflow-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <tbody>
+                  {report.deleted.map((row) => (
+                    <tr key={row.table} className="border-b border-slate-100">
+                      <td className="ops-code px-3 py-1.5 text-slate-700">{row.table}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-600">{qty(row.rows)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+          <Section title={applied ? 'Kept and unlinked' : 'Will be kept, unlinked'} hint="the link is cleared, the row stays">
+            <div className="max-h-80 overflow-auto">
+              <table className="w-full border-collapse text-left text-xs">
+                <tbody>
+                  {report.detached?.length ? (
+                    report.detached.map((row) => (
+                      <tr key={`${row.table}.${row.column}`} className="border-b border-slate-100">
+                        <td className="px-3 py-1.5 text-slate-700">
+                          <span className="ops-code">{row.table}</span>
+                          <span className="text-slate-400"> · {row.column} → {row.pointsAt}</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-amber-700">{qty(row.rows)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <EmptyRow colSpan={2} title="Nothing outside the catalog points at it" />
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        </div>
+      ) : (
+        <Notice tone="good" icon={FiCheckCircle} title="The catalog is already empty">
+          There is nothing to delete. Run the steps below.
+        </Notice>
+      )}
+    </div>
+  );
+}
+
 function RunPanel({ run }) {
   if (!run) return null;
   const job = JOBS[run.job];
@@ -516,8 +690,10 @@ function RunPanel({ run }) {
       <SectionBody className="space-y-4 p-4">
         {run.status === 'running' ? (
           <Notice tone="info" icon={FiRefreshCw} title="Working">
-            Reading {run.scopeLabel ? run.scopeLabel : 'the old POS'} and comparing it with this system. Leaving
-            this page does not stop it.
+            {run.job === 'reset'
+              ? 'Working out everything that belongs to the catalog.'
+              : `Reading ${run.scopeLabel || (run.job === 'website' ? 'the old website' : 'the old POS')} and comparing it with this system.`}{' '}
+            Leaving this page does not stop it.
           </Notice>
         ) : null}
 
@@ -530,6 +706,8 @@ function RunPanel({ run }) {
           </>
         ) : null}
 
+        {report && run.job === 'reset' ? <ResetReport report={report} /> : null}
+        {report && run.job === 'website' ? <WebsiteReport report={report} /> : null}
         {report && run.job === 'catalog' ? <CatalogReport report={report} /> : null}
         {report && run.job === 'stock' ? <StockReport report={report} /> : null}
       </SectionBody>
@@ -702,6 +880,187 @@ function StockTab({ search, warehouseIds }) {
 
 /* ── page ─────────────────────────────────────────────────────────────────── */
 
+const timeOf = (value) =>
+  new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/**
+ * Where a job stands, read off the run log (newest first). The log lives in
+ * the API's memory, so "not run" means "not since the API last started".
+ */
+function stepState(job, runs) {
+  const latest = runs.find((entry) => entry.job === job);
+  const applied = runs.find((entry) => entry.job === job && entry.mode === 'apply' && entry.status === 'succeeded');
+  if (latest?.status === 'running') return { key: 'running', label: latest.mode === 'apply' ? 'Running' : 'Previewing', tone: 'info' };
+  if (latest?.status === 'failed') return { key: 'failed', label: `Stopped ${timeOf(latest.startedAt)}`, tone: 'bad', applied };
+  if (applied && applied === latest) return { key: 'applied', label: `Done ${timeOf(applied.finishedAt)}`, tone: 'good', applied };
+  if (latest) return { key: 'previewed', label: `Previewed ${timeOf(latest.finishedAt)}`, tone: 'neutral', applied };
+  return { key: 'idle', label: 'Not run yet', tone: 'neutral' };
+}
+
+function SourceCard({ icon: Icon, title, state, detail, children }) {
+  const tone = state.connected ? 'good' : state.configured ? 'bad' : 'warn';
+  return (
+    <div className="card-ui flex min-w-0 flex-col gap-2 px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold text-slate-700">
+          <Icon size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="truncate">{title}</span>
+        </p>
+        <Pill tone={tone}>{state.connected ? 'connected' : state.configured ? 'unreachable' : 'not set up'}</Pill>
+      </div>
+      {state.connected ? (
+        <p className="text-xs text-slate-500">{detail}</p>
+      ) : (
+        <p className="text-xs text-slate-500">{state.message || 'Checking…'}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/** One stop on the line: its number, what it does, where it stands, and its two actions. */
+function Step({ job, state, sourceReady, blockedReason, orderHint, scopeNote, busy, onRun, last }) {
+  const definition = JOBS[job];
+  const node =
+    state.key === 'applied'
+      ? 'border-[var(--brand)] bg-[var(--brand)] text-white'
+      : state.key === 'running'
+        ? 'border-[var(--brand)] bg-white text-[var(--brand-strong)] motion-safe:animate-pulse'
+        : state.key === 'failed'
+          ? 'border-rose-400 bg-rose-50 text-rose-600'
+          : 'border-slate-300 bg-white text-slate-500';
+  return (
+    <li className="relative flex gap-4 pb-6 last:pb-0">
+      {/* The line itself: from this stop down to the next. */}
+      {last ? null : <span aria-hidden="true" className="absolute left-[17px] top-9 bottom-0 w-px bg-slate-200" />}
+      <span
+        className={`relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black tabular-nums ${node}`}
+        aria-hidden="true"
+      >
+        {state.key === 'applied' ? <FiCheckCircle size={16} /> : definition.step}
+      </span>
+      <div className="min-w-0 flex-1 pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h3 className="text-[15px] font-black tracking-tight text-slate-900">
+            <span className="sr-only">Step {definition.step}: </span>
+            {definition.label}
+          </h3>
+          <Pill tone={state.tone}>{state.label}</Pill>
+          {definition.repeatable ? <span className="text-[11px] text-slate-400">run as often as needed</span> : null}
+        </div>
+        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-500">{definition.blurb}</p>
+        {scopeNote ? <p className="mt-1 text-[11px] text-slate-400">{scopeNote}</p> : null}
+        {orderHint ? (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] font-semibold text-amber-700">
+            <FiAlertTriangle size={12} className="mt-px shrink-0" aria-hidden="true" /> {orderHint}
+          </p>
+        ) : null}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onRun(job, 'preview')}
+            className="btn-ghost h-9 !text-xs"
+            disabled={!sourceReady || busy}
+          >
+            <FiEye size={13} aria-hidden="true" /> Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => onRun(job, 'apply')}
+            className="btn-brand h-9 !text-xs"
+            disabled={!sourceReady || busy}
+          >
+            <FiPlay size={13} aria-hidden="true" /> {definition.runLabel}
+          </button>
+          {!sourceReady && blockedReason ? <span className="text-[11px] text-slate-400">{blockedReason}</span> : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The reset, kept apart from the line and coloured as what it is. Deleting
+ * needs a preview of exactly what goes, then the phrase typed out.
+ */
+function StartOver({ runs, busy, onPreview, onApply }) {
+  const [open, setOpen] = useState(false);
+  const [phrase, setPhrase] = useState('');
+  const latest = runs.find((entry) => entry.job === 'reset');
+  const previewed = latest?.mode === 'preview' && latest.status === 'succeeded';
+  const ready = previewed && phrase.trim() === RESET_PHRASE;
+  return (
+    <section className="card-ui overflow-hidden !border-rose-200">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100 bg-rose-50/60 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <FiTrash2 size={15} className="shrink-0 text-rose-500" aria-hidden="true" />
+          <h2 className="text-[13px] font-bold uppercase tracking-wide text-rose-700">Start over</h2>
+          <span className="truncate text-xs font-medium text-rose-500/80">before launch only</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="btn-ghost h-9 !text-xs"
+          aria-expanded={open}
+          aria-controls="start-over-panel"
+        >
+          {open ? 'Close' : 'Open'}
+          <FiChevronDown
+            size={14}
+            aria-hidden="true"
+            className={`transition-transform duration-200 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+      </header>
+      {open ? (
+        <div id="start-over-panel" className="space-y-3 p-4">
+          <p className="max-w-3xl text-xs leading-relaxed text-slate-600">
+            Deletes every product and variation, with everything that cannot exist without them: stock, stock lots and
+            their ledger, order items, production records, reviews and purchase lines. Orders left with no items go too.
+            Payments and cash entries of those orders are kept, with the order link cleared. Branches, users, colours,
+            sizes, materials and images stay, and the steps below reuse them.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <button type="button" onClick={onPreview} className="btn-ghost h-9 !text-xs" disabled={busy}>
+              <FiEye size={13} aria-hidden="true" /> Preview what goes
+            </button>
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-[11px] font-semibold text-slate-500">
+                Type <span className="ops-code text-rose-600">{RESET_PHRASE}</span> to confirm
+              </span>
+              <input
+                value={phrase}
+                onChange={(event) => setPhrase(event.target.value)}
+                className={`${fieldClass} h-9 !w-64 max-w-full !py-1 !text-xs`}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={!previewed || busy}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                onApply(phrase.trim());
+                setPhrase('');
+              }}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-rose-600 px-3.5 text-xs font-semibold text-white transition hover:bg-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!ready || busy}
+            >
+              <FiTrash2 size={13} aria-hidden="true" /> {JOBS.reset.runLabel}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            {previewed
+              ? `Previewed ${timeOf(latest.finishedAt)} — the table-by-table list is in the report below.`
+              : 'Preview first: the delete unlocks once you have seen exactly what goes.'}{' '}
+            Take a database backup before deleting; this cannot be undone from here.
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function LegacyPosMigration() {
   const queryClient = useQueryClient();
   const [activeRunId, setActiveRunId] = useState(null);
@@ -713,6 +1072,7 @@ export default function LegacyPosMigration() {
   const connectionQuery = useQuery('legacy-pos-status-connection', () => getLegacyPosStatus(), { retry: false });
   const connectionStatus = connectionQuery.data?.data;
   const connected = connectionStatus?.connected;
+  const websiteState = connectionStatus?.website || { configured: false, connected: false };
 
   const showroomsQuery = useQuery('legacy-pos-branches', getLegacyPosBranches, {
     retry: false,
@@ -733,6 +1093,7 @@ export default function LegacyPosMigration() {
     const selected = new Set(selectedWarehouseIds.map(String));
     return showrooms.filter((row) => selected.has(String(row.id)));
   }, [selectedWarehouseIds, showrooms]);
+  const scopeLabel = scopedShowrooms.length === 1 ? scopedShowrooms[0].name : `${scopedShowrooms.length} showrooms`;
 
   const statusQuery = useQuery(
     ['legacy-pos-status', scopeKey],
@@ -742,7 +1103,7 @@ export default function LegacyPosMigration() {
   const status = scopeReady ? statusQuery.data?.data : connectionStatus;
 
   const runsQuery = useQuery('legacy-pos-runs', getLegacyPosRuns, { retry: false });
-  const recentRuns = runsQuery.data?.data || [];
+  const recentRuns = useMemo(() => runsQuery.data?.data || [], [runsQuery.data]);
 
   // Follow the newest run automatically, so a run started before a page reload
   // is picked back up rather than looking as though it never happened.
@@ -752,8 +1113,10 @@ export default function LegacyPosMigration() {
     retry: false,
     refetchInterval: (data) => (data?.data?.status === 'running' ? 2000 : false),
     onSuccess: (data) => {
+      if (data?.data?.status !== 'running') queryClient.invalidateQueries('legacy-pos-runs');
       if (data?.data?.status === 'succeeded' && data.data.mode === 'apply') {
         queryClient.invalidateQueries('legacy-pos-status');
+        queryClient.invalidateQueries('legacy-pos-status-connection');
         queryClient.invalidateQueries('legacy-pos-branches');
         queryClient.invalidateQueries('legacy-pos-products');
         queryClient.invalidateQueries('legacy-pos-stock');
@@ -772,26 +1135,22 @@ export default function LegacyPosMigration() {
   });
 
   const trigger = async (job, mode) => {
-    if (!scopeReady) return;
-    const scopeLabel = scopedShowrooms.length === 1 ? scopedShowrooms[0].name : `${scopedShowrooms.length} showrooms`;
+    const definition = JOBS[job];
+    if (definition.usesScope && !scopeReady) return;
+    const label = definition.usesScope ? scopeLabel : job === 'website' ? 'Old website' : 'Whole catalog';
 
     if (mode === 'apply') {
       const confirmed = await Swal.fire({
-        title: `${JOBS[job].runLabel}?`,
-        text: `${JOBS[job].confirm} This run covers ${scopeLabel}.`,
+        title: `${definition.runLabel}?`,
+        text: `${definition.confirm}${definition.usesScope ? ` This run covers ${scopeLabel}.` : ''}`,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: JOBS[job].runLabel,
+        confirmButtonText: definition.runLabel,
         confirmButtonColor: '#0f172a'
       });
       if (!confirmed.isConfirmed) return;
     }
-    start.mutate({
-      job,
-      mode,
-      warehouseIds: selectedWarehouseIds,
-      scopeLabel
-    });
+    start.mutate({ job, mode, warehouseIds: definition.usesScope ? selectedWarehouseIds : undefined, scopeLabel: label });
     if (mode === 'preview') toast('Preview started');
   };
 
@@ -800,12 +1159,33 @@ export default function LegacyPosMigration() {
     setSearch(searchInput.trim());
   };
 
+  const states = Object.fromEntries(STEPS.map((job) => [job, stepState(job, recentRuns)]));
+  const working = busy || start.isLoading;
+  const stepProps = {
+    website: {
+      sourceReady: Boolean(websiteState.connected),
+      blockedReason: 'Connect the old website first.'
+    },
+    catalog: {
+      sourceReady: Boolean(connected && scopeReady),
+      blockedReason: connected ? 'Select at least one showroom below.' : 'Connect the old POS first.',
+      orderHint: states.website.applied ? null : 'Import the website first, so these land on website products instead of beside them.',
+      scopeNote: connected && scopeReady ? `Showrooms: ${scopedShowrooms.map((row) => row.name).join(' · ')}` : null
+    },
+    stock: {
+      sourceReady: Boolean(connected && scopeReady),
+      blockedReason: connected ? 'Select at least one showroom below.' : 'Connect the old POS first.',
+      orderHint: states.catalog.applied ? null : 'Import showroom products first; stock can only land on a matched variation.',
+      scopeNote: connected && scopeReady ? `Showrooms: ${scopedShowrooms.map((row) => row.name).join(' · ')}` : null
+    }
+  };
+
   return (
     <div className="space-y-4">
       <PageBar
         eyebrow="Migration"
-        title="Old POS"
-        subtitle="Bring branches, products and branch stock across from the old POS while both systems are running."
+        title="Catalog migration"
+        subtitle="Website products first, then the showrooms, then their stock."
       >
         <button
           type="button"
@@ -817,9 +1197,71 @@ export default function LegacyPosMigration() {
           className="btn-ghost h-9 !text-xs"
           disabled={connectionQuery.isFetching || statusQuery.isFetching}
         >
-          <FiRefreshCw size={13} className={connectionQuery.isFetching || statusQuery.isFetching ? 'animate-spin' : ''} /> Check connection
+          <FiRefreshCw size={13} className={connectionQuery.isFetching || statusQuery.isFetching ? 'animate-spin' : ''} /> Check connections
         </button>
       </PageBar>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <SourceCard
+          icon={FiGlobe}
+          title="Old website"
+          state={connectionQuery.isLoading ? { message: 'Checking…' } : websiteState}
+          detail={
+            websiteState.source
+              ? `${qty(websiteState.source.products)} products · ${qty(websiteState.source.variations)} variations · ${qty(websiteState.source.categories)} categories`
+              : null
+          }
+        />
+        <SourceCard
+          icon={FiDatabase}
+          title="Old POS"
+          state={connectionQuery.isLoading ? { message: 'Checking…' } : connectionStatus || {}}
+          detail={
+            scopeReady && status?.source
+              ? `${qty(status.source.products)} products · ${qty(status.source.stockQuantity)} pcs in ${qty(status.source.warehouses)} selected showrooms`
+              : 'Select showrooms below to see their totals.'
+          }
+        >
+          {status?.source?.missingWarehouses?.length ? (
+            <p className="text-[11px] font-semibold text-rose-600">
+              Not found in the old POS: {status.source.missingWarehouses.join(', ')}. Nothing can be imported until the
+              names match.
+            </p>
+          ) : null}
+          {status?.lastStockMovementAt ? (
+            <p className="text-[11px] text-slate-400">Last stock pulled {timeOf(status.lastStockMovementAt)}</p>
+          ) : null}
+        </SourceCard>
+      </div>
+
+      <StartOver
+        runs={recentRuns}
+        busy={working}
+        onPreview={() => trigger('reset', 'preview')}
+        onApply={(confirmation) => start.mutate({ job: 'reset', mode: 'apply', confirmation, scopeLabel: 'Whole catalog' })}
+      />
+
+      <Section title="Migration" hint="in this order">
+        <SectionBody className="p-4 sm:p-5">
+          <ol aria-label="Migration steps, in order">
+            {STEPS.map((job, index) => (
+              <Step
+                key={job}
+                job={job}
+                state={states[job]}
+                busy={working}
+                onRun={trigger}
+                last={index === STEPS.length - 1}
+                {...stepProps[job]}
+              />
+            ))}
+          </ol>
+          <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+            Preview writes nothing — it reads both systems and reports what a run would do. Step history is kept until
+            the API restarts.
+          </p>
+        </SectionBody>
+      </Section>
 
       {connected ? (
         <ScopeSelector
@@ -828,118 +1270,10 @@ export default function LegacyPosMigration() {
           onChange={setWarehouseScope}
           isLoading={showroomsQuery.isLoading}
           error={showroomsQuery.error}
-          disabled={busy || start.isLoading}
+          disabled={working}
           missingDefaults={showroomsQuery.data?.meta?.missingDefaultWarehouses || []}
         />
       ) : null}
-
-      <Section
-        title="Old POS"
-        icon={FiDatabase}
-        hint={status?.connection ? `${status.connection.host} · ${status.connection.database}` : undefined}
-        actions={
-          <Pill tone={connected ? 'good' : connectionStatus?.configured ? 'bad' : 'warn'}>
-            {connected ? 'connected' : connectionStatus?.configured ? 'unreachable' : 'not configured'}
-          </Pill>
-        }
-      >
-        <SectionBody className="space-y-3 p-4">
-          {connectionQuery.isLoading || (scopeReady && statusQuery.isLoading) ? (
-            <p className="text-sm text-slate-400">Checking…</p>
-          ) : null}
-          {scopeReady && statusQuery.error ? (
-            <Notice tone="bad" title="Scoped totals could not be loaded">{errorText(statusQuery.error)}</Notice>
-          ) : null}
-          {connectionStatus && !connected ? (
-            <Notice tone={connectionStatus.configured ? 'bad' : 'warn'} icon={FiAlertTriangle} title="The old POS cannot be read">
-              {connectionStatus.message || 'The connection was refused.'}
-            </Notice>
-          ) : null}
-          {connected && scopeReady && status?.source ? (
-            <>
-              <Notice
-                tone={status.source.missingWarehouses?.length ? 'bad' : 'neutral'}
-                icon={status.source.missingWarehouses?.length ? FiAlertTriangle : FiLayers}
-                title={`Scoped to ${qty(status.scope?.length || 0)} showrooms`}
-              >
-                {(status.scope || []).join(' · ')}
-                {status.source.missingWarehouses?.length ? (
-                  <p className="mt-1 font-semibold">
-                    Not found in the old POS: {status.source.missingWarehouses.join(', ')}. Nothing can be
-                    imported until the names match.
-                  </p>
-                ) : (
-                  <p className="mt-1 opacity-80">
-                    Only these showrooms contribute to the products, stock and migration actions on this page.
-                  </p>
-                )}
-              </Notice>
-              <SummaryTiles
-                tiles={[
-                  { label: 'Showrooms', value: qty(status.source.warehouses) },
-                  { label: 'Products trading', value: qty(status.source.products) },
-                  { label: 'Variants trading', value: qty(status.source.variants) },
-                  {
-                    label: 'Stock there',
-                    value: qty(status.source.stockQuantity),
-                    note: `${qty(status.source.stockLines)} lines`
-                  }
-                ]}
-              />
-            </>
-          ) : null}
-          {connected && !scopeReady ? (
-            <Notice tone="warn" icon={FiAlertTriangle} title="Migration scope is empty">
-              Select at least one showroom above to load scoped totals.
-            </Notice>
-          ) : null}
-          {status?.lastStockMovementAt ? (
-            <p className="text-[11px] text-slate-400">
-              Last stock movement pulled: {new Date(status.lastStockMovementAt).toLocaleString()}
-            </p>
-          ) : null}
-        </SectionBody>
-      </Section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {Object.entries(JOBS).map(([job, definition]) => (
-          <Section key={job} title={definition.label} icon={definition.icon}>
-            {/* min-h, never h-full: `Section` is not a flex column, so h-full
-                here resolves to the section's whole height — header included —
-                and pushes the buttons out under `overflow-hidden`. A floor is
-                all this needs: it lines the two cards' buttons up when their
-                blurbs wrap to different heights. */}
-            <SectionBody className="flex min-h-[7.5rem] flex-col gap-3 p-4">
-              <p className="text-xs leading-relaxed text-slate-500">{definition.blurb}</p>
-
-              <div className="mt-auto flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => trigger(job, 'preview')}
-                  className="btn-ghost h-9 !text-xs"
-                  disabled={!connected || !scopeReady || busy || start.isLoading}
-                >
-                  <FiEye size={13} /> Preview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => trigger(job, 'apply')}
-                  className="btn-brand h-9 !text-xs"
-                  disabled={!connected || !scopeReady || busy || start.isLoading}
-                >
-                  <FiPlay size={13} /> {definition.runLabel}
-                </button>
-              </div>
-            </SectionBody>
-          </Section>
-        ))}
-      </div>
-
-      {busy ? null : (
-        <p className="text-[11px] text-slate-400">
-          Preview writes nothing — it only reads both systems and reports what a run would do.
-        </p>
-      )}
 
       <RunPanel run={run} />
 
@@ -996,9 +1330,10 @@ export default function LegacyPosMigration() {
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                   placeholder="Search name or barcode"
+                  aria-label="Search name or barcode"
                   className={`${fieldClass} h-8 !w-52 !py-1 !text-xs`}
                 />
-                <button type="submit" className="btn-ghost h-8 !text-xs">
+                <button type="submit" className="btn-ghost h-8 !text-xs" aria-label="Search">
                   <FiSearch size={13} />
                 </button>
               </form>

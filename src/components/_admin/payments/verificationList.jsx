@@ -27,6 +27,7 @@ const REASON_LABELS = {
   outside_window: 'Payment timestamp is outside the invoice window',
   multiple_attempts: 'Customer tried several transaction IDs',
   high_value: 'Above the review threshold',
+  balance_unverified: 'The SMS balance does not chain from the wallet — it may be forged',
   unrecognised_sms: 'The SMS could not be read automatically'
 };
 
@@ -39,15 +40,93 @@ const STATUS_STYLES = {
   expired: 'border-slate-200 bg-slate-50 text-slate-400'
 };
 
+const STATUS_LABELS = {
+  needs_review: 'Needs review',
+  awaiting_sms: 'Waiting for SMS',
+  awaiting_payment: 'Not paid yet',
+  verified: 'Verified',
+  rejected: 'Rejected',
+  expired: 'Expired'
+};
+
+const STATUS_TABS = [
+  { value: 'needs_review', label: 'Needs review' },
+  { value: 'awaiting_sms', label: 'Waiting for SMS' },
+  { value: 'awaiting_payment', label: 'Not paid yet' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'expired', label: 'Expired' },
+  { value: '', label: 'All' }
+];
+
 function StatusBadge({ status }) {
   return (
     <span
-      className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-xs ${
+      className={`whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
         STATUS_STYLES[status] || STATUS_STYLES.awaiting_payment
       }`}
     >
-      {String(status || '').replace(/_/g, ' ')}
+      {STATUS_LABELS[status] || String(status || '').replace(/_/g, ' ')}
     </span>
+  );
+}
+
+// The questions a reviewer is really asking, answered from the evidence, so
+// "can I approve this?" is read off green and amber lines instead of pieced
+// together from a table. Each line is the inverse of a reason code.
+function ApprovalChecklist({ reasons = [], actual }) {
+  const has = (code) => reasons.includes(code);
+  const checks = [
+    {
+      ok: Boolean(actual),
+      good: 'The transaction ID is in an SMS the shop phone received',
+      bad: 'No SMS with this transaction ID has arrived'
+    },
+    actual && { ok: !has('amount_mismatch'), good: 'The amount matches', bad: 'The amount is different' },
+    actual && {
+      ok: !has('account_mismatch'),
+      good: 'Paid to the right wallet',
+      bad: 'Paid to a different wallet or operator'
+    },
+    actual && {
+      ok: !has('trxid_reused'),
+      good: 'This transaction ID has not been used before',
+      bad: 'This transaction ID was already used for another payment'
+    },
+    actual && {
+      ok: !has('outside_window'),
+      good: 'Paid while the invoice was open',
+      bad: 'Paid outside the invoice time'
+    },
+    actual &&
+      actual.balanceStatus !== 'unchecked' && {
+        ok: actual.balanceStatus === 'verified',
+        good: "The wallet balance adds up — the SMS is genuine",
+        bad: "The wallet balance does not add up — the SMS may be forged"
+      },
+    has('sender_mismatch') && { ok: false, bad: 'Paid from a different number than the customer said' },
+    has('multiple_attempts') && { ok: false, bad: 'The customer tried several transaction IDs' },
+    has('high_value') && { ok: false, bad: 'Large payment — always checked by a person' }
+  ].filter(Boolean);
+
+  return (
+    <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+      {checks.map((check) => (
+        <li key={check.good || check.bad} className="flex items-start gap-2.5 px-3 py-2 text-sm">
+          <span
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${
+              check.ok ? 'bg-emerald-500' : 'bg-amber-500'
+            }`}
+            aria-hidden="true"
+          >
+            {check.ok ? <FiCheck size={12} /> : <FiAlertTriangle size={11} />}
+          </span>
+          <span className={check.ok ? 'text-slate-700' : 'font-medium text-amber-800'}>
+            {check.ok ? check.good : check.bad}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -164,51 +243,51 @@ function ReviewModal({ intentId, onClose, onDone }) {
 
         {intent && (
           <>
-            {intent.reviewReason?.length > 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                <p className="mb-1 text-xs font-semibold text-amber-800">
-                  Why this needs a human
-                </p>
-                <ReasonList reasons={intent.reviewReason} />
-              </div>
-            )}
+            <ApprovalChecklist reasons={intent.reviewReason || []} actual={actual} />
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[520px]">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500" />
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
-                      Customer claimed
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
-                      SMS actually said
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  <CompareRow label="Transaction ID" claimed={claimed?.trxId} actual={actual?.trxId} mono />
-                  <CompareRow
-                    label="Amount"
-                    claimed={claimed?.amount != null ? fmt(claimed.amount) : null}
-                    actual={actual?.amount != null ? fmt(actual.amount) : null}
-                  />
-                  <CompareRow
-                    label="Paid from"
-                    claimed={claimed?.senderAccount}
-                    actual={actual?.senderAccount}
-                    mono
-                  />
-                  <CompareRow label="Operator" claimed={claimed?.type} actual={actual?.type} />
-                  <CompareRow label="Paid to" claimed={claimed?.account} actual={actual?.account} mono />
-                  <CompareRow
-                    label="Time"
-                    claimed={claimed?.at ? dtStr(claimed.at) : null}
-                    actual={actual?.at ? dtStr(actual.at) : null}
-                  />
-                </tbody>
-              </table>
-            </div>
+            <details className="rounded-md border border-slate-200">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600">
+                Compare the customer&apos;s claim with the SMS
+              </summary>
+              <div className="border-t border-slate-100 p-3">
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full min-w-[520px]">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500" />
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
+                          Customer claimed
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
+                          SMS actually said
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      <CompareRow label="Transaction ID" claimed={claimed?.trxId} actual={actual?.trxId} mono />
+                      <CompareRow
+                        label="Amount"
+                        claimed={claimed?.amount != null ? fmt(claimed.amount) : null}
+                        actual={actual?.amount != null ? fmt(actual.amount) : null}
+                      />
+                      <CompareRow
+                        label="Paid from"
+                        claimed={claimed?.senderAccount}
+                        actual={actual?.senderAccount}
+                        mono
+                      />
+                      <CompareRow label="Operator" claimed={claimed?.type} actual={actual?.type} />
+                      <CompareRow label="Paid to" claimed={claimed?.account} actual={actual?.account} mono />
+                      <CompareRow
+                        label="Time"
+                        claimed={claimed?.at ? dtStr(claimed.at) : null}
+                        actual={actual?.at ? dtStr(actual.at) : null}
+                      />
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
 
             {/* The raw message is the evidence — show it verbatim rather than
                 asking the reviewer to trust the parser's reading of it. */}
@@ -220,6 +299,19 @@ function ReviewModal({ intentId, onClose, onDone }) {
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100">
                   {actual.rawBody}
                 </pre>
+                {/* Balance verification: the check a forged SMS cannot pass. */}
+                {actual.balanceStatus === 'verified' && (
+                  <p className="mt-1.5 text-xs text-emerald-700">
+                    Balance verified — this message chains from the wallet&apos;s real balance
+                    {actual.simSlot ? ` (SIM ${actual.simSlot})` : ''}.
+                  </p>
+                )}
+                {actual.balanceStatus === 'unverified' && (
+                  <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    <strong>Balance not verified.</strong> {actual.balanceReason || ''} Check the wallet app
+                    for this transaction before approving.
+                  </p>
+                )}
               </div>
             )}
 
@@ -231,16 +323,16 @@ function ReviewModal({ intentId, onClose, onDone }) {
                 <div className="space-y-2">
                   {candidates.map((c) => (
                     <label
-                      key={c._id}
+                      key={c.id}
                       className={`flex cursor-pointer items-start gap-2 rounded-md border p-2 text-xs ${
-                        chosenSms === c._id ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'
+                        chosenSms === c.id ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'
                       }`}
                     >
                       <input
                         type="radio"
                         name="candidate"
-                        checked={chosenSms === c._id}
-                        onChange={() => setChosenSms(c._id)}
+                        checked={chosenSms === c.id}
+                        onChange={() => setChosenSms(c.id)}
                         className="mt-0.5"
                       />
                       <span>
@@ -372,11 +464,15 @@ export default function VerificationList() {
       render: (i) =>
         ['needs_review', 'awaiting_sms'].includes(i.status) && (
           <button
-            onClick={() => setReviewId(i._id)}
-            className="whitespace-nowrap rounded-md border px-3 py-1 text-xs font-medium transition hover:bg-slate-50"
-            style={{ color: 'var(--brand-strong)', borderColor: 'var(--brand-ring)' }}
+            onClick={() => setReviewId(i.id)}
+            className={
+              i.status === 'needs_review'
+                ? 'btn-brand h-8 whitespace-nowrap px-3 text-xs'
+                : 'whitespace-nowrap rounded-md border px-3 py-1 text-xs font-medium transition hover:bg-slate-50'
+            }
+            style={i.status === 'needs_review' ? undefined : { color: 'var(--brand-strong)', borderColor: 'var(--brand-ring)' }}
           >
-            Review
+            {i.status === 'needs_review' ? 'Review' : 'Check'}
           </button>
         )
     }
@@ -393,31 +489,51 @@ export default function VerificationList() {
         }
       />
 
-      <ListToolbar
-        refreshing={isFetching}
-        onRefresh={refetch}
-        onReset={() => {
-          setStatus('needs_review');
-          setPage(1);
-        }}
-      >
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="select-ui"
-        >
-          <option value="needs_review">Needs review</option>
-          <option value="awaiting_sms">Awaiting SMS</option>
-          <option value="awaiting_payment">Awaiting payment</option>
-          <option value="verified">Verified</option>
-          <option value="rejected">Rejected</option>
-          <option value="expired">Expired</option>
-          <option value="">All</option>
-        </select>
-      </ListToolbar>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Payment status">
+          {STATUS_TABS.map((tab) => {
+            const active = status === tab.value;
+            return (
+              <button
+                key={tab.label}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setStatus(tab.value);
+                  setPage(1);
+                }}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition ${
+                  active
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                {tab.label}
+                {tab.value === 'needs_review' && data?.pendingReview > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 text-[10px] font-bold ${
+                      active ? 'bg-white text-slate-900' : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    {data.pendingReview}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="ml-auto">
+          <ListToolbar refreshing={isFetching} onRefresh={refetch} />
+        </div>
+      </div>
+
+      {status === 'needs_review' && rows.length > 0 && (
+        <p className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          These payments did not match cleanly. Open each one, check the list, and approve or reject it —
+          approving marks the order paid.
+        </p>
+      )}
 
       <DataTable
         columns={columns}

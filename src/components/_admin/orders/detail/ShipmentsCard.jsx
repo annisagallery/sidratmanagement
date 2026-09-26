@@ -12,7 +12,7 @@
 import { format } from 'date-fns';
 import { FiAlertTriangle, FiExternalLink, FiRefreshCw, FiTruck } from 'react-icons/fi';
 
-import { CopyButton, PROVIDER_LABEL, Pill, Section, SectionBody, money, oid } from './parts';
+import { Card, CopyButton, PROVIDER_LABEL, Pill, money, oid } from './parts';
 
 const STATUS_META = {
   pending: { label: 'Awaiting pickup', tone: 'neutral' },
@@ -27,10 +27,10 @@ const STATUS_META = {
 
 /** Intent states worth saying out loud; `submitted` is the silent normal case. */
 const INTENT_NOTE = {
-  prepared: 'Prepared — not yet sent to the courier.',
-  submitting: 'Submission in progress. Do not re-send until this resolves.',
-  failed: 'The courier rejected the submission.',
-  requires_review: 'Needs review — the courier may already hold this parcel.'
+  prepared: 'Not sent to the courier yet',
+  submitting: 'Sending to the courier…',
+  failed: 'Rejected by the courier',
+  requires_review: 'Needs review — the courier may already have it'
 };
 
 export function ShipmentStatusPill({ status }) {
@@ -54,23 +54,23 @@ export default function ShipmentsCard({
   sendLabel = 'Send parcel'
 }) {
   return (
-    <Section
-      title="Courier"
+    <Card
+      title="Shipping"
       icon={FiTruck}
-      hint={shipments.length ? `${shipments.length} attempt${shipments.length === 1 ? '' : 's'}` : 'Not dispatched'}
+      badge={shipments.length > 1 ? <Pill tone="neutral">{shipments.length} attempts</Pill> : null}
       actions={
         <button
           type="button"
           onClick={onSend}
           disabled={!meta.canSend}
-          title={meta.canSend ? sendLabel : 'The order must be packed before a parcel can be created.'}
-          className="btn-ghost h-8 !px-2.5 !text-xs"
+          title={meta.canSend ? sendLabel : 'Pack the order first'}
+          className={meta.canSend ? 'btn-brand h-8 !px-3 !text-xs' : 'btn-ghost h-8 !px-2.5 !text-xs'}
         >
           <FiTruck size={14} /> {sendLabel}
         </button>
       }
     >
-      <SectionBody className="p-4">
+      <div className="border-t border-slate-100 px-5 py-4">
         {shipments.length ? (
           <ul className="space-y-2">
             {shipments.map((shipment) => {
@@ -81,7 +81,7 @@ export default function ShipmentsCard({
               return (
                 <li
                   key={id}
-                  className={`rounded-md border p-3 ${shipment.isActive ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'}`}
+                  className={`rounded-lg border p-3 ${shipment.isActive ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60 opacity-75'}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -91,7 +91,7 @@ export default function ShipmentsCard({
                         {shipment.attempt > 1 ? <Pill tone="neutral">Attempt {shipment.attempt}</Pill> : null}
                         {!shipment.isActive ? <Pill tone="neutral">Superseded</Pill> : null}
                       </p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-slate-400">
+                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-slate-500">
                         {shipment.consignmentId ? (
                           <>
                             <span className="ops-code font-semibold text-slate-600">{shipment.consignmentId}</span>
@@ -101,7 +101,9 @@ export default function ShipmentsCard({
                         ) : null}
                         <span>{money(shipment.codAmount)} COD</span>
                         {shipment.deliveryFee ? <span>· {money(shipment.deliveryFee)} fee</span> : null}
-                        {shipment.createdAt ? <span>· {format(new Date(shipment.createdAt), 'dd MMM, hh:mm a')}</span> : null}
+                        {shipment.createdAt ? (
+                          <span>· {format(new Date(shipment.createdAt), 'dd MMM, hh:mm a')}</span>
+                        ) : null}
                         {shipment.createdBy?.name ? <span>· by {shipment.createdBy.name}</span> : null}
                       </p>
                     </div>
@@ -114,7 +116,7 @@ export default function ShipmentsCard({
                         disabled={refreshingId === id}
                         title="Refresh status from the courier"
                         aria-label="Refresh status from the courier"
-                        className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                        className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                       >
                         <FiRefreshCw size={13} className={refreshingId === id ? 'animate-spin' : ''} />
                       </button>
@@ -125,7 +127,7 @@ export default function ShipmentsCard({
                           rel="noreferrer"
                           title="Track parcel"
                           aria-label="Track parcel"
-                          className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                         >
                           <FiExternalLink size={13} />
                         </a>
@@ -149,13 +151,9 @@ export default function ShipmentsCard({
             })}
           </ul>
         ) : (
-          <p className="py-2 text-sm text-slate-400">
-            {meta.canSend
-              ? 'No parcel created yet — send it to a courier when it leaves the table.'
-              : 'No parcel yet. The order must be packed before a consignment can be created.'}
-          </p>
+          <p className="text-sm text-slate-500">No parcel yet</p>
         )}
-      </SectionBody>
-    </Section>
+      </div>
+    </Card>
   );
 }

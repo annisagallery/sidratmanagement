@@ -20,9 +20,9 @@ import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.css';
 import {
   FiAlertTriangle,
+  FiChevronRight,
   FiCornerDownLeft,
   FiEdit2,
-  FiMessageCircle,
   FiPackage,
   FiPlayCircle,
   FiShoppingBag
@@ -43,14 +43,14 @@ import PaymentsCard from 'src/components/_admin/orders/detail/PaymentsCard';
 import ReturnReceiptCard, { pendingReturnItems } from 'src/components/_admin/orders/detail/ReturnReceiptCard';
 import ReturnItemsModal from 'src/components/_admin/orders/detail/ReturnItemsModal';
 import ShipmentsCard from 'src/components/_admin/orders/detail/ShipmentsCard';
-import { AddressPanel, BillPanel, CustomerPanel, MetaPanel } from 'src/components/_admin/orders/detail/SidePanels';
+import { CustomerPanel, MetaPanel, NotePanel } from 'src/components/_admin/orders/detail/SidePanels';
 import {
   AddPaymentModal,
   ComplaintModal,
   EditDetailsModal,
   ShipModal
 } from 'src/components/_admin/orders/detail/modals';
-import { Notice, Section, SectionBody, errorAlert, money, oid, toast } from 'src/components/_admin/orders/detail/parts';
+import { Card, Notice, errorAlert, money, oid, toast } from 'src/components/_admin/orders/detail/parts';
 
 /** Only a finished order can carry a customer complaint about what arrived. */
 const COMPLETED_STATUSES = ['delivered', 'completed'];
@@ -97,17 +97,18 @@ export default function OrderDetail({ params }) {
 
   /* ── mutations ─────────────────────────────────────────────────────────── */
 
-  const { mutate: updateStatus, mutateAsync: updateStatusAsync, isLoading: updatingStatus } = useMutation(
-    (status) => api.updateOrderStatusByAdmin({ orderNo, status }),
-    {
-      onSuccess: () => {
-        refetch();
-        refetchShipments();
-        toast('Status updated');
-      },
-      onError: (error) => errorAlert('Could not update status', error)
-    }
-  );
+  const {
+    mutate: updateStatus,
+    mutateAsync: updateStatusAsync,
+    isLoading: updatingStatus
+  } = useMutation((status) => api.updateOrderStatusByAdmin({ orderNo, status }), {
+    onSuccess: () => {
+      refetch();
+      refetchShipments();
+      toast('Status updated');
+    },
+    onError: (error) => errorAlert('Could not update status', error)
+  });
 
   const { mutateAsync: packOrderAsync } = useMutation(() => api.packOrderByAdmin(orderNo), {
     onSuccess: () => {
@@ -253,9 +254,7 @@ export default function OrderDetail({ params }) {
   const due = Math.max(0, Math.round((order.total || 0) - paid));
   const activeShipment = shipments.find((shipment) => shipment.isActive) || null;
   const packing = order.packingProgress || { total: 0, verified: 0, remaining: 0 };
-  const packingLeft = Math.max(0, packing.total - packing.verified);
   const canPackHere = ['confirmed', 'ready-to-pack'].includes(order.status);
-  const blockedActions = (order.availableActions || []).filter((action) => !action.enabled && action.blockedBy);
 
   /**
    * Fallback for API builds that predate `availableActions`: the statuses an
@@ -275,7 +274,7 @@ export default function OrderDetail({ params }) {
   })();
 
   return (
-    <div className="space-y-4 pb-12">
+    <div className="space-y-5 pb-12">
       <OrderHeader
         order={order}
         orderStatuses={orderStatuses}
@@ -297,60 +296,20 @@ export default function OrderDetail({ params }) {
         onHistory={() => setModal('history')}
       />
 
-      {/* Things that need a decision, stated plainly and never hidden. */}
-      {order.status === 'cancelled' ? (
-        <Notice tone="bad" icon={FiAlertTriangle} title="This order was cancelled.">
-          Reserved stock, materials, coupon and Sidrat Cash have been released. Any payment is settled in Finance review.
-        </Notice>
+      {/* The one exception worth a banner: money missing on a finished order.
+          Status, packing and courier progress live in the tracker above. */}
+      {due > 0 && codAwaiting === 0 && COMPLETED_STATUSES.includes(order.status) ? (
+        <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} unpaid on a delivered order`} />
       ) : null}
 
-      {order.status === 'returned' ? (
-        <Notice tone="bad" icon={FiAlertTriangle} title="This order was returned.">
-          {returnPending
-            ? 'Receive the parcel below to put its pieces back into stock or write them off. Refunds are handled in Finance review.'
-            : 'The parcel has been received. Refunds are handled in Finance review.'}
-        </Notice>
-      ) : null}
-
-      {canPackHere && packingLeft > 0 ? (
-        <Notice
-          tone="info"
-          icon={FiPackage}
-          title={`${packingLeft} of ${packing.total} pieces still to scan`}
-          action={
-            <button type="button" onClick={() => setModal('pack')} className="btn-brand h-9 !text-xs">
-              <FiPlayCircle size={14} /> Scan pieces
-            </button>
-          }
-        >
-          The scan panel opens beside this order — you do not lose your place.
-        </Notice>
-      ) : null}
-
-      {due > 0 && COMPLETED_STATUSES.includes(order.status) ? (
-        codAwaiting > 0 ? (
-          <Notice tone="info" icon={FiAlertTriangle} title={`${money(codAwaiting)} was collected by the courier.`}>
-            It is verified when the courier's payout is matched under Shipping → COD payouts.
-          </Notice>
-        ) : (
-          <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} is still unpaid on a delivered order.`}>
-            Record the collected amount under Payments, or raise it in Finance review.
-          </Notice>
-        )
-      ) : null}
-
-      {order.note ? (
-        <Notice tone="warn" icon={FiMessageCircle} title="Customer note">
-          {order.note}
-        </Notice>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
         {/* Reference column. First in the DOM so it leads on a phone, where the
             next step matters more than the item list. */}
-        <aside className="space-y-4 lg:order-2">
-          <Section title="Next step" icon={FiPlayCircle}>
-            <SectionBody className="space-y-2 p-4">
+        <aside className="space-y-5 lg:order-2">
+          <NotePanel note={order.note} />
+
+          <Card title="Actions" icon={FiPlayCircle}>
+            <div className="space-y-2 border-t border-slate-100 px-5 py-4">
               {order.availableActions ? (
                 <ActionBar actions={order.availableActions} onAction={handleAction} busyAction={busyAction} />
               ) : (
@@ -370,66 +329,58 @@ export default function OrderDetail({ params }) {
                   </select>
                 </label>
               )}
+            </div>
+            <ul className="divide-y divide-slate-100 border-t border-slate-100">
+              {[
+                canPackHere && { label: 'Scan & pack', icon: FiPackage, onClick: () => setModal('pack') },
+                {
+                  label: 'Add / remove products',
+                  icon: FiShoppingBag,
+                  onClick: () => router.push(`/orders/${orderNo}/edit`)
+                },
+                { label: 'Edit details & address', icon: FiEdit2, onClick: () => setModal('details') },
+                canReturnItems && {
+                  label: order.status === 'shipped' ? 'Partial delivery / returns' : 'Return items',
+                  icon: FiCornerDownLeft,
+                  onClick: () => setModal('return-items')
+                }
+              ]
+                .filter(Boolean)
+                .map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={item.onClick}
+                      className="group flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <item.icon size={15} className="shrink-0 text-slate-400 group-hover:text-slate-600" />
+                      <span className="flex-1">{item.label}</span>
+                      <FiChevronRight size={14} className="text-slate-300 group-hover:text-slate-500" />
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </Card>
 
-              {canPackHere ? (
-                <button
-                  type="button"
-                  onClick={() => setModal('pack')}
-                  className="btn-ghost w-full !border-sky-200 !bg-sky-50 !text-sky-700 hover:!bg-sky-100"
-                >
-                  <FiPackage size={15} /> Scan &amp; pack
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => router.push(`/orders/${orderNo}/edit`)}
-                className="btn-ghost w-full"
-              >
-                <FiShoppingBag size={15} /> Add / remove products
-              </button>
-
-              <button type="button" onClick={() => setModal('details')} className="btn-ghost w-full">
-                <FiEdit2 size={15} /> Edit details &amp; address
-              </button>
-
-              {canReturnItems ? (
-                <button type="button" onClick={() => setModal('return-items')} className="btn-ghost w-full">
-                  <FiCornerDownLeft size={15} />{' '}
-                  {order.status === 'shipped' ? 'Partial delivery / returns' : 'Return items'}
-                </button>
-              ) : null}
-
-              {blockedActions.length ? (
-                <ul className="space-y-1 pt-1">
-                  {blockedActions.map((action) => (
-                    <li key={action.action} className="text-[11px] leading-snug text-slate-500">
-                      <span className="font-semibold text-slate-600">{action.label}:</span> {action.blockedBy}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </SectionBody>
-          </Section>
-
-          <CustomerPanel order={order} />
-          <AddressPanel order={order} onEdit={() => setModal('details')} />
-          <BillPanel order={order} paid={paid} due={due} />
+          <CustomerPanel order={order} onEditAddress={() => setModal('details')} />
           <MetaPanel order={order} />
         </aside>
 
-        <div className="space-y-4 lg:order-1 lg:col-span-2">
+        <div className="min-w-0 space-y-5 lg:order-1">
           {order.status === 'returned' && returnPending ? (
             <ReturnReceiptCard key={order.updatedAt} order={order} orderNo={orderNo} onReceived={refetch} />
           ) : null}
 
           <ItemsCard
             order={order}
+            packing={packing}
+            onPack={canPackHere ? () => setModal('pack') : undefined}
             onComplain={setComplaintItem}
             canComplain={COMPLETED_STATUSES.includes(order.status)}
           />
 
           <PaymentsCard
+            order={order}
             payments={order.payments}
             total={order.total}
             paid={paid}

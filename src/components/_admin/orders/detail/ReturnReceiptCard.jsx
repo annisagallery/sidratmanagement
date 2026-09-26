@@ -14,7 +14,7 @@ import { useMutation } from 'react-query';
 import { FiCornerDownLeft } from 'react-icons/fi';
 
 import * as api from 'src/services';
-import { Section, SectionBody, errorAlert, oid, toast } from './parts';
+import { Card, Pill, errorAlert, oid, toast } from './parts';
 
 const RETURNED = ['returned', 'return'];
 
@@ -59,8 +59,13 @@ export default function ReturnReceiptCard({ order, orderNo, onReceived }) {
   const restockCount = items.filter((item) => decisions[oid(item)] !== false).length;
 
   return (
-    <Section title="Receive return" icon={FiCornerDownLeft} hint={`${items.length} piece${items.length === 1 ? '' : 's'} to inspect`}>
-      <SectionBody className="space-y-3 p-4">
+    <Card
+      title="Receive return"
+      icon={FiCornerDownLeft}
+      badge={<Pill tone="bad">{items.length} to inspect</Pill>}
+      className="!border-rose-200"
+    >
+      <div className="space-y-3 border-t border-slate-100 px-5 py-4">
         <ul className="space-y-2">
           {items.map((item) => {
             const id = oid(item);
@@ -72,7 +77,7 @@ export default function ReturnReceiptCard({ order, orderNo, onReceived }) {
               >
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-semibold text-slate-800">{itemName(item)}</p>
-                  {item.isCustom ? <p className="text-[11px] text-amber-600">Custom piece — restocks as custom stock</p> : null}
+                  {item.isCustom ? <p className="text-[11px] text-amber-600">Custom piece</p> : null}
                 </div>
                 <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-200 text-xs font-semibold">
                   <button
@@ -101,7 +106,7 @@ export default function ReturnReceiptCard({ order, orderNo, onReceived }) {
             ? 'Receiving…'
             : `Receive return — ${restockCount} to stock, ${items.length - restockCount} written off`}
         </button>
-      </SectionBody>
-    </Section>
+      </div>
+    </Card>
   );
 }

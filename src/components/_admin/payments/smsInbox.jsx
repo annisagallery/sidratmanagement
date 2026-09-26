@@ -319,6 +319,22 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
           </div>
         )}
 
+        {message.balanceStatus === 'unverified' && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <p className="font-semibold">Balance not verified</p>
+            <p className="mt-0.5 text-xs">
+              {message.balanceReason} This message cannot verify a payment on its own. If money moved
+              outside these SMS, set the wallet balance again under Payments → Devices.
+            </p>
+          </div>
+        )}
+        {message.balanceStatus === 'verified' && (
+          <p className="text-xs text-emerald-700">
+            Balance verified — chains from the wallet&apos;s last verified balance
+            {message.simSlot ? ` on SIM ${message.simSlot}` : ''}.
+          </p>
+        )}
+
         {unread && message.parseReason && !message.paymentId && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             <p className="font-semibold">{REASON_LABELS[message.parseReason] || message.parseReason}</p>

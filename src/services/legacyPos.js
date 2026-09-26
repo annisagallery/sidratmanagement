@@ -30,9 +30,10 @@ export const getLegacyPosStock = async (params = {}) =>
  * Starts a job and returns straight away; poll the run for the report.
  * `warehouseIds` is the page-level showroom scope for either job.
  * `scopeLabel` is only so the run reads properly before its report lands.
+ * `confirmation` is the phrase the reset requires before it deletes anything.
  */
-export const startLegacyPosRun = async ({ job, mode, warehouseIds, scopeLabel }) =>
-  (await http.post(`${BASE}/runs`, { job, mode, warehouseIds, scopeLabel })).data;
+export const startLegacyPosRun = async ({ job, mode, warehouseIds, scopeLabel, confirmation }) =>
+  (await http.post(`${BASE}/runs`, { job, mode, warehouseIds, scopeLabel, confirmation })).data;
 
 export const getLegacyPosRuns = async () => (await http.get(`${BASE}/runs`)).data;
 

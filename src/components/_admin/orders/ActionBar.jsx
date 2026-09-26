@@ -37,7 +37,7 @@ export default function ActionBar({ actions = [], onAction, busyAction = null })
   const [pending, setPending] = useState(null);
 
   if (!actions.length) {
-    return <p className="text-xs text-slate-500">No actions are available for this order.</p>;
+    return <p className="text-xs text-slate-500">No actions available</p>;
   }
 
   const run = async (action) => {

@@ -11,6 +11,7 @@ import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
+import BalanceVerification from './balanceVerification';
 
 // The API the collector phone talks to. Same origin the management app uses.
 const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
@@ -417,6 +418,8 @@ export default function CollectorDevices() {
           />
         }
       />
+
+      <BalanceVerification devices={rows} />
 
       {addOpen && <AddDeviceModal onClose={() => setAddOpen(false)} onPaired={setPaired} />}
       {paired && <PairedModal device={paired} onClose={() => setPaired(null)} />}

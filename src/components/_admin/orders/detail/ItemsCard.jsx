@@ -3,7 +3,7 @@
 /**
  * What the customer bought, and where each physical piece currently is.
  *
- * One order line is one physical piece, so the row reads as an object in the
+ * One order line is one physical piece, so each row reads as an object in the
  * world: what it is, which piece it is (barcode), what state that piece is in,
  * and what it cost. Supply state is joined from the bound production unit by
  * `<SupplyBadge>` rather than trusted from the order row.
@@ -11,139 +11,145 @@
  * Item state is reported here, never edited. A piece moves when something
  * physical happens to it — received into stock, scanned on the production line,
  * scanned into a pack, shipped — and each of those paths does its own inventory
- * bookkeeping. A hand-typed status change skipped all of it, so the row and the
- * shelf could disagree with nothing to say which was right.
+ * bookkeeping.
  */
 
 import Image from 'next/image';
-import { FiAlertTriangle, FiPackage } from 'react-icons/fi';
+import { FiAlertTriangle, FiPackage, FiPlayCircle } from 'react-icons/fi';
 
-import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import SupplyBadge from 'src/components/_admin/orders/SupplyBadge';
 import { Code } from 'src/components/_admin/ops/primitives';
-import { Pill, Section, money, oid } from './parts';
+import { Card, Pill, money, oid } from './parts';
 
 const itemName = (item) => item.pid?.name || item.productSnapshot?.name || 'Unknown product';
 
-export default function ItemsCard({ order, onComplain, canComplain = false }) {
+function PackingProgress({ packing, onPack }) {
+  const total = packing?.total || 0;
+  if (!total) return null;
+  const verified = packing.verified || 0;
+  const complete = verified >= total;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 sm:block">
+        <span
+          className={`block h-full rounded-full transition-all ${complete ? 'bg-emerald-500' : 'bg-[var(--brand)]'}`}
+          style={{ width: `${Math.round((verified / total) * 100)}%` }}
+        />
+      </span>
+      <span className={`text-xs font-semibold tabular-nums ${complete ? 'text-emerald-700' : 'text-slate-600'}`}>
+        {verified}/{total} packed
+      </span>
+      {onPack && !complete ? (
+        <button type="button" onClick={onPack} className="btn-brand h-8 !px-3 !text-xs">
+          <FiPlayCircle size={13} /> Scan pieces
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export default function ItemsCard({ order, packing, onPack, onComplain, canComplain = false }) {
   const items = order.items || [];
-  const itemsTotal = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
 
   return (
-    <Section
+    <Card
       title="Items"
       icon={FiPackage}
-      hint={`${items.length} piece${items.length === 1 ? '' : 's'}`}
-      actions={<span className="text-[13px] font-bold tabular-nums text-slate-700">{money(itemsTotal)}</span>}
+      badge={<Pill tone="neutral">{items.length}</Pill>}
+      actions={<PackingProgress packing={packing} onPack={onPack} />}
     >
-      <GlobalTable>
-        <thead>
-          <tr>
-            <th className="w-10 text-center">#</th>
-            <th>Product</th>
-            <th>Piece &amp; state</th>
-            <th className="text-right">Price</th>
-            {canComplain ? <th className="w-24 text-right">Issue</th> : null}
-          </tr>
-        </thead>
-        <tbody>
+      {items.length ? (
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
           {items.map((item, index) => {
             const barcode = item.packingBarcode || item.assignedUnit?.barcode;
             const quantity = Number(item.quantity) || 1;
+            const lineTotal = (Number(item.price) || 0) * quantity;
 
             return (
-              <tr key={oid(item) || index} className="align-top">
-                <td className="text-center text-xs font-semibold text-slate-400">{index + 1}</td>
-
-                <td>
-                  <div className="flex items-start gap-3">
-                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                      {item.pid?.featuredImage?.path ? (
-                        <Image src={item.pid.featuredImage.path} alt="" fill className="object-cover" />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-slate-300">
-                          <FiPackage size={16} />
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold leading-tight text-slate-800">
-                        {itemName(item)}
-                        {quantity > 1 ? <span className="ml-1 text-slate-500">× {quantity}</span> : null}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {(item.attributes || []).map((attribute, position) => (
-                          <span
-                            key={`${attribute.attributeName}-${position}`}
-                            className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
-                          >
-                            {attribute.colorHex ? (
-                              <span
-                                className="h-2.5 w-2.5 rounded-full border border-slate-300"
-                                style={{ backgroundColor: attribute.colorHex }}
-                              />
-                            ) : null}
-                            {attribute.valueName}
-                          </span>
-                        ))}
-                        {item.isCustom ? <Pill tone="brand">Custom</Pill> : null}
-                        {item.returnedQty > 0 ? <Pill tone="bad">{item.returnedQty} returned</Pill> : null}
-                      </div>
-                      {item.customizeDetails ? (
-                        <p className="mt-1 text-[11px] leading-snug text-amber-700">{item.customizeDetails}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </td>
-
-                <td>
-                  <div className="flex flex-col items-start gap-1">
-                    <SupplyBadge item={item} />
-                    {barcode ? <Code className="text-slate-500">{barcode}</Code> : null}
-                  </div>
-                </td>
-
-                <td className="text-right">
-                  {item.salePrice ? (
-                    <>
-                      <span className="block text-[11px] text-slate-400 line-through">{money(item.regularPrice)}</span>
-                      <span className="text-[13px] font-bold tabular-nums text-slate-800">{money(item.price)}</span>
-                    </>
+              <li key={oid(item) || index} className="flex gap-4 px-5 py-4">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  {item.pid?.featuredImage?.path ? (
+                    <Image src={item.pid.featuredImage.path} alt="" fill sizes="64px" className="object-cover" />
                   ) : (
-                    <span className="text-[13px] font-bold tabular-nums text-slate-800">{money(item.price)}</span>
+                    <span className="flex h-full w-full items-center justify-center text-slate-300">
+                      <FiPackage size={18} />
+                    </span>
                   )}
-                  {item.customizePrice > 0 ? (
-                    <span className="mt-0.5 block text-[11px] font-medium text-amber-600">
-                      incl. {money(item.customizePrice)} customisation
+                  {quantity > 1 ? (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">
+                      {quantity}
                     </span>
                   ) : null}
-                </td>
+                </div>
 
-                {canComplain ? (
-                  <td className="text-right">
-                    <button
-                      type="button"
-                      onClick={() => onComplain(item)}
-                      title="Open a complaint for this item"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-100"
-                    >
-                      <FiAlertTriangle size={12} /> Complain
-                    </button>
-                  </td>
-                ) : null}
-              </tr>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                    <p className="min-w-0 text-sm font-semibold leading-snug text-slate-900">{itemName(item)}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold tabular-nums text-slate-900">{money(lineTotal)}</p>
+                      <p className="text-[11px] tabular-nums text-slate-500">
+                        {item.salePrice && item.regularPrice ? (
+                          <span className="mr-1 line-through">{money(item.regularPrice)}</span>
+                        ) : null}
+                        {money(item.price)} × {quantity}
+                      </p>
+                    </div>
+                  </div>
+
+                  {(item.attributes || []).length || item.isCustom || item.returnedQty > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {(item.attributes || []).map((attribute, position) => (
+                        <span
+                          key={`${attribute.attributeName}-${position}`}
+                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                        >
+                          {attribute.colorHex ? (
+                            <span
+                              className="h-2.5 w-2.5 rounded-full border border-slate-300"
+                              style={{ backgroundColor: attribute.colorHex }}
+                            />
+                          ) : null}
+                          {attribute.valueName}
+                        </span>
+                      ))}
+                      {item.isCustom ? <Pill tone="brand">Custom</Pill> : null}
+                      {item.returnedQty > 0 ? <Pill tone="bad">{item.returnedQty} returned</Pill> : null}
+                    </div>
+                  ) : null}
+
+                  {item.customizeDetails || item.customizePrice > 0 ? (
+                    <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800">
+                      {item.customizeDetails}
+                      {item.customizePrice > 0 ? (
+                        <span className={`font-semibold ${item.customizeDetails ? 'ml-1' : ''}`}>
+                          (incl. {money(item.customizePrice)} customisation)
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <SupplyBadge item={item} />
+                    {barcode ? <Code className="text-slate-500">{barcode}</Code> : null}
+                    {canComplain ? (
+                      <button
+                        type="button"
+                        onClick={() => onComplain(item)}
+                        title="Open a complaint for this item"
+                        className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:underline"
+                      >
+                        <FiAlertTriangle size={11} /> Report issue
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
             );
           })}
-
-          {!items.length ? (
-            <tr>
-              <td colSpan={canComplain ? 5 : 4} className="py-8 text-center text-sm text-slate-400">
-                This order has no items.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </GlobalTable>
-    </Section>
+        </ul>
+      ) : (
+        <p className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">No items</p>
+      )}
+    </Card>
   );
 }

@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import { FiImage, FiMessageSquare, FiSend, FiX } from 'react-icons/fi';
 
 import * as api from 'src/services';
-import { Section, SectionBody, errorAlert, oid, toast } from './parts';
+import { Card, Pill, errorAlert, oid, toast } from './parts';
 
 const MAX_IMAGES = 10;
 
@@ -69,18 +69,19 @@ export default function AdminNotes({ orderNo, comments = [], onPosted }) {
     });
 
   return (
-    <Section
+    <Card
       title="Internal notes"
       icon={FiMessageSquare}
-      hint={comments.length ? `${comments.length} comment${comments.length === 1 ? '' : 's'}` : 'Admins only'}
+      badge={comments.length ? <Pill tone="neutral">{comments.length}</Pill> : null}
+      actions={<span className="text-[11px] text-slate-500">Staff only</span>}
     >
       {comments.length ? (
-        <ul className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto">
+        <ul className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto border-t border-slate-100">
           {comments.map((comment) => (
-            <li key={oid(comment)} className="p-4">
+            <li key={oid(comment)} className="px-5 py-4">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[13px] font-bold text-slate-800">{comment.author?.name || 'Admin'}</p>
-                <p className="shrink-0 text-[11px] text-slate-400">
+                <p className="shrink-0 text-[11px] text-slate-500">
                   {comment.createdAt ? format(new Date(comment.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
                 </p>
               </div>
@@ -106,12 +107,10 @@ export default function AdminNotes({ orderNo, comments = [], onPosted }) {
           ))}
         </ul>
       ) : (
-        <SectionBody>
-          <p className="text-sm text-slate-400">No internal notes yet.</p>
-        </SectionBody>
+        <p className="border-t border-slate-100 px-5 py-4 text-sm text-slate-500">No notes yet</p>
       )}
 
-      <div className="space-y-3 border-t border-slate-200 bg-slate-50/70 p-4">
+      <div className="space-y-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
@@ -124,7 +123,10 @@ export default function AdminNotes({ orderNo, comments = [], onPosted }) {
         {files.length ? (
           <div className="flex flex-wrap gap-2">
             {files.map((entry) => (
-              <div key={entry.id} className="group relative h-16 w-16 overflow-hidden rounded-md border border-slate-200">
+              <div
+                key={entry.id}
+                className="group relative h-16 w-16 overflow-hidden rounded-md border border-slate-200"
+              >
                 <Image src={entry.preview} alt={entry.file.name} fill className="object-cover" />
                 <button
                   type="button"
@@ -159,6 +161,6 @@ export default function AdminNotes({ orderNo, comments = [], onPosted }) {
           </button>
         </div>
       </div>
-    </Section>
+    </Card>
   );
 }

@@ -1035,6 +1035,20 @@ export const deleteSmsDevice = async (id) => {
   return data;
 };
 
+// ── Balance verification ──────────────────────────────────────────────────────
+export const setWalletBalance = async ({ deviceId, ...payload }) => {
+  const { data } = await http.post(`/admin/sms-devices/${deviceId}/wallets`, payload);
+  return data;
+};
+export const updateWalletBalance = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/admin/wallet-balances/${id}`, payload);
+  return data;
+};
+export const deleteWalletBalance = async (id) => {
+  const { data } = await http.delete(`/admin/wallet-balances/${id}`);
+  return data;
+};
+
 // ── Payment Types ─────────────────────────────────────────────────────────────
 export const getPaymentTypesByAdmin = async () => {
   const { data } = await http.get(`/admin/payment-types`);

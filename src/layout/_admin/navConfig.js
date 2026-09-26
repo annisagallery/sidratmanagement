@@ -364,7 +364,7 @@ export const navGroups = [
       // TEMPORARY: the bridge to the old POS, gated on a subject only `manage
       // all` roles hold. Removed with the rest of it — see
       // postgressserver/src/legacy-pos/README.md.
-      { key: 'legacy-pos', label: 'Old POS Migration', href: '/legacy-pos', icon: MdSwapHoriz, subject: 'LegacyPos' },
+      { key: 'legacy-pos', label: 'Catalog Migration', href: '/legacy-pos', icon: MdSwapHoriz, subject: 'LegacyPos' },
       { key: 'message-settings', label: 'Message Settings', href: '/message-settings/api', icon: FiMessageSquare, subject: 'MessageSettings', children: [{ label: 'API', href: '/message-settings/api' }, { label: 'Message Format Settings', href: '/message-settings/formats' }] },
       { key: 'image-server', label: 'Image Server', href: '/site-settings/image-server', icon: IoImagesOutline, subject: 'ApiSettings', children: [{ label: 'API Settings', href: '/site-settings/image-server' }] }
     ]

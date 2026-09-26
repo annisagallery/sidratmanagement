@@ -21,13 +21,18 @@ function dtStr(d) {
   return fDateTime(d);
 }
 
+// "webhook" is how the record arrived, not something a person should have to
+// decode: it means the system recorded it by itself — an SMS match or an
+// outside system — as opposed to someone on staff entering it.
 function SourceBadge({ source }) {
   return source === 'webhook' ? (
-    <span className="rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs text-violet-700">
-      webhook
+    <span className="whitespace-nowrap rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+      Automatic
     </span>
   ) : (
-    <span className="rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">manual</span>
+    <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700">
+      Added by staff
+    </span>
   );
 }
 
