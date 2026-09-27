@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next-nprogress-bar';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Link from 'next/link';
@@ -7,10 +8,11 @@ import * as api from 'src/services';
 import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
+import { RecordStatus } from 'src/components/_admin/ui/Badge';
 
 const STATUS_OPTS = [
   { label: 'All Status', value: '' },
@@ -23,7 +25,7 @@ const fmt = (d) => (d ? fDate(d) : '—');
 function Avatar({ name }) {
   return (
     <div
-      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold"
+      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-xs font-semibold"
       style={{ backgroundColor: 'var(--brand-soft)', color: 'var(--brand-strong)' }}
     >
       {name?.slice(0, 2)?.toUpperCase() || '?'}
@@ -31,22 +33,14 @@ function Avatar({ name }) {
   );
 }
 
-function StatusBadge({ status }) {
-  const map = { active: 'bg-emerald-100 text-emerald-700', blocked: 'bg-red-100 text-red-700' };
-  return (
-    <span
-      className={`inline-block rounded-md px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] || 'bg-slate-100 text-slate-600'}`}
-    >
-      {status}
-    </span>
-  );
-}
+const StatusBadge = ({ status }) => <RecordStatus status={status} />;
 
 /**
  * Customers page: storefront accounts only (no access role). Staff — and
  * turning a customer into staff — live in HRM → People.
  */
 export default function UserList() {
+  const router = useRouter();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -73,7 +67,7 @@ export default function UserList() {
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
-  const { data, isLoading, isFetching } = useQuery(['admin-users', params], () => api.getUsersByAdmin(params), {
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(['admin-users', params], () => api.getUsersByAdmin(params), {
     keepPreviousData: true
   });
 
@@ -162,7 +156,7 @@ export default function UserList() {
           <Avatar name={u.name} />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-slate-800">{u.name}</p>
-            <p className="truncate text-xs text-slate-400">{u.email}</p>
+            <p className="truncate text-xs text-slate-500">{u.email}</p>
           </div>
         </div>
       )
@@ -194,24 +188,13 @@ export default function UserList() {
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (u) => (
-        <div className="flex items-center justify-end gap-1">
-          <Link
-            href={`/users/${encodeURIComponent(u.phone)}`}
-            className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            title="View Activity"
-          >
-            <MdOpenInNew size={17} />
-          </Link>
-          <button
-            onClick={() => handleChangeStatus(u)}
-            className="rounded-md p-2 transition hover:bg-slate-100"
-            style={{ color: 'var(--brand-strong)' }}
-            title="Toggle Status"
-          >
-            {u.status === 'active' ? <MdToggleOn size={19} /> : <MdToggleOff size={19} />}
+        <div className="flex items-center justify-end" onClick={stopRow}>
+          <button type="button" onClick={() => handleChangeStatus(u)} className={u.status === 'active' ? 'btn-quiet btn-sm' : 'btn-ghost btn-sm'}>
+            {u.status === 'active' ? 'Block' : 'Unblock'}
           </button>
         </div>
       )
@@ -219,7 +202,7 @@ export default function UserList() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Customers" subtitle={`${total} customer${total !== 1 ? 's' : ''} total`} />
 
       <ListToolbar
@@ -251,13 +234,18 @@ export default function UserList() {
       </ListToolbar>
 
       <DataTable
+        onRowClick={(u) => router.push(`/users/${encodeURIComponent(u.phone)}`)}
+        rowLabel={(u) => `Open ${u.name}`}
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={users}
         sort={sort}
         selectionLabel="customers"
         exportFileName="customers-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
+        isLoading={isLoading}
+        isFetching={isFetching}
         empty={<EmptyState title="No customers found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="customers" />}
       />

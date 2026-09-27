@@ -75,7 +75,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write h
   }, [value, editor]);
 
   if (!editor) {
-    return <div className="border border-gray-200 rounded-md bg-gray-50" style={{ minHeight: minHeight + 41 }} />;
+    return <div className="border border-slate-200 rounded-md bg-slate-50" style={{ minHeight: minHeight + 41 }} />;
   }
 
   const setLink = () => {
@@ -106,18 +106,18 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write h
       title={label}
       aria-label={label}
       className={`h-8 min-w-8 px-1.5 rounded-md flex items-center justify-center text-[13px] transition ${
-        active ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-100'
+        active ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
       }`}
     >
       {children}
     </button>
   );
 
-  const Divider = () => <span className="mx-1 h-5 w-px bg-gray-200" />;
+  const Divider = () => <span className="mx-1 h-5 w-px bg-slate-200" />;
 
   return (
-    <div className="border border-gray-200 rounded-md bg-white focus-within:border-gray-400">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-100 px-1.5 py-1">
+    <div className="border border-slate-200 rounded-md bg-white focus-within:border-slate-400">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-100 px-1.5 py-1">
         {[1, 2, 3].map((level) => (
           <Btn
             key={level}
@@ -125,7 +125,7 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write h
             active={editor.isActive('heading', { level })}
             onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
           >
-            <span className="font-bold">H{level}</span>
+            <span className="font-semibold">H{level}</span>
           </Btn>
         ))}
         <Divider />
@@ -244,10 +244,10 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Write h
         {inTable && (
           <>
             <Btn label="Add row below" onClick={() => editor.chain().focus().addRowAfter().run()}>
-              <span className="text-[11px] font-bold">+Row</span>
+              <span className="text-xs font-semibold">+Row</span>
             </Btn>
             <Btn label="Add column after" onClick={() => editor.chain().focus().addColumnAfter().run()}>
-              <span className="text-[11px] font-bold">+Col</span>
+              <span className="text-xs font-semibold">+Col</span>
             </Btn>
           </>
         )}

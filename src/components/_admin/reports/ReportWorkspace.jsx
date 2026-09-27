@@ -1,9 +1,9 @@
 'use client';
+import { alertError } from 'src/utils/swal';
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useQuery } from 'react-query';
-import { toast } from 'react-toastify';
 import {
   FiBarChart2,
   FiChevronDown,
@@ -18,6 +18,9 @@ import { MdInbox } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
+import Badge from 'src/components/_admin/ui/Badge';
+import { Switch } from 'src/components/_admin/ui/fields';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import * as api from 'src/services';
 import { fDate, fDateTime } from 'src/utils/formatTime';
 
@@ -33,58 +36,51 @@ const LINKS = {
 };
 
 // ── Formatting ─────────────────────────────────────────────────────────────────
-const STATUS_CLS = {
-  active: 'bg-emerald-100 text-emerald-700',
-  delivered: 'bg-emerald-100 text-emerald-700',
-  received: 'bg-emerald-100 text-emerald-700',
-  resolved: 'bg-emerald-100 text-emerald-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  paid: 'bg-emerald-100 text-emerald-700',
-  earned: 'bg-emerald-100 text-emerald-700',
-  approved: 'bg-blue-100 text-blue-700',
-  processing: 'bg-blue-100 text-blue-700',
-  reviewing: 'bg-blue-100 text-blue-700',
-  'in transit': 'bg-sky-100 text-sky-700',
-  shipped: 'bg-sky-100 text-sky-700',
-  pending: 'bg-amber-100 text-amber-700',
-  partial: 'bg-amber-100 text-amber-700',
-  high: 'bg-red-100 text-red-700',
-  cancelled: 'bg-red-100 text-red-700',
-  rejected: 'bg-red-100 text-red-700',
-  blocked: 'bg-red-100 text-red-700',
-  spent: 'bg-red-100 text-red-700',
-  returned: 'bg-orange-100 text-orange-700',
-  refunded: 'bg-orange-100 text-orange-700',
-  refund: 'bg-orange-100 text-orange-700',
-  exchange: 'bg-violet-100 text-violet-700',
-  unpaid: 'bg-gray-100 text-gray-500',
-  inactive: 'bg-gray-100 text-gray-500',
-  expired: 'bg-gray-100 text-gray-500',
-  draft: 'bg-gray-100 text-gray-500'
+const STATUS_TONE = {
+  active: 'success',
+  delivered: 'success',
+  received: 'success',
+  resolved: 'success',
+  completed: 'success',
+  paid: 'success',
+  earned: 'success',
+  approved: 'info',
+  processing: 'info',
+  reviewing: 'info',
+  'in transit': 'info',
+  shipped: 'info',
+  pending: 'warning',
+  partial: 'warning',
+  high: 'danger',
+  cancelled: 'danger',
+  rejected: 'danger',
+  blocked: 'danger',
+  spent: 'danger',
+  returned: 'warning',
+  refunded: 'warning',
+  refund: 'warning',
+  exchange: 'violet',
+  unpaid: 'neutral',
+  inactive: 'neutral',
+  expired: 'neutral',
+  draft: 'neutral'
 };
 
 function StatusBadge({ value }) {
   const norm = String(value || '')
     .toLowerCase()
     .replace(/[_-]/g, ' ');
-  const cls = STATUS_CLS[norm] || STATUS_CLS[norm.split(' ')[0]] || 'bg-slate-100 text-slate-600';
-  return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${cls}`}
-    >
-      {norm || '—'}
-    </span>
-  );
+  const tone = STATUS_TONE[norm] || STATUS_TONE[norm.split(' ')[0]] || 'neutral';
+  return <Badge tone={tone}>{norm ? norm.replace(/^./, (c) => c.toUpperCase()) : '—'}</Badge>;
 }
 
 function Cell({ col, value }) {
-  if (value == null || value === '' || value === '—') return <span className="text-slate-300">—</span>;
-  if (col.type === 'date') return <span className="whitespace-nowrap text-xs text-slate-500">{fDate(value)}</span>;
-  if (col.type === 'datetime')
-    return <span className="whitespace-nowrap text-xs text-slate-500">{fDateTime(value)}</span>;
+  if (value == null || value === '' || value === '—') return <span className="text-slate-400">—</span>;
+  if (col.type === 'date') return <span className="whitespace-nowrap text-slate-600">{fDate(value)}</span>;
+  if (col.type === 'datetime') return <span className="whitespace-nowrap text-slate-600">{fDateTime(value)}</span>;
   if (col.type === 'currency')
     return (
-      <span className="whitespace-nowrap font-medium tabular-nums text-slate-800">
+      <span className="whitespace-nowrap font-medium tabular-nums text-slate-900">
         ৳{Number(value).toLocaleString()}
       </span>
     );
@@ -93,9 +89,9 @@ function Cell({ col, value }) {
   if (col.type === 'status') return <StatusBadge value={value} />;
   if (col.type === 'boolean')
     return value === true || value === 'true' ? (
-      <span className="text-xs font-medium text-emerald-600">Yes</span>
+      <span className="font-medium text-slate-900">Yes</span>
     ) : (
-      <span className="text-xs text-slate-400">No</span>
+      <span className="text-slate-500">No</span>
     );
   return <span className="text-slate-700">{String(value)}</span>;
 }
@@ -108,8 +104,7 @@ function LinkedCell({ col, value, refs }) {
   return (
     <Link
       href={LINKS[col.link](ref)}
-      className="font-medium underline-offset-2 hover:underline"
-      style={{ color: 'var(--brand-strong)' }}
+      className="font-medium text-slate-900 underline-offset-2 hover:underline"
     >
       {String(value)}
     </Link>
@@ -117,32 +112,15 @@ function LinkedCell({ col, value, refs }) {
 }
 
 // ── Filter form pieces ─────────────────────────────────────────────────────────
-function Toggle({ on, onChange }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={onChange}
-      className="relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full transition-colors"
-      style={{ backgroundColor: on ? 'var(--brand)' : '#cbd5e1' }}
-    >
-      <span
-        className={`inline-block h-[14px] w-[14px] transform rounded-full bg-white shadow transition-transform ${
-          on ? 'translate-x-[16px]' : 'translate-x-[2px]'
-        }`}
-      />
-    </button>
-  );
-}
 
 function FilterField({ filter, options, value, onChange, disabled }) {
-  const cls = disabled ? 'pointer-events-none opacity-40' : '';
+  const cls = disabled ? 'opacity-50' : '';
+  const label = filter.label;
   const selectOptions = filter.options || options[filter.optionsKey] || [];
 
   if (filter.type === 'select') {
     return (
-      <select value={value || ''} onChange={(e) => onChange(e.target.value)} className={`select-ui w-full ${cls}`}>
+      <select value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label={label} className={`select-ui w-full ${cls}`}>
         <option value="">All</option>
         {selectOptions.map((o) => (
           <option key={o.value} value={o.value}>
@@ -154,7 +132,7 @@ function FilterField({ filter, options, value, onChange, disabled }) {
   }
   if (filter.type === 'boolean') {
     return (
-      <select value={value || ''} onChange={(e) => onChange(e.target.value)} className={`select-ui w-full ${cls}`}>
+      <select value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} aria-label={label} className={`select-ui w-full ${cls}`}>
         <option value="">All</option>
         <option value="true">Yes</option>
         <option value="false">No</option>
@@ -168,14 +146,18 @@ function FilterField({ filter, options, value, onChange, disabled }) {
         <input
           type="number"
           placeholder="Min"
+          aria-label={`${label} from`}
+          disabled={disabled}
           value={v.min}
           onChange={(e) => onChange({ ...v, min: e.target.value })}
           className="input-ui w-full"
         />
-        <span className="text-slate-300">–</span>
+        <span className="text-slate-400">–</span>
         <input
           type="number"
           placeholder="Max"
+          aria-label={`${label} to`}
+          disabled={disabled}
           value={v.max}
           onChange={(e) => onChange({ ...v, max: e.target.value })}
           className="input-ui w-full"
@@ -189,13 +171,17 @@ function FilterField({ filter, options, value, onChange, disabled }) {
       <div className={`flex items-center gap-1.5 ${cls}`}>
         <input
           type="date"
+          aria-label={`${label} from`}
+          disabled={disabled}
           value={v.start}
           onChange={(e) => onChange({ ...v, start: e.target.value })}
           className="input-ui w-full"
         />
-        <span className="text-slate-300">–</span>
+        <span className="text-slate-400">–</span>
         <input
           type="date"
+          aria-label={`${label} to`}
+          disabled={disabled}
           value={v.end}
           onChange={(e) => onChange({ ...v, end: e.target.value })}
           className="input-ui w-full"
@@ -207,6 +193,8 @@ function FilterField({ filter, options, value, onChange, disabled }) {
     <input
       type="text"
       value={value || ''}
+      aria-label={label}
+      disabled={disabled}
       placeholder={filter.label}
       onChange={(e) => onChange(e.target.value)}
       className={`input-ui w-full ${cls}`}
@@ -259,8 +247,8 @@ function excelCell(col, value) {
 }
 
 function SortIcon({ active, dir }) {
-  if (!active) return <FiChevronDown size={11} className="ml-1 opacity-30" />;
-  return dir === 'asc' ? <FiChevronUp size={11} className="ml-1" /> : <FiChevronDown size={11} className="ml-1" />;
+  if (!active) return <FiChevronDown size={13} className="ml-1 text-slate-300" aria-hidden />;
+  return dir === 'asc' ? <FiChevronUp size={13} className="ml-1" aria-hidden /> : <FiChevronDown size={13} className="ml-1" aria-hidden />;
 }
 
 function Spinner() {
@@ -269,7 +257,10 @@ function Spinner() {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function ReportWorkspace({ reportKey }) {
-  const { data: catalog, isLoading: catalogLoading } = useQuery('report-catalog', api.getReportCatalog);
+  const { data: catalog, isLoading: catalogLoading, isError: catalogFailed, error: catalogError, refetch: retryCatalog } = useQuery(
+    'report-catalog',
+    api.getReportCatalog
+  );
   const meta = catalog?.data?.find((r) => r.key === reportKey);
   const options = catalog?.options || {};
 
@@ -291,7 +282,7 @@ export default function ReportWorkspace({ reportKey }) {
     return p.toString();
   }, [page, sortField, sortDir, applied]);
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery(
     ['report', reportKey, params],
     () => api.getReport(reportKey, params),
     { enabled: !!meta, keepPreviousData: true }
@@ -299,22 +290,31 @@ export default function ReportWorkspace({ reportKey }) {
 
   if (catalogLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-10 w-72 animate-pulse rounded-md bg-slate-100" />
-        <div className="h-48 animate-pulse rounded-md border border-slate-200 bg-slate-100" />
-        <div className="h-80 animate-pulse rounded-md border border-slate-200 bg-slate-100" />
+      <div className="space-y-6" aria-busy="true">
+        <div className="skeleton h-8 w-72" />
+        <div className="card-ui h-48 animate-pulse" />
+        <div className="card-ui h-80 animate-pulse" />
       </div>
     );
   }
 
+  if (catalogFailed) {
+    return <ErrorState error={catalogError} title="Reports could not be loaded" onRetry={retryCatalog} />;
+  }
+
   if (!meta) {
     return (
-      <div className="card-ui px-6 py-16 text-center">
-        <p className="font-medium text-slate-700">Unknown report</p>
-        <p className="mt-1 text-sm text-slate-500">This report does not exist.</p>
-        <Link href="/reports" className="btn-brand mt-4 inline-flex items-center gap-1.5">
-          <FiChevronLeft size={14} /> All reports
-        </Link>
+      <div className="card-ui">
+        <EmptyState
+          icon={FiBarChart2}
+          title="There is no such report"
+          hint="It may have been renamed. Pick one from the list of reports."
+          action={
+            <Link href="/reports" className="btn-ghost">
+              <FiChevronLeft size={15} aria-hidden /> All reports
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -384,7 +384,7 @@ export default function ReportWorkspace({ reportKey }) {
       else window.open(url, '_blank');
     } catch (err) {
       win?.close();
-      toast.error(err?.response?.data?.message || 'PDF export failed');
+      alertError(err, { title: 'The PDF was not exported' });
     } finally {
       setPdfBusy(false);
     }
@@ -406,7 +406,7 @@ export default function ReportWorkspace({ reportKey }) {
       XLSX.utils.book_append_sheet(wb, ws, meta.label.slice(0, 31));
       XLSX.writeFile(wb, `${reportKey}-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Excel export failed');
+      alertError(err, { title: 'The Excel file was not exported' });
     } finally {
       setXlsBusy(false);
     }
@@ -415,29 +415,16 @@ export default function ReportWorkspace({ reportKey }) {
   const appliedCount = Object.keys(applied).length;
 
   return (
-    <div className="space-y-4">
-      <PageHeader title={`${meta.label} Report`} subtitle={meta.description} icon={FiBarChart2}>
-        <Link
-          href="/reports"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-        >
-          <FiChevronLeft size={14} /> All Reports
+    <div className="space-y-6">
+      <PageHeader title={`${meta.label} report`} subtitle={meta.description} eyebrow="Reports">
+        <Link href="/reports" className="btn-ghost">
+          <FiChevronLeft size={15} aria-hidden /> All reports
         </Link>
-        <button
-          type="button"
-          onClick={exportExcel}
-          disabled={xlsBusy || total === 0}
-          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {xlsBusy ? <Spinner /> : <FiGrid size={14} />} Excel
+        <button type="button" onClick={exportExcel} disabled={xlsBusy || total === 0} className="btn-ghost">
+          {xlsBusy ? <Spinner /> : <FiGrid size={15} aria-hidden />} Export Excel
         </button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          disabled={pdfBusy || total === 0}
-          className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pdfBusy ? <Spinner /> : <FiFileText size={14} />} PDF
+        <button type="button" onClick={exportPdf} disabled={pdfBusy || total === 0} className="btn-ghost">
+          {pdfBusy ? <Spinner /> : <FiFileText size={15} aria-hidden />} Export PDF
         </button>
       </PageHeader>
 
@@ -446,12 +433,13 @@ export default function ReportWorkspace({ reportKey }) {
         <button
           type="button"
           onClick={() => setFormOpen((o) => !o)}
-          className={`flex w-full items-center justify-between px-4 py-2.5 text-left transition hover:bg-slate-50/60 ${
-            formOpen ? 'border-b border-slate-100' : ''
+          aria-expanded={formOpen}
+          className={`flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50 ${
+            formOpen ? 'border-b border-slate-200' : ''
           }`}
         >
-          <span className="text-sm font-semibold text-slate-700">Customize the report</span>
-          <span className="flex items-center gap-2 text-xs text-slate-400">
+          <span className="text-[15px] font-semibold text-slate-900">Filters</span>
+          <span className="flex items-center gap-2 text-[13px] text-slate-500">
             {appliedCount > 0
               ? `${appliedCount} filter${appliedCount > 1 ? 's' : ''} applied`
               : 'Switch a filter on, set its value, then generate'}
@@ -460,15 +448,13 @@ export default function ReportWorkspace({ reportKey }) {
         </button>
         {formOpen && (
           <>
-            <div className="grid gap-x-6 gap-y-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-x-6 gap-y-5 p-5 md:grid-cols-2 xl:grid-cols-3">
               {meta.filters.map((f) => (
                 <div key={f.key}>
-                  <label className="mb-1.5 flex items-center gap-2">
-                    <Toggle on={!!enabled[f.key]} onChange={() => toggleFilter(f.key)} />
-                    <span className={`text-xs font-semibold ${enabled[f.key] ? 'text-slate-700' : 'text-slate-400'}`}>
-                      {f.label}
-                    </span>
-                  </label>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <Switch checked={!!enabled[f.key]} onChange={() => toggleFilter(f.key)} label={`Filter by ${f.label}`} />
+                    <span className={`text-[13px] font-medium ${enabled[f.key] ? 'text-slate-900' : 'text-slate-500'}`}>{f.label}</span>
+                  </div>
                   <FilterField
                     filter={f}
                     options={options}
@@ -479,19 +465,15 @@ export default function ReportWorkspace({ reportKey }) {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
-              <button type="submit" className="btn-brand inline-flex items-center gap-1.5">
-                <FiSearch size={14} /> Generate Report
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+              <button type="submit" className="btn-brand">
+                <FiSearch size={15} aria-hidden /> Run report
               </button>
-              <button
-                type="button"
-                onClick={reset}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-              >
-                <FiRotateCcw size={13} /> Reset
+              <button type="button" onClick={reset} className="btn-ghost">
+                <FiRotateCcw size={14} aria-hidden /> Reset
               </button>
               {appliedCount > 0 && (
-                <span className="ml-auto text-xs text-slate-500">
+                <span className="ml-auto text-[13px] text-slate-500">
                   {appliedCount} filter{appliedCount > 1 ? 's' : ''} applied
                 </span>
               )}
@@ -502,11 +484,11 @@ export default function ReportWorkspace({ reportKey }) {
 
       {/* Summary tiles */}
       {summary.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 md:grid-cols-3 xl:grid-cols-5">
           {summary.map((s) => (
-            <div key={s.key} className="card-ui px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{s.label}</p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+            <div key={s.key} className="bg-white px-5 py-4">
+              <p className="truncate text-xs font-medium text-slate-500">{s.label}</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">
                 {s.format === 'currency'
                   ? `৳${Number(s.value ?? 0).toLocaleString()}`
                   : Number(s.value ?? 0).toLocaleString()}
@@ -519,51 +501,63 @@ export default function ReportWorkspace({ reportKey }) {
       {/* Results table */}
       <div className="card-ui overflow-hidden">
         <GlobalTable>
+          <caption className="sr-only">{meta.label} report</caption>
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/80">
-              {meta.columns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col)}
-                  className={`select-none whitespace-nowrap px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 ${
-                    col.align === 'right' ? 'text-right' : 'text-left'
-                  } ${col.sortField ? 'cursor-pointer transition-colors hover:bg-slate-100 hover:text-slate-800' : ''}`}
-                >
-                  <span className="inline-flex items-center">
-                    {col.label}
-                    {col.sortField && <SortIcon active={sortField === col.sortField} dir={sortDir} />}
-                  </span>
-                </th>
-              ))}
+            <tr>
+              {meta.columns.map((col) => {
+                const active = col.sortField && sortField === col.sortField;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                    className={`whitespace-nowrap ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                  >
+                    {col.sortField ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col)}
+                        className={`inline-flex items-center rounded hover:text-slate-900 ${active ? 'text-slate-900' : ''}`}
+                      >
+                        {col.label}
+                        <SortIcon active={active} dir={sortDir} />
+                      </button>
+                    ) : (
+                      col.label
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody>
             {busy ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i}>
+                <tr key={i} aria-hidden>
                   {meta.columns.map((c, j) => (
-                    <td key={c.key} className="px-4 py-3">
-                      <div
-                        className="h-3.5 animate-pulse rounded-md bg-slate-100"
-                        style={{ width: `${40 + ((i + j) % 4) * 15}%` }}
-                      />
+                    <td key={c.key}>
+                      <div className="skeleton h-3.5" style={{ width: `${40 + ((i + j) % 4) * 15}%` }} />
                     </td>
                   ))}
                 </tr>
               ))
+            ) : isError ? (
+              <tr>
+                <td colSpan={meta.columns.length} className="p-5">
+                  <ErrorState error={error} title="The report could not be run" onRetry={refetch} />
+                </td>
+              </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={meta.columns.length} className="px-6 py-16 text-center text-slate-400">
-                  <MdInbox size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium text-slate-500">No data found</p>
-                  <p className="mt-1 text-xs">Adjust the filters above and generate again</p>
+                <td colSpan={meta.columns.length}>
+                  <EmptyState icon={MdInbox} title="Nothing matches" hint="Change the filters and run the report again." />
                 </td>
               </tr>
             ) : (
               rows.map((row, i) => (
-                <tr key={i} className="transition-colors hover:bg-slate-50/50">
+                <tr key={i}>
                   {meta.columns.map((col) => (
-                    <td key={col.key} className={`px-4 py-2.5 ${col.align === 'right' ? 'text-right' : ''}`}>
+                    <td key={col.key} className={col.align === 'right' ? 'text-right' : ''}>
                       <LinkedCell col={col} value={row[col.key]} refs={row._refs} />
                     </td>
                   ))}

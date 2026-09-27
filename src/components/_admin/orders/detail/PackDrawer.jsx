@@ -13,13 +13,13 @@
  * with a dedicated monitor; both drive the same endpoints.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from 'react-query';
-import Swal from 'sweetalert2';
-import { FiCheck, FiPackage, FiX } from 'react-icons/fi';
+import { FiCheck, FiCheckCircle, FiPackage } from 'react-icons/fi';
 
 import * as api from 'src/services';
 import ScanStation from 'src/components/_admin/scan/ScanStation';
+import Drawer from 'src/components/_admin/ui/Drawer';
 import { Code, StateChip, readState } from 'src/components/_admin/ops/primitives';
 import { errorAlert, oid, toast } from './parts';
 
@@ -42,14 +42,8 @@ export default function PackDrawer({ order, orderNo, onClose, onChanged }) {
   const remaining = items.filter((item) => !item.packVerifiedAt);
   const packed = order.status === 'packed';
   const packAction = (order.availableActions || []).find((action) => action.action === 'PACK');
-
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const allScanned = items.length > 0 && remaining.length === 0;
+  const canPack = packAction ? packAction.enabled : allScanned;
 
   const { mutate: pack, isLoading: packing } = useMutation(() => api.packOrderByAdmin(orderNo), {
     onSuccess: () => {
@@ -81,91 +75,108 @@ export default function PackDrawer({ order, orderNo, onClose, onChanged }) {
       return {
         ok: false,
         message: body?.message || 'That code was not accepted.',
-        detail: body?.manualAllowed
-          ? 'No product matches this code. Pick the item below to assign it manually.'
-          : null
+        detail: body?.manualAllowed ? 'No product matches this code. Choose the item below to assign it by hand.' : null
       };
     }
   };
 
   const progress = items.length ? Math.round((scanned.length / items.length) * 100) : 0;
+  const blockedReason = packAction && !packAction.enabled ? packAction.blockedBy : !allScanned ? `${remaining.length} piece${remaining.length === 1 ? '' : 's'} still to scan.` : null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-slate-950/40" onClick={onClose}>
-      <aside
-        role="dialog"
-        aria-label={`Packing scan for order ${orderNo}`}
-        onClick={(event) => event.stopPropagation()}
-        className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
-      >
-        <header className="border-b border-slate-200 px-4 py-3">
-          <div className="flex items-start justify-between gap-3">
+    <Drawer
+      title={`Pack order #${orderNo}`}
+      eyebrow="Packing scan"
+      size="md"
+      onClose={onClose}
+      footer={
+        packed ? (
+          <button type="button" onClick={onClose} className="btn-brand">
+            Done
+          </button>
+        ) : (
+          <div className="flex w-full flex-col gap-2">
+            {blockedReason && <p className="text-[13px] text-slate-600">{blockedReason}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="btn-ghost">
+                Close
+              </button>
+              <button type="button" onClick={() => pack()} disabled={packing || !canPack} className="btn-brand">
+                <FiPackage size={16} aria-hidden /> {packing ? 'Packing…' : 'Mark as packed'}
+              </button>
+            </div>
+          </div>
+        )
+      }
+    >
+      <div className="space-y-6">
+        {/* Where the parcel stands, before anything else. */}
+        <div className="rounded-lg border border-slate-200 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-900">
+              {packed ? 'Packed' : allScanned ? 'Every piece is scanned' : 'Scan each piece into the parcel'}
+            </p>
+            <p className="text-sm tabular-nums text-slate-600">
+              <span className="font-semibold text-slate-900">{scanned.length}</span> of {items.length}
+            </p>
+          </div>
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={items.length}
+            aria-valuenow={scanned.length}
+            aria-label="Pieces scanned"
+          >
+            <span className={`block h-full rounded-full transition-all ${progress === 100 ? 'bg-emerald-500' : 'bg-slate-900'}`} style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+
+        {packed ? (
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3" role="status">
+            <FiCheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden />
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Packing scan</p>
-              <h2 className="text-lg font-bold text-slate-900">
-                Order <span className="ops-code">#{orderNo}</span>
-              </h2>
+              <p className="text-[13px] font-semibold text-emerald-900">This order is packed.</p>
+              <p className="text-[13px] text-emerald-800">Send the parcel to a courier from the order page.</p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close packing panel"
-              className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <FiX size={18} />
-            </button>
           </div>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-              <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
-            </span>
-            <span className="ops-code shrink-0 text-sm font-black text-slate-700">
-              {scanned.length}/{items.length}
-            </span>
-          </div>
-        </header>
+        ) : (
+          <ScanStation
+            onScan={handleScan}
+            label="Scan a piece"
+            hint={
+              manualItem
+                ? 'Manual assignment is on — the next scan is attached to the item you chose below.'
+                : 'Production pieces carry their own code; stock items take the catalogue barcode.'
+            }
+          />
+        )}
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-          {packed ? (
-            <div className="flex items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
-              <FiCheck className="shrink-0 text-xl text-emerald-600" />
-              <div>
-                <p className="text-[13px] font-bold text-emerald-900">This order is packed.</p>
-                <p className="text-xs text-emerald-800">Hand it to dispatch to create the consignment.</p>
-              </div>
-            </div>
-          ) : (
-            <ScanStation
-              onScan={handleScan}
-              label="Scan each piece into the parcel"
-              hint={
-                manualItem
-                  ? 'Manual assignment armed — the next scan is attached to the selected item.'
-                  : 'Production pieces carry their own unit code; stock items take the catalogue barcode.'
-              }
-            />
-          )}
-
-          <section className="card-ui overflow-hidden">
-            <h3 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-              Pieces in this parcel
-            </h3>
-            <ul className="divide-y divide-slate-100">
+        <section aria-labelledby="pack-pieces-title">
+          <h3 id="pack-pieces-title" className="mb-2 text-sm font-semibold text-slate-900">
+            Pieces in this parcel
+          </h3>
+          {items.length ? (
+            <ul className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
               {items.map((item) => {
                 const state = readState(item);
                 const done = Boolean(item.packVerifiedAt);
+                const code = item.packingBarcode || item.assignedUnit?.barcode;
                 return (
-                  <li key={oid(item)} className="flex items-start gap-2.5 px-3 py-2">
+                  <li key={oid(item)} className={`flex items-start gap-3 px-3 py-2.5 ${done ? 'bg-slate-50' : ''}`}>
                     <span className="mt-0.5 shrink-0">
                       {done ? (
-                        <FiCheck className="text-emerald-600" />
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white">
+                          <FiCheck size={12} aria-hidden />
+                          <span className="sr-only">Scanned</span>
+                        </span>
                       ) : (
-                        <span className="block h-4 w-4 rounded-full border border-slate-300" />
+                        <span className="block h-5 w-5 rounded-full border-2 border-slate-300" aria-hidden />
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium leading-snug text-slate-700">{pieceLabel(item)}</p>
-                      <Code className="text-slate-500">{item.packingBarcode || item.assignedUnit?.barcode || ''}</Code>
+                      <p className={`text-[13px] font-medium leading-snug ${done ? 'text-slate-500' : 'text-slate-900'}`}>{pieceLabel(item)}</p>
+                      {code ? <Code className="text-slate-500">{code}</Code> : null}
                     </div>
                     <span className="shrink-0">
                       <StateChip state={done ? 'ready' : state.key} label={done ? 'Scanned' : state.label} />
@@ -173,22 +184,24 @@ export default function PackDrawer({ order, orderNo, onClose, onChanged }) {
                   </li>
                 );
               })}
-              {!items.length ? <li className="px-3 py-6 text-center text-sm text-slate-400">No pieces on this order.</li> : null}
             </ul>
-          </section>
+          ) : (
+            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-[13px] text-slate-500">No pieces on this order.</p>
+          )}
+        </section>
 
-          {!packed && remaining.length ? (
-            <details className="card-ui p-3">
-              <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                Assign an unmatched barcode manually
-              </summary>
-              <p className="mt-2 text-xs text-slate-500">
-                Use this only when a piece carries no code this system knows. The override is recorded against the item.
+        {!packed && remaining.length ? (
+          <details className="rounded-lg border border-slate-200">
+            <summary className="cursor-pointer px-4 py-3 text-[13px] font-medium text-slate-900">Assign an unknown barcode by hand</summary>
+            <div className="space-y-2 border-t border-slate-200 px-4 py-3">
+              <p className="text-[13px] text-slate-500">
+                Only when a piece carries a code this system does not know. The override is recorded against the item.
               </p>
               <select
                 value={manualItem}
                 onChange={(event) => setManualItem(event.target.value)}
-                className="select-ui mt-2 w-full"
+                className="select-ui w-full"
+                aria-label="Item the next scan belongs to"
               >
                 <option value="">Choose the item this piece is…</option>
                 {remaining.map((item) => (
@@ -197,30 +210,10 @@ export default function PackDrawer({ order, orderNo, onClose, onChanged }) {
                   </option>
                 ))}
               </select>
-            </details>
-          ) : null}
-        </div>
-
-        {!packed ? (
-          <footer className="border-t border-slate-200 bg-slate-50/70 p-4">
-            <button
-              type="button"
-              onClick={() =>
-                remaining.length
-                  ? Swal.fire('Not every piece is scanned', `${remaining.length} still to go.`, 'warning')
-                  : pack()
-              }
-              disabled={packing || (packAction ? !packAction.enabled : remaining.length > 0)}
-              className="btn-brand h-10 w-full"
-            >
-              <FiPackage /> {packing ? 'Packing…' : 'Pack order'}
-            </button>
-            {packAction && !packAction.enabled && packAction.blockedBy ? (
-              <p className="mt-1.5 text-center text-xs font-semibold text-slate-500">{packAction.blockedBy}</p>
-            ) : null}
-          </footer>
+            </div>
+          </details>
         ) : null}
-      </aside>
-    </div>
+      </div>
+    </Drawer>
   );
 }

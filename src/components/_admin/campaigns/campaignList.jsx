@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next-nprogress-bar';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Link from 'next/link';
@@ -9,54 +10,36 @@ import { getCampaignsByAdmin, deleteCampaignByAdmin, updateCampaignByAdmin } fro
 import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
+import Badge, { RecordStatus } from 'src/components/_admin/ui/Badge';
 
 const TYPE_OPTS = [
-  { label: 'All Types', value: '' },
-  { label: 'Flash Sale', value: 'flash_sale' },
+  { label: 'All types', value: '' },
+  { label: 'Flash sale', value: 'flash_sale' },
   { label: 'Discount', value: 'discount' },
   { label: 'Seasonal', value: 'seasonal' },
   { label: 'Announcement', value: 'announcement' }
 ];
 
 const TYPE_META = {
-  flash_sale: { label: 'Flash Sale', icon: <FiZap size={11} />, cls: 'bg-red-50 text-red-600 border border-red-200' },
-  discount: { label: 'Discount', icon: <FiTag size={11} />, cls: 'bg-sky-50 text-sky-600 border border-sky-200' },
-  seasonal: { label: 'Seasonal', icon: <FiSun size={11} />, cls: 'bg-amber-50 text-amber-600 border border-amber-200' },
-  announcement: {
-    label: 'Announcement',
-    icon: <FiVolume2 size={11} />,
-    cls: 'bg-violet-50 text-violet-600 border border-violet-200'
-  }
+  flash_sale: { label: 'Flash sale', icon: FiZap, tone: 'danger' },
+  discount: { label: 'Discount', icon: FiTag, tone: 'info' },
+  seasonal: { label: 'Seasonal', icon: FiSun, tone: 'warning' },
+  announcement: { label: 'Announcement', icon: FiVolume2, tone: 'violet' }
 };
 
 const fmt = (d) => (d ? fDate(d) : '—');
 
 function StatusBadge({ status, endDate }) {
   const expired = endDate && new Date(endDate) < new Date();
-  if (expired)
-    return (
-      <span className="inline-block rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-        Expired
-      </span>
-    );
-  if (status === 'active')
-    return (
-      <span className="inline-block rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-        Active
-      </span>
-    );
-  return (
-    <span className="inline-block rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-      Inactive
-    </span>
-  );
+  return <RecordStatus status={expired ? 'expired' : status === 'active' ? 'active' : 'inactive'} />;
 }
 
 export default function CampaignList() {
+  const router = useRouter();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
@@ -73,7 +56,7 @@ export default function CampaignList() {
     setPage(1);
   };
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(
     ['admin-campaigns', page, search, type, sortBy, sortOrder],
     () => getCampaignsByAdmin(page, search, type, sortBy, sortOrder),
     { keepPreviousData: true }
@@ -167,17 +150,17 @@ export default function CampaignList() {
           {c.cover?.path ? (
             <Image
               src={c.cover.path}
-              className="h-10 w-10 flex-shrink-0 rounded-md border object-cover"
+              className="h-10 w-10 flex-shrink-0 rounded-md border border-slate-200 object-cover"
               alt=""
               width={40}
               height={40}
             />
           ) : (
-            <div className="h-10 w-10 flex-shrink-0 rounded-md bg-slate-100" />
+            <div className="h-10 w-10 flex-shrink-0 rounded-md bg-slate-100" aria-hidden />
           )}
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-slate-800">{c.name}</p>
-            <p className="truncate text-xs text-slate-400">{c.slug}</p>
+            <p className="truncate text-[13px] font-semibold text-slate-900">{c.name}</p>
+            <p className="truncate text-xs text-slate-500">{c.slug}</p>
           </div>
         </div>
       )
@@ -188,10 +171,11 @@ export default function CampaignList() {
       sortable: true,
       render: (c) => {
         const tm = TYPE_META[c.type] || TYPE_META.discount;
+        const Icon = tm.icon;
         return (
-          <span className={`inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium ${tm.cls}`}>
-            {tm.icon} {tm.label}
-          </span>
+          <Badge tone={tm.tone}>
+            <Icon size={11} aria-hidden /> {tm.label}
+          </Badge>
         );
       }
     },
@@ -219,7 +203,7 @@ export default function CampaignList() {
       render: (c) => (
         <>
           <p className="whitespace-nowrap text-xs text-slate-600">{fmt(c.startDate)}</p>
-          <p className="whitespace-nowrap text-xs text-slate-400">→ {fmt(c.endDate)}</p>
+          <p className="whitespace-nowrap text-xs text-slate-500">→ {fmt(c.endDate)}</p>
         </>
       )
     },
@@ -232,24 +216,22 @@ export default function CampaignList() {
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (c) => (
-        <div className="flex items-center justify-end gap-1">
-          <Link
-            href={`/campaigns/${c.slug}`}
-            className="rounded-md p-2 transition hover:bg-slate-100"
-            style={{ color: 'var(--brand-strong)' }}
-            title="Edit"
-          >
-            <MdEdit size={17} />
+        <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+          <Link href={`/campaigns/${c.slug}`} className="btn-ghost btn-sm">
+            Edit
           </Link>
           <button
+            type="button"
             onClick={() => handleDelete(c)}
-            className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
+            className="btn-icon btn-icon-sm btn-icon-danger"
+            aria-label={`Delete ${c.title || c.name || 'campaign'}`}
             title="Delete"
           >
-            <MdDelete size={17} />
+            <MdDelete size={18} />
           </button>
         </div>
       )
@@ -257,10 +239,10 @@ export default function CampaignList() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Campaigns" subtitle={`${total} campaign${total !== 1 ? 's' : ''} total`}>
         <Link href="/campaigns/add" className="btn-brand">
-          <MdAdd size={18} /> New Campaign
+          <MdAdd size={18} /> New campaign
         </Link>
       </PageHeader>
 
@@ -283,6 +265,7 @@ export default function CampaignList() {
             setPage(1);
           }}
           className="select-ui min-w-[140px]"
+          aria-label="Campaign type"
         >
           {TYPE_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -293,13 +276,18 @@ export default function CampaignList() {
       </ListToolbar>
 
       <DataTable
+        onRowClick={(c) => router.push(`/campaigns/${c.slug}`)}
+        rowLabel={(c) => `Edit ${c.title || c.name || 'campaign'}`}
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={campaigns}
         sort={sort}
         selectionLabel="campaigns"
         exportFileName="campaigns-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
+        isLoading={isLoading}
+        isFetching={isFetching}
         empty={<EmptyState title="No campaigns found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="campaigns" />}
       />

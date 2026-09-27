@@ -39,12 +39,12 @@ import {
   PageBar,
   Pill,
   Section,
-  errorAlert,
   fieldClass,
   oid,
-  qty,
-  toast
+  qty
 } from 'src/components/_admin/ui/primitives';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import { alertError, toastSuccess } from 'src/utils/swal';
 import { catalogCode, displaySku, needName, variationLabel } from 'src/components/_admin/inventory/shared';
 
 const num = (value) => {
@@ -314,37 +314,28 @@ export default function BatchBuilder() {
       }),
     {
       onSuccess: (response) => {
-        toast(`Draft ${response?.data?.batchNo || 'batch'} created`);
+        toastSuccess(`Draft ${response?.data?.batchNo || 'batch'} created`);
         queryClient.invalidateQueries('production-batches');
         queryClient.invalidateQueries('production-needs');
         queryClient.invalidateQueries('production-replenishment');
         const batchNo = response?.data?.batchNo;
         router.push(batchNo ? `/production/batches/${batchNo}` : '/production');
       },
-      onError: (error) => errorAlert('The batch could not be created', error)
+      onError: (error) => alertError(error, { title: 'The batch was not created' })
     }
   );
 
   /* ── work waiting ────────────────────────────────────────────────────── */
 
-  const tabButton = (key, label, count) => (
-    <button
-      type="button"
-      onClick={() => setTab(key)}
-      aria-pressed={tab === key}
-      className={`flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-        tab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-      }`}
-    >
-      {label} <span className="ml-0.5 tabular-nums text-slate-400">{qty(count)}</span>
-    </button>
-  );
 
   const waitingLoading = tab === 'orders' ? needsQuery.isLoading : refillQuery.isLoading;
+  // Shelf refill is optional (the API may not offer it), so only the customer
+  // queue failing is worth an error.
+  const waitingFailed = tab === 'orders' && needsQuery.isError;
   const shown = tab === 'orders' ? shownOrders : shownRefills;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Production"
         title="New batch"
@@ -382,10 +373,10 @@ export default function BatchBuilder() {
                         <p className="font-medium text-slate-800">
                           {line.productName}
                           {line.code ? (
-                            <span className="ops-code ml-2 text-[11px] text-slate-400">{line.code}</span>
+                            <span className="ops-code ml-2 text-xs text-slate-500">{line.code}</span>
                           ) : null}
                         </p>
-                        <p className="text-[11px] text-slate-400">{line.variationName}</p>
+                        <p className="text-xs text-slate-500">{line.variationName}</p>
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-1">
@@ -401,7 +392,8 @@ export default function BatchBuilder() {
                           value={line.note}
                           onChange={(event) => setLine(line.key, { note: event.target.value })}
                           placeholder={line.kind === 'order' ? 'Measurements and instructions' : 'Optional'}
-                          className="input-ui h-9 w-full min-w-[200px] text-[12px]"
+                          className="input-ui w-full min-w-[200px]"
+                          aria-label={`Production note for ${line.productName}`}
                         />
                       </td>
                       <td className="px-3 py-2.5 text-right">
@@ -477,7 +469,7 @@ export default function BatchBuilder() {
                 disabled={save.isLoading || problems.length > 0}
                 className="btn-brand mt-3 h-11 w-full"
               >
-                <FiSave size={15} /> {save.isLoading ? 'Saving…' : 'Save draft batch'}
+                <FiSave size={15} aria-hidden /> {save.isLoading ? 'Saving…' : 'Save draft batch'}
               </button>
             </DocketFoot>
           </Section>
@@ -485,38 +477,37 @@ export default function BatchBuilder() {
 
         {/* work waiting — narrow, and scrolls on its own ────────────────── */}
         <aside className="card-ui flex flex-col overflow-hidden xl:sticky xl:top-4 xl:max-h-[calc(100vh-6rem)]">
-          <header className="space-y-2 border-b border-slate-200 bg-slate-50/70 p-3">
+          <header className="space-y-3 border-b border-slate-200 p-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-600">Work waiting</h2>
+              <h2 className="text-[15px] font-semibold text-slate-900">Work waiting</h2>
               {tab === 'orders' && overdue.length ? (
-                <button
-                  type="button"
-                  onClick={() => addOrders(overdue)}
-                  className="text-[11px] font-semibold text-rose-600 hover:underline"
-                >
-                  + Add {overdue.length} overdue
+                <button type="button" onClick={() => addOrders(overdue)} className="btn-ghost btn-sm text-rose-700">
+                  <FiPlus size={14} aria-hidden /> Add {overdue.length} overdue
                 </button>
               ) : null}
             </div>
-            <div className="flex rounded-md border border-slate-200 bg-slate-100 p-0.5">
-              {tabButton('orders', 'Customers', waitingOrders.length)}
-              {tabButton('refill', 'Shelf refill', waitingRefills.length)}
-            </div>
+            <Segmented
+              label="Work waiting"
+              options={[
+                { id: 'orders', label: `Customers ${qty(waitingOrders.length)}` },
+                { id: 'refill', label: `Shelf refill ${qty(waitingRefills.length)}` }
+              ]}
+              value={tab}
+              onChange={setTab}
+              className="w-full [&>button]:flex-1 [&>button]:justify-center"
+            />
             <div className="relative">
-              <FiSearch
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-                size={13}
-              />
+              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} aria-hidden />
               <input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder={tab === 'orders' ? 'Filter by order or product…' : 'Filter by product…'}
-                className="input-ui h-8 w-full pl-7 text-[12px]"
+                className="input-ui w-full pl-9"
                 aria-label="Filter the work waiting"
               />
             </div>
             {tab === 'orders' ? (
-              <p className="text-[11px] text-slate-400">
+              <p className="text-xs text-slate-500">
                 Earliest promise first
                 {plannedElsewhere ? ` · ${plannedElsewhere} already in a draft batch` : ''}
               </p>
@@ -525,11 +516,23 @@ export default function BatchBuilder() {
 
           <ul className="max-h-[480px] min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto xl:max-h-none">
             {waitingLoading ? (
-              <li className="px-4 py-10 text-center text-sm text-slate-400">Loading…</li>
+              [1, 2, 3, 4].map((i) => (
+                <li key={i} className="space-y-2 px-4 py-3" aria-hidden>
+                  <div className="skeleton h-4 w-3/4" />
+                  <div className="skeleton h-3 w-1/2" />
+                </li>
+              ))
+            ) : waitingFailed ? (
+              <li className="px-4 py-8 text-center">
+                <p className="text-[13px] font-medium text-slate-900">The queue could not be loaded</p>
+                <button type="button" onClick={() => needsQuery.refetch()} className="btn-ghost btn-sm mt-2">
+                  Try again
+                </button>
+              </li>
             ) : !shown.length ? (
               <li className="px-4 py-10 text-center">
-                <FiCheck className="mx-auto mb-1.5 text-xl text-slate-300" />
-                <p className="text-[13px] font-semibold text-slate-600">
+                <FiCheck className="mx-auto mb-1.5 text-xl text-slate-400" aria-hidden />
+                <p className="text-[13px] font-medium text-slate-700">
                   {term
                     ? 'Nothing matches that'
                     : tab === 'orders'
@@ -542,22 +545,22 @@ export default function BatchBuilder() {
                 const due = dueMeta(items[0].deliveryDate);
                 const single = items.length === 1;
                 return (
-                  <li key={orderNo} className="px-3 py-2.5">
+                  <li key={orderNo} className="px-4 py-3">
                     {/* The order: its promise, and — when it has several
                         pieces — one press to add them all. */}
                     <div className="flex items-center gap-1.5">
                       <Pill tone={due.tone}>{due.text}</Pill>
-                      <span className="ops-code text-[12px] font-bold text-slate-700">#{orderNo}</span>
+                      <span className="ops-code text-[12px] font-semibold text-slate-700">#{orderNo}</span>
                       {single ? null : (
                         <>
-                          <span className="text-[11px] text-slate-400">{items.length} pieces</span>
+                          <span className="text-xs text-slate-500">{items.length} pieces</span>
                           <button
                             type="button"
                             onClick={() => addOrders(items)}
-                            className="ml-auto text-[11px] font-semibold text-[var(--brand-strong)] hover:underline"
+                            className="btn-ghost btn-sm ml-auto"
                             aria-label={`Add all ${items.length} pieces of order ${orderNo}`}
                           >
-                            + Add all
+                            <FiPlus size={14} aria-hidden /> Add all
                           </button>
                         </>
                       )}
@@ -578,12 +581,12 @@ export default function BatchBuilder() {
                                 ) : null}
                               </p>
                               {code || variation ? (
-                                <p className="truncate text-[11px] text-slate-500">
+                                <p className="truncate text-xs text-slate-500">
                                   {[code, variation].filter(Boolean).join(' · ')}
                                 </p>
                               ) : null}
                               {need.customizeDetails ? (
-                                <p className="truncate text-[11px] text-amber-700" title={need.customizeDetails}>
+                                <p className="truncate text-xs text-amber-700" title={need.customizeDetails}>
                                   {need.customizeDetails}
                                 </p>
                               ) : null}
@@ -591,11 +594,11 @@ export default function BatchBuilder() {
                             <button
                               type="button"
                               onClick={() => addOrders([need])}
-                              className="btn-brand h-8 w-8 shrink-0 !p-0"
+                              className="btn-icon btn-icon-sm shrink-0 border border-slate-200"
                               aria-label={`Add ${needName(need)} from order ${orderNo} to the batch`}
                               title="Add to batch"
                             >
-                              <FiPlus size={15} />
+                              <FiPlus size={15} aria-hidden />
                             </button>
                           </li>
                         );
@@ -606,17 +609,17 @@ export default function BatchBuilder() {
               })
             ) : (
               shownRefills.map((row) => (
-                <li key={row.variationId} className="flex items-start gap-2 px-3 py-2.5 hover:bg-slate-50">
+                <li key={row.variationId} className="flex items-start gap-2 px-4 py-3 hover:bg-slate-50">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-medium text-slate-800">{row.productName}</p>
-                    <p className="truncate text-[11px] text-slate-500">
-                      <span className={row.freeStock <= 0 ? 'font-semibold text-rose-600' : ''}>
+                    <p className="truncate text-xs text-slate-500">
+                      <span className={row.freeStock <= 0 ? 'font-semibold text-rose-700' : ''}>
                         {row.freeStock} free
                       </span>
                       {` · min ${row.minStock} · target ${row.targetStock}`}
                     </p>
                     {row.inProduction || row.plannedInDrafts || row.waitingDemand ? (
-                      <p className="truncate text-[11px] text-slate-400">
+                      <p className="truncate text-xs text-slate-500">
                         {[
                           row.inProduction ? `${row.inProduction} being made` : null,
                           row.plannedInDrafts ? `${row.plannedInDrafts} planned` : null,
@@ -631,10 +634,10 @@ export default function BatchBuilder() {
                     <button
                       type="button"
                       onClick={() => addRefills([row])}
-                      className="btn-brand h-8 !px-2.5 !text-xs"
+                      className="btn-ghost btn-sm"
                       aria-label={`Add ${row.suggestedQuantity} of ${row.productName} to the batch`}
                     >
-                      <FiPlus size={13} /> {row.suggestedQuantity}
+                      <FiPlus size={14} aria-hidden /> {row.suggestedQuantity}
                     </button>
                   </div>
                 </li>
@@ -651,9 +654,9 @@ export default function BatchBuilder() {
 function SummaryRow({ label, value, strong = false }) {
   return (
     <div className={`flex items-baseline justify-between gap-6 ${strong ? 'border-t border-slate-200 pt-2' : ''}`}>
-      <span className={strong ? 'text-[13px] font-bold text-slate-900' : 'text-[13px] text-slate-500'}>{label}</span>
+      <span className={strong ? 'text-[13px] font-semibold text-slate-900' : 'text-[13px] text-slate-500'}>{label}</span>
       <span
-        className={`tabular-nums ${strong ? 'text-lg font-black text-slate-900' : 'text-[13px] font-semibold text-slate-700'}`}
+        className={`tabular-nums ${strong ? 'text-lg font-semibold text-slate-900' : 'text-[13px] font-semibold text-slate-700'}`}
       >
         {qty(value)}
       </span>

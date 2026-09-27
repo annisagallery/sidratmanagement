@@ -8,7 +8,6 @@ import { Form, FormikProvider, useFormik } from 'formik';
 import { useMutation } from 'react-query';
 import { useDropzone } from 'react-dropzone';
 import * as Yup from 'yup';
-import Swal from 'sweetalert2';
 import {
   MdArrowBack,
   MdAutorenew,
@@ -30,6 +29,7 @@ import {
 import * as api from 'src/services';
 import RichTextEditor from 'src/components/richTextEditor';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import { toastSuccess, alertError } from 'src/utils/swal';
 
 CategoryForm.propTypes = {
   data: PropTypes.object,
@@ -52,9 +52,9 @@ const STATUS_OPTIONS = [
 ];
 
 const fieldClass =
-  'min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-ring)] sm:text-sm';
+  'min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--brand-strong)] focus:ring-2 focus:ring-[var(--brand-ring)] sm:text-sm';
 
-const errorFieldClass = 'border-red-400 focus:border-red-500 focus:ring-red-200';
+const errorFieldClass = 'border-rose-400 focus:border-rose-500 focus:ring-rose-200';
 
 const stripHtml = (value = '') =>
   String(value)
@@ -66,7 +66,7 @@ const stripHtml = (value = '') =>
 function FieldError({ id, error, touched }) {
   if (!touched || !error) return null;
   return (
-    <p id={id} className="mt-1.5 text-xs font-medium text-red-700" role="alert">
+    <p id={id} className="mt-1.5 text-[13px] font-medium text-rose-700" role="alert">
       {error}
     </p>
   );
@@ -78,25 +78,20 @@ FieldError.propTypes = {
   touched: PropTypes.bool
 };
 
-function SectionCard({ icon: Icon, title, description, children }) {
+function SectionCard({ title, description, children }) {
   return (
-    <section className="card-ui overflow-hidden">
-      <div className="flex items-start gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-          <Icon size={20} aria-hidden="true" />
-        </span>
-        <div>
-          <h2 className="text-sm font-bold text-slate-900">{title}</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-        </div>
+    <section className="card-ui">
+      <div className="px-5 pt-5">
+        <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+        {description ? <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">{description}</p> : null}
       </div>
-      <div className="p-5 sm:p-6">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
 
 SectionCard.propTypes = {
-  icon: PropTypes.elementType.isRequired,
+  icon: PropTypes.elementType,
   title: PropTypes.string.isRequired,
   description: PropTypes.string.isRequired,
   children: PropTypes.node.isRequired
@@ -127,7 +122,7 @@ function CategoryImageUploader({ file, name, invalid, onChange, onTouched }) {
         onChange(uploaded);
         onTouched();
       } catch (error) {
-        Swal.fire('Could not upload image', error?.message || 'Choose another image and try again.', 'error');
+        alertError(error, { title: 'Could not upload the image', text: error?.message || 'Choose another image and try again.' });
       } finally {
         setUploading(false);
       }
@@ -160,7 +155,7 @@ function CategoryImageUploader({ file, name, invalid, onChange, onTouched }) {
               onChange(null);
               onTouched();
             }}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-white/10 text-white transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-white/10 text-white transition hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             aria-label="Remove category image"
           >
             <MdDeleteOutline size={21} />
@@ -177,15 +172,15 @@ function CategoryImageUploader({ file, name, invalid, onChange, onTouched }) {
       aria-describedby={invalid ? 'category-image-error' : undefined}
       className={`flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed px-6 text-center transition focus-within:ring-2 focus-within:ring-[var(--brand-ring)] ${
         isDragActive
-          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-          : 'border-slate-300 bg-slate-50 hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]'
+          ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900'
+          : 'border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-[var(--brand-soft)]'
       } ${uploading ? 'cursor-wait opacity-70' : ''}`}
     >
       <input {...getInputProps()} aria-label="Upload category image" />
       <span className="flex h-12 w-12 items-center justify-center rounded-md bg-white text-[var(--brand-strong)] shadow-sm">
         {uploading ? <MdAutorenew className="animate-spin" size={24} /> : <MdCloudUpload size={24} />}
       </span>
-      <p className="mt-4 text-sm font-bold text-slate-700">
+      <p className="mt-4 text-sm font-semibold text-slate-700">
         {uploading ? `Uploading${progress ? ` ${progress}%` : '...'}` : isDragActive ? 'Drop the image here' : 'Upload category image'}
       </p>
       <p className="mt-1 text-xs leading-5 text-slate-500">Square artwork works best. Recommended 1000 × 1000 px.</p>
@@ -218,13 +213,13 @@ function StatusPicker({ value, onChange, disabled = false }) {
               onClick={() => onChange(option.value)}
               className={`flex min-h-[72px] items-start gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-60 ${
                 selected
-                  ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900'
+                  ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900 text-slate-900'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
-              <Icon size={21} className={selected ? 'text-[var(--brand-strong)]' : 'text-slate-400'} aria-hidden="true" />
+              <Icon size={21} className={selected ? 'text-[var(--brand-strong)]' : 'text-slate-500'} aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">{option.label}</span>
+                <span className="block text-sm font-semibold">{option.label}</span>
                 <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{option.help}</span>
               </span>
               {selected && <MdCheck size={18} className="shrink-0 text-[var(--brand-strong)]" aria-hidden="true" />}
@@ -256,7 +251,7 @@ function CatalogPreview({ values }) {
     <aside className="space-y-4 xl:sticky xl:top-6" aria-label="Category preview">
       <section className="card-ui overflow-hidden">
         <div className="border-b border-slate-200 px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Catalog preview</p>
+          <p className="section-label">Catalog preview</p>
         </div>
         <div className="p-4">
           <div className="relative aspect-square overflow-hidden rounded-md bg-slate-100">
@@ -269,23 +264,23 @@ function CatalogPreview({ values }) {
                 sizes="320px"
               />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center text-slate-300">
+              <div className="flex h-full flex-col items-center justify-center text-slate-400">
                 <MdImage size={48} aria-hidden="true" />
                 <span className="mt-2 text-xs font-semibold">Image preview</span>
               </div>
             )}
             <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-              <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${values.status === 'active' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white'}`}>
+              <span className={`rounded-md px-2 py-1 text-xs font-semibold ${values.status === 'active' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white'}`}>
                 {values.status === 'active' ? 'Active' : 'Inactive'}
               </span>
-              <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${values.isVisibleInEcom ? 'bg-white text-slate-800' : 'bg-amber-100 text-amber-900'}`}>
+              <span className={`rounded-md px-2 py-1 text-xs font-semibold ${values.isVisibleInEcom ? 'bg-white text-slate-800' : 'bg-amber-100 text-amber-900'}`}>
                 {values.isVisibleInEcom ? 'Storefront visible' : 'Storefront hidden'}
               </span>
             </div>
           </div>
           <div className="px-1 pb-1 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand-strong)]">Product category</p>
-            <h2 className="mt-1 break-words text-xl font-bold text-slate-950">{values.name.trim() || 'Category name'}</h2>
+            <p className="section-label text-[var(--brand-strong)]">Product category</p>
+            <h2 className="mt-1 break-words text-xl font-semibold text-slate-950">{values.name.trim() || 'Category name'}</h2>
             <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">
               {description || 'Add a description to help customers understand what belongs in this category.'}
             </p>
@@ -296,10 +291,10 @@ function CatalogPreview({ values }) {
       <section className="card-ui overflow-hidden" aria-label="Search result preview">
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
           <MdSearch size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Search preview</p>
+          <p className="section-label">Search preview</p>
         </div>
         <div className="p-4">
-          <p className="break-words text-base font-semibold text-blue-800">
+          <p className="break-words text-base font-semibold text-sky-800">
             {values.metaTitle.trim() || values.name.trim() || 'Category search title'}
           </p>
           <p className="mt-1 break-all text-xs text-emerald-700">/products/{values.slug || 'category-slug'}</p>
@@ -312,17 +307,17 @@ function CatalogPreview({ values }) {
       <section className="card-ui p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-slate-800">Category readiness</p>
+            <p className="text-sm font-semibold text-slate-800">Category readiness</p>
             <p className="mt-0.5 text-xs text-slate-500">{completeCount} of {checks.length} essentials complete</p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-bold tabular-nums text-[var(--brand-strong)]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-semibold tabular-nums text-[var(--brand-strong)]">
             {Math.round((completeCount / checks.length) * 100)}%
           </span>
         </div>
         <div className="mt-4 space-y-2">
           {checks.map((check) => (
             <div key={check.label} className="flex min-h-9 items-center gap-2 text-xs font-semibold text-slate-600">
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full ${check.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full ${check.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                 {check.complete ? <MdCheck size={14} /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
               </span>
               {check.label}
@@ -349,7 +344,7 @@ CatalogPreview.propTypes = {
 
 function CategoryFormSkeleton() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader title="Edit category" subtitle="Loading category details..." icon={MdCategory} />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
@@ -373,15 +368,11 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
     {
       retry: false,
       onSuccess: (response) => {
-        Swal.fire(response.message, '', 'success');
+        toastSuccess(response.message);
         router.push('/categories');
       },
       onError: (error) => {
-        Swal.fire(
-          isEdit ? 'Could not update category' : 'Could not create category',
-          error?.response?.data?.message || error.message,
-          'error'
-        );
+        alertError(error, { title: isEdit ? 'The category was not updated' : 'The category was not created' });
       }
     }
   );
@@ -445,14 +436,14 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
     : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title={isEdit ? 'Edit category' : 'Create category'}
         subtitle={isEdit ? `Update how ${currentCategory.name} appears across the catalogue.` : 'Create a clear storefront destination for a product collection.'}
         icon={MdCategory}
       >
         {isSystem && (
-          <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-600">
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
             <MdLock size={16} /> Permanent POS category
           </span>
         )}
@@ -464,8 +455,8 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
       <FormikProvider value={formik}>
         <Form onSubmit={handleSubmit} noValidate>
           {invalidCount > 0 && (
-            <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-              <span className="font-bold">Check {invalidCount} required field{invalidCount === 1 ? '' : 's'}.</span>{' '}
+            <div className="mb-5 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+              <span className="font-semibold">Check {invalidCount} required field{invalidCount === 1 ? '' : 's'}.</span>{' '}
               The first incomplete field has been focused.
             </div>
           )}
@@ -479,8 +470,8 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
               >
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
-                    <label htmlFor="category-name" className="mb-2 block text-xs font-semibold text-slate-700">
-                      Category name <span className="text-red-600">*</span>
+                    <label htmlFor="category-name" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+                      Category name <span className="text-rose-700">*</span>
                     </label>
                     <input
                       id="category-name"
@@ -499,13 +490,13 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                   </div>
 
                   <div>
-                    <label htmlFor="category-slug" className="mb-2 block text-xs font-semibold text-slate-700">
-                      URL slug <span className="text-red-600">*</span>
+                    <label htmlFor="category-slug" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+                      URL slug <span className="text-rose-700">*</span>
                     </label>
                     <div className="relative">
                       <MdLink
                         size={18}
-                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
                         aria-hidden="true"
                       />
                       <input
@@ -526,15 +517,15 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                 </div>
 
                 <div className="mt-5">
-                  <label htmlFor="category-description" className="mb-2 block text-xs font-semibold text-slate-700">
-                    Description <span className="text-red-600">*</span>
+                  <label htmlFor="category-description" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+                    Description <span className="text-rose-700">*</span>
                   </label>
                   <div
                     id="category-description"
                     tabIndex={-1}
                     aria-invalid={Boolean(touched.description && errors.description)}
                     aria-describedby={touched.description && errors.description ? 'category-description-error' : undefined}
-                    className={`overflow-hidden rounded-md border bg-white ${touched.description && errors.description ? 'border-red-400' : 'border-slate-200'}`}
+                    className={`overflow-hidden rounded-md border bg-white ${touched.description && errors.description ? 'border-rose-400' : 'border-slate-200'}`}
                     onBlur={() => setFieldTouched('description', true)}
                   >
                     <RichTextEditor
@@ -559,7 +550,7 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                 <div className="grid gap-6 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
                   <div className="w-full max-w-sm">
                     <p className="mb-2 text-xs font-semibold text-slate-700">
-                      Category image <span className="text-red-600">*</span>
+                      Category image <span className="text-rose-700">*</span>
                     </p>
                     <CategoryImageUploader
                       file={values.file}
@@ -595,7 +586,7 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                           {values.isVisibleInEcom ? <MdVisibility size={20} /> : <MdVisibilityOff size={20} />}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold">
+                          <span className="block text-sm font-semibold">
                             {values.isVisibleInEcom ? 'Visible on ecommerce' : 'Hidden from ecommerce'}
                           </span>
                           <span className="mt-1 block text-xs font-normal leading-5 opacity-80">
@@ -604,7 +595,7 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                               : 'Products remain in the catalogue, but this category is hidden from the storefront.'}
                           </span>
                         </span>
-                        <span className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${values.isVisibleInEcom ? 'bg-emerald-600' : 'bg-slate-300'}`} aria-hidden="true">
+                        <span className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${values.isVisibleInEcom ? 'bg-slate-900' : 'bg-slate-300'}`} aria-hidden="true">
                           <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${values.isVisibleInEcom ? 'translate-x-6' : 'translate-x-1'}`} />
                         </span>
                       </button>
@@ -621,10 +612,10 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
                 <div className="space-y-5">
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <label htmlFor="meta-title" className="text-xs font-semibold text-slate-700">
-                        Search title <span className="text-red-600">*</span>
+                      <label htmlFor="meta-title" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+                        Search title <span className="text-rose-700">*</span>
                       </label>
-                      <span className={`text-xs tabular-nums ${values.metaTitle.length > 60 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                      <span className={`text-xs tabular-nums ${values.metaTitle.length > 60 ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>
                         {values.metaTitle.length}/60
                       </span>
                     </div>
@@ -641,10 +632,10 @@ export default function CategoryForm({ data: currentCategory, isLoading: categor
 
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <label htmlFor="meta-description" className="text-xs font-semibold text-slate-700">
-                        Search description <span className="text-red-600">*</span>
+                      <label htmlFor="meta-description" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+                        Search description <span className="text-rose-700">*</span>
                       </label>
-                      <span className={`text-xs tabular-nums ${values.metaDescription.length > 160 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                      <span className={`text-xs tabular-nums ${values.metaDescription.length > 160 ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>
                         {values.metaDescription.length}/160
                       </span>
                     </div>

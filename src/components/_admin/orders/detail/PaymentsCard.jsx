@@ -15,7 +15,6 @@ import {
   FiCheck,
   FiCheckCircle,
   FiClock,
-  FiCreditCard,
   FiPlus,
   FiRotateCcw,
   FiSlash,
@@ -24,6 +23,7 @@ import {
   FiXCircle
 } from 'react-icons/fi';
 
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
 import { Card, CopyButton, PaymentBadge, money, oid } from './parts';
 
 const DELIVERY_LABEL = { regular: 'Regular', urgent: 'Urgent', sameDay: 'Same day' };
@@ -61,79 +61,13 @@ function stateOf(payment) {
     return { key: 'verified', label: 'Verified', icon: FiCheckCircle, cls: 'text-emerald-700' };
   if (status === 'refunded') return { key: 'refunded', label: 'Refunded', icon: FiRotateCcw, cls: 'text-slate-600' };
   if (status === 'rejected' || status === 'failed') {
-    return { key: 'void', label: status === 'failed' ? 'Failed' : 'Rejected', icon: FiXCircle, cls: 'text-rose-600' };
+    return { key: 'void', label: status === 'failed' ? 'Failed' : 'Rejected', icon: FiXCircle, cls: 'text-rose-700' };
   }
   if (payment.method === 'cod') return { key: 'courier', label: 'With courier', icon: FiTruck, cls: 'text-sky-700' };
   return { key: 'pending', label: 'Needs check', icon: FiClock, cls: 'text-amber-700' };
 }
 
 const sum = (list) => list.reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
-
-/* ── collection summary ─────────────────────────────────────────────────── */
-
-const SEGMENTS = [
-  { key: 'verified', label: 'Verified', bar: 'bg-emerald-500', dot: 'bg-emerald-500' },
-  { key: 'pending', label: 'Needs check', bar: 'bg-amber-400', dot: 'bg-amber-400' },
-  { key: 'courier', label: 'With courier', bar: 'bg-sky-500', dot: 'bg-sky-500' },
-  { key: 'open', label: 'Not received', bar: 'bg-transparent', dot: 'border border-slate-300 bg-white' }
-];
-
-function Collection({ total, due, amounts }) {
-  const base = Math.max(total, amounts.verified + amounts.pending + amounts.courier, 1);
-  const onTheWay = amounts.pending + amounts.courier;
-  const shown = SEGMENTS.filter((segment) => amounts[segment.key] > 0);
-
-  return (
-    <div className="border-t border-slate-100 px-5 py-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-slate-500">Collected</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
-            {money(amounts.verified)}
-            <span className="ml-1.5 text-sm font-medium text-slate-500">of {money(total)}</span>
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-medium text-slate-500">{due > 0 ? 'Balance due' : 'Balance'}</p>
-          <p className={`mt-0.5 text-lg font-bold tabular-nums ${due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {money(due)}
-          </p>
-          {due > 0 && onTheWay > 0 ? (
-            <p className="text-xs text-slate-500">{money(Math.min(onTheWay, due))} on its way</p>
-          ) : null}
-        </div>
-      </div>
-
-      <div
-        className="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-100"
-        role="img"
-        aria-label={shown.map((segment) => `${segment.label} ${money(amounts[segment.key])}`).join(', ')}
-      >
-        {SEGMENTS.slice(0, 3).map((segment) =>
-          amounts[segment.key] > 0 ? (
-            <span
-              key={segment.key}
-              className={`${segment.bar} h-full border-r border-white last:border-r-0`}
-              style={{ width: `${(amounts[segment.key] / base) * 100}%` }}
-            />
-          ) : null
-        )}
-      </div>
-
-      {shown.length > 1 || amounts.open > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
-          {shown.map((segment) => (
-            <li key={segment.key} className="flex items-center gap-1.5 text-xs text-slate-600">
-              <span className={`h-2 w-2 rounded-full ${segment.dot}`} aria-hidden="true" />
-              {segment.label}
-              <span className="font-semibold tabular-nums text-slate-900">{money(amounts[segment.key])}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
 
 /* ── one payment ────────────────────────────────────────────────────────── */
 
@@ -146,7 +80,7 @@ function PaymentRow({ payment, onRemove, onVerify }) {
   return (
     <li className="flex items-start gap-3 py-3">
       <span
-        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${voided ? 'opacity-40' : ''}`}
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white ${voided ? 'opacity-40' : ''}`}
         style={{ backgroundColor: method.color }}
         aria-hidden="true"
       >
@@ -162,7 +96,7 @@ function PaymentRow({ payment, onRemove, onVerify }) {
           </span>
           <span className="text-sm text-slate-600">{method.label}</span>
           <span className={`inline-flex items-center gap-1 text-xs font-semibold ${state.cls}`}>
-            <StateIcon size={12} aria-hidden="true" />
+            <StateIcon size={13} aria-hidden="true" />
             {state.label}
           </span>
         </div>
@@ -185,33 +119,20 @@ function PaymentRow({ payment, onRemove, onVerify }) {
 
         {state.key === 'pending' && onVerify ? (
           <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => onVerify(oid(payment), 'verified')}
-              className="btn-ghost h-8 !border-emerald-200 !px-3 !text-xs !text-emerald-700 hover:!bg-emerald-50"
-            >
-              <FiCheck size={13} /> Verify
+            <button type="button" onClick={() => onVerify(oid(payment), 'verified')} className="btn-ghost btn-sm">
+              <FiCheck size={14} className="text-emerald-600" aria-hidden /> Verify
             </button>
-            <button
-              type="button"
-              onClick={() => onVerify(oid(payment), 'rejected')}
-              className="btn-ghost h-8 !border-rose-200 !px-3 !text-xs !text-rose-600 hover:!bg-rose-50"
-            >
-              <FiSlash size={13} /> Reject
+            <button type="button" onClick={() => onVerify(oid(payment), 'rejected')} className="btn-ghost btn-sm !text-rose-700 hover:!bg-rose-50">
+              <FiSlash size={14} aria-hidden /> Reject
             </button>
           </div>
         ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={() => onRemove(oid(payment))}
-        aria-label={`Remove ${money(payment.amount)} ${method.label} payment`}
-        title="Remove payment"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
-      >
-        <FiTrash2 size={14} />
-      </button>
+      <ActionMenu
+        label={`More actions for the ${money(payment.amount)} ${method.label} payment`}
+        items={[{ label: 'Remove payment…', icon: FiTrash2, tone: 'danger', onClick: () => onRemove(oid(payment)) }]}
+      />
     </li>
   );
 }
@@ -225,7 +146,7 @@ function Line({ label, sub, amount, sign = '', tone = 'text-slate-900', strong =
         {label}
         {sub ? <span className="ml-2 text-xs text-slate-500">{sub}</span> : null}
       </span>
-      <span className={`tabular-nums ${strong ? 'text-sm font-bold text-slate-900' : `text-[13px] ${tone}`}`}>
+      <span className={`tabular-nums ${strong ? 'text-sm font-semibold text-slate-900' : `text-[13px] ${tone}`}`}>
         {sign}
         {money(amount)}
       </span>
@@ -251,36 +172,47 @@ export default function PaymentsCard({
     (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
   );
   const byState = (key) => sorted.filter((payment) => stateOf(payment).key === key);
-  const verified = paid;
-  const pending = sum(byState('pending'));
-  const courier = sum(byState('courier'));
-  const amounts = {
-    verified,
-    pending,
-    courier,
-    open: Math.max(0, Math.round(total - verified - pending - courier))
-  };
+  const needsCheck = sum(byState('pending'));
+  const withCourier = sum(byState('courier'));
+  const onTheWay = needsCheck + withCourier;
 
   return (
     <Card
       title="Payment"
-      icon={FiCreditCard}
       badge={<PaymentBadge paid={paid} due={due} />}
       actions={
-        <button
-          type="button"
-          onClick={onAdd}
-          className={due > 0 ? 'btn-brand h-8 !px-3 !text-xs' : 'btn-ghost h-8 !px-3 !text-xs'}
-        >
-          <FiPlus size={14} /> Add payment
+        <button type="button" onClick={onAdd} className="btn-ghost btn-sm">
+          <FiPlus size={14} aria-hidden /> Add payment
         </button>
       }
     >
-      <Collection total={total} due={due} amounts={amounts} />
+      {/* The bill, then what has been paid against it. */}
+      <div className="space-y-2 border-t border-slate-100 px-5 py-4">
+        <Line label="Subtotal" sub={`${itemCount} item${itemCount === 1 ? '' : 's'}`} amount={order?.subTotal} />
+        <Line label="Shipping" sub={DELIVERY_LABEL[order?.deliveryType] || order?.deliveryType} amount={order?.shipping} />
+        {order?.discount > 0 ? <Line label="Discount" sub={coupon} amount={order.discount} sign="−" tone="text-emerald-700" /> : null}
+        {order?.cashDiscount > 0 ? <Line label="Sidrat Cash" amount={order.cashDiscount} sign="−" tone="text-emerald-700" /> : null}
+        {order?.vat > 0 ? <Line label="VAT" sub={`${order.vatPercent}%`} amount={order.vat} /> : null}
+        <div className="border-t border-slate-200 pt-2">
+          <Line label="Total" amount={total} strong />
+        </div>
+        <Line label="Paid" sub="Verified payments" amount={paid} />
+        <div className="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-2">
+          <span className="text-sm font-semibold text-slate-900">{due > 0 ? 'Balance due' : 'Fully paid'}</span>
+          <span className={`text-sm font-semibold tabular-nums ${due > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>{money(due)}</span>
+        </div>
+        {due > 0 && onTheWay > 0 ? (
+          <p className="text-right text-xs text-slate-500">
+            {needsCheck > 0 ? `${money(needsCheck)} waiting to be checked` : ''}
+            {needsCheck > 0 && withCourier > 0 ? ' · ' : ''}
+            {withCourier > 0 ? `${money(withCourier)} with the courier` : ''}
+          </p>
+        ) : null}
+      </div>
 
-      <div className="border-t border-slate-100 px-5 pt-3">
-        <p className="text-xs font-semibold text-slate-600">
-          Transactions <span className="font-normal text-slate-500">· {sorted.length}</span>
+      <div className="border-t border-slate-100 px-5 py-3">
+        <p className="text-[13px] font-medium text-slate-900">
+          Transactions <span className="font-normal text-slate-500">{sorted.length}</span>
         </p>
         {sorted.length ? (
           <ul className="divide-y divide-slate-100">
@@ -289,27 +221,8 @@ export default function PaymentsCard({
             ))}
           </ul>
         ) : (
-          <p className="py-3 text-sm text-slate-500">No payments yet</p>
+          <p className="py-3 text-[13px] text-slate-500">No payments recorded yet.</p>
         )}
-      </div>
-
-      <div className="space-y-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
-        <Line label="Subtotal" sub={`${itemCount} item${itemCount === 1 ? '' : 's'}`} amount={order?.subTotal} />
-        <Line
-          label="Shipping"
-          sub={DELIVERY_LABEL[order?.deliveryType] || order?.deliveryType}
-          amount={order?.shipping}
-        />
-        {order?.discount > 0 ? (
-          <Line label="Discount" sub={coupon} amount={order.discount} sign="−" tone="text-emerald-700" />
-        ) : null}
-        {order?.cashDiscount > 0 ? (
-          <Line label="Sidrat Cash" amount={order.cashDiscount} sign="−" tone="text-emerald-700" />
-        ) : null}
-        {order?.vat > 0 ? <Line label="VAT" sub={`${order.vatPercent}%`} amount={order.vat} /> : null}
-        <div className="border-t border-slate-200 pt-2">
-          <Line label="Total" amount={total} strong />
-        </div>
       </div>
     </Card>
   );

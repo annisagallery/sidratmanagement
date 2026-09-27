@@ -1,112 +1,133 @@
 'use client';
-import DataTable from 'src/components/_admin/ui/DataTable';
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { getOrderSettings, updateOrderSettings } from 'src/services';
-import Swal from 'sweetalert2';
+import { toastSuccess, toastError } from 'src/utils/swal';
+import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import Panel from 'src/components/_admin/ui/Panel';
+import { ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
 
 const TYPES = [
   { key: 'regular', label: 'Regular' },
   { key: 'urgent', label: 'Urgent' },
-  { key: 'sameDay', label: 'Same Day' }
+  { key: 'sameDay', label: 'Same day' }
 ];
 
 const DAY_FIELD = { regular: 'regularDays', urgent: 'urgentDays', sameDay: 'sameDayDays' };
 
-function Card({ title, subtitle, children }) {
-  return (
-    <section className="bg-white border border-gray-100 rounded-md p-6 shadow-sm">
-      <div className="mb-5">
-        <h2 className="font-semibold text-base text-gray-800">{title}</h2>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
+const dueFor = (days) =>
+  new Date(Date.now() + Math.max(0, Number(days) || 0) * 86400000).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
 
 export default function OrderSettingsPage() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery('order-settings', getOrderSettings);
+  const { data, isLoading, isError, error, refetch } = useQuery('order-settings', getOrderSettings);
 
   const [form, setForm] = useState({ regularDays: 7, urgentDays: 2, sameDayDays: 0, defaultDeliveryType: 'regular' });
+  const [saved, setSaved] = useState(null);
 
   useEffect(() => {
     if (!data?.data) return;
     const d = data.data;
-    setForm({
+    const next = {
       regularDays: d.regularDays ?? 7,
       urgentDays: d.urgentDays ?? 2,
       sameDayDays: d.sameDayDays ?? 0,
       defaultDeliveryType: d.defaultDeliveryType || 'regular'
-    });
+    };
+    setForm(next);
+    setSaved(next);
   }, [data]);
+
+  const dirty = saved !== null && JSON.stringify(form) !== JSON.stringify(saved);
 
   const { mutate: save, isLoading: saving } = useMutation(updateOrderSettings, {
     onSuccess: () => {
+      toastSuccess('Delivery types saved');
+      setSaved(form);
       qc.invalidateQueries('order-settings');
-      Swal.fire({ icon: 'success', title: 'Saved', timer: 1500, showConfirmButton: false });
     },
-    onError: (e) => Swal.fire({ icon: 'error', title: e.response?.data?.message || 'Save failed' })
+    onError: (e) => toastError(e, 'Could not save the delivery types.')
   });
 
-  if (isLoading) {
-    return <div className="h-40 bg-gray-100 animate-pulse rounded-md" />;
-  }
+  if (isLoading) return <LoadingBlock rows={3} />;
+  // Never offer a form built from defaults when the real values failed to load.
+  if (isError || !data?.data) return <ErrorState error={error} title="Delivery settings could not be loaded" onRetry={refetch} />;
 
   return (
     <div className="space-y-6">
-      <Card
-        title="Delivery Types"
-        subtitle="Days are added to today to calculate the estimated delivery date on customer orders."
+      <Panel
+        title="Delivery types"
+        description="Days are added to the order date to set its estimated delivery. The default is pre-selected on new orders."
+        bodyClassName="!p-0 !pt-4"
       >
-        <DataTable className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">
-              <th className="pb-2 font-semibold">Type</th>
-              <th className="pb-2 font-semibold w-32">Days</th>
-              <th className="pb-2 font-semibold text-center">Default</th>
-            </tr>
-          </thead>
-          <tbody>
-            {TYPES.map((t) => (
-              <tr key={t.key} className="border-b border-gray-50 last:border-0">
-                <td className="py-3 font-medium text-gray-700">{t.label}</td>
-                <td className="py-3 pr-6">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form[DAY_FIELD[t.key]]}
-                    onChange={(e) => setForm((p) => ({ ...p, [DAY_FIELD[t.key]]: Number(e.target.value) }))}
-                    className="border border-gray-200 rounded-md px-3 py-1.5 text-sm w-24 focus:outline-none focus:border-gray-400"
-                  />
-                  <span className="ml-2 text-xs text-gray-400">days</span>
-                </td>
-                <td className="py-3 text-center">
-                  <input
-                    type="radio"
-                    name="defaultDeliveryType"
-                    checked={form.defaultDeliveryType === t.key}
-                    onChange={() => setForm((p) => ({ ...p, defaultDeliveryType: t.key }))}
-                    className="accent-[var(--brand)] w-4 h-4"
-                  />
-                </td>
+        <div className="border-t border-slate-200">
+          <GlobalTable>
+            <caption className="sr-only">Delivery types</caption>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Days to deliver</th>
+                <th scope="col" className="hidden sm:table-cell">
+                  An order placed today is due
+                </th>
+                <th scope="col" className="text-center">
+                  Default
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </DataTable>
-      </Card>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => save(form)}
-          disabled={saving}
-          className="px-5 py-2 rounded-md bg-[var(--brand)] text-white text-sm font-semibold hover:brightness-95 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save Changes'}
-        </button>
-      </div>
+            </thead>
+            <tbody>
+              {TYPES.map((t) => {
+                const field = DAY_FIELD[t.key];
+                return (
+                  <tr key={t.key}>
+                    <td className="font-medium text-slate-900">{t.label}</td>
+                    <td>
+                      <span className="inline-flex items-center gap-2">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={form[field]}
+                          onChange={(e) => setForm((p) => ({ ...p, [field]: Number(e.target.value) }))}
+                          aria-label={`Days to deliver — ${t.label}`}
+                          className="input-ui w-24 tabular-nums"
+                        />
+                        <span className="text-[13px] text-slate-500">days</span>
+                      </span>
+                    </td>
+                    <td className="hidden text-slate-600 sm:table-cell">{dueFor(form[field])}</td>
+                    <td className="text-center">
+                      <input
+                        type="radio"
+                        name="defaultDeliveryType"
+                        checked={form.defaultDeliveryType === t.key}
+                        onChange={() => setForm((p) => ({ ...p, defaultDeliveryType: t.key }))}
+                        aria-label={`Make ${t.label} the default`}
+                        className="h-4 w-4 accent-slate-900"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </GlobalTable>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3">
+          {dirty ? <span className="mr-auto text-[13px] text-slate-600">You have unsaved changes.</span> : null}
+          {dirty ? (
+            <button type="button" className="btn-quiet" onClick={() => setForm(saved)} disabled={saving}>
+              Discard
+            </button>
+          ) : null}
+          <button type="button" onClick={() => save(form)} disabled={saving || !dirty} className="btn-brand">
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </Panel>
     </div>
   );
 }

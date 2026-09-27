@@ -1,27 +1,37 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMutation } from 'react-query';
-import { MdOutlineDashboard, MdOutlineVisibility, MdOutlineVisibilityOff } from 'react-icons/md';
-import { toast } from 'react-toastify';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation } from "react-query";
+import { MdOutlineDashboard, MdOutlineVisibility, MdOutlineVisibilityOff } from "react-icons/md";
 
-import * as api from 'src/services';
-import useAdminUserStore from 'src/stores/userStore';
-import { useSiteSettings } from 'src/context/SiteSettingsContext';
+import * as api from "src/services";
+import useAdminUserStore from "src/stores/userStore";
+import { useSiteSettings } from "src/context/SiteSettingsContext";
+import Callout from "src/components/_admin/ui/Callout";
+import { apiMessage } from "src/utils/swal";
 
-// Per-app identity. Everything below this block is deliberately identical
-// across all six staff-facing apps — keep the sign-in screens in sync.
-const APP_LABEL = 'Management';
-const APP_TAGLINE = 'Sign in with your store admin account';
+// Per-app identity. Everything below this block matches the marketing app's
+// sign-in (the shared Sidrat design system) — keep the redesigned apps in sync.
+const APP_LABEL = "Management";
+const APP_TAGLINE = "Sign in with your store admin account";
 const AppIcon = MdOutlineDashboard;
 
 export default function LoginForm() {
   const router = useRouter();
   const { login } = useAdminUserStore();
   const { siteName, logo, logoType, primaryColor } = useSiteSettings();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  // The API client sends people here with ?reason=session-expired after a 401.
+  // Read once on mount rather than with useSearchParams, which would force a
+  // Suspense boundary during prerender.
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason === "session-expired") setNotice("Your session expired. Sign in again to pick up where you left off.");
+  }, []);
 
   const loginMutation = useMutation(api.login, {
     onSuccess: (data) => {
@@ -30,89 +40,98 @@ export default function LoginForm() {
       // that hook forces a Suspense boundary during prerender, and the value
       // is only ever needed once the user has already interacted.
       const params = new URLSearchParams(window.location.search);
-      router.push(params.get('redirect') || '/');
+      router.push(params.get("redirect") || "/");
     },
-    onError: (err) => {
-      toast.error(err?.response?.data?.message || 'Login failed');
-    }
   });
 
   const onSubmit = (e) => {
     e.preventDefault();
     if (!identifier.trim() || !password) return;
+    setNotice("");
     loginMutation.mutate({ identifier: identifier.trim(), password });
   };
 
+  const error = loginMutation.isError ? apiMessage(loginMutation.error, "Sign-in failed. Check your details and try again.") : "";
+
   return (
     <div
-      className="admin-root flex min-h-screen items-center justify-center bg-slate-100 p-4"
-      style={{ '--brand': primaryColor }}
+      className="admin-root flex min-h-screen items-center justify-center bg-[var(--canvas)] px-4 py-12"
+      style={{ "--brand": primaryColor }}
     >
-      <form onSubmit={onSubmit} className="card-ui w-full max-w-sm space-y-4 p-6">
-        <div className="flex flex-col items-center gap-1 pb-2">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
           {logo ? (
-            <span className="flex h-14 w-14 overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-sm">
-              <img
-                src={logo}
-                alt={siteName || 'Site logo'}
-                className={`h-full w-full ${logoType === 'round' ? 'rounded-md object-cover' : 'object-contain'}`}
-              />
+            <span className="mb-4 flex h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+              <img src={logo} alt="" className={`h-full w-full ${logoType === "round" ? "rounded-md object-cover" : "object-contain"}`} />
             </span>
           ) : (
-            <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-strong)]">
-              <AppIcon size={26} />
+            <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-900 text-white">
+              <AppIcon size={26} aria-hidden />
             </span>
           )}
-          <h1 className="text-lg font-bold text-slate-800">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             {siteName} {APP_LABEL}
           </h1>
-          <p className="text-sm text-slate-500">{APP_TAGLINE}</p>
+          <p className="mt-1 text-sm text-slate-500">{APP_TAGLINE}</p>
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Phone or Email
-          </label>
-          <input
-            type="text"
-            inputMode="email"
-            className="input-ui"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            placeholder="01XXXXXXXXX or you@example.com"
-            autoComplete="username"
-            required
-          />
-        </div>
+        <form onSubmit={onSubmit} className="card-ui space-y-5 p-6 sm:p-8" noValidate>
+          {notice && !error && <Callout tone="warning">{notice}</Callout>}
+          {error && <Callout tone="danger">{error}</Callout>}
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Password
-          </label>
-          <div className="relative">
+          <div>
+            <label htmlFor="login-identifier" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+              Phone or email
+            </label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              className="input-ui pr-10"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              id="login-identifier"
+              type="text"
+              inputMode="email"
+              className="input-ui h-10"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="01XXXXXXXXX or you@example.com"
+              autoComplete="username"
+              autoFocus
               required
             />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
-              onClick={() => setShowPassword((v) => !v)}
-              tabIndex={-1}
-            >
-              {showPassword ? <MdOutlineVisibilityOff size={18} /> : <MdOutlineVisibility size={18} />}
-            </button>
           </div>
-        </div>
 
-        <button type="submit" className="btn-brand w-full" disabled={loginMutation.isLoading}>
-          {loginMutation.isLoading ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+          <div>
+            <label htmlFor="login-password" className="block mb-1.5 text-[13px] font-medium text-slate-800">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                className="input-ui h-10 pr-11"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <MdOutlineVisibilityOff size={18} /> : <MdOutlineVisibility size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="btn-brand h-10 w-full"
+            disabled={loginMutation.isLoading || !identifier.trim() || !password}
+          >
+            {loginMutation.isLoading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

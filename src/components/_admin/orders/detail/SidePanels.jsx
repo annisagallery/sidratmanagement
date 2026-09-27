@@ -8,8 +8,9 @@
  * from the clipboard.
  */
 
+import Link from 'next/link';
 import { format } from 'date-fns';
-import { FiFileText, FiMail, FiMapPin, FiMessageCircle, FiPhone, FiUser } from 'react-icons/fi';
+import { FiEdit2, FiFileText, FiMail, FiMapPin, FiMessageCircle, FiPhone } from 'react-icons/fi';
 
 import { Card, CopyButton, Row, money, tagColor, tagId, tagName } from './parts';
 
@@ -35,7 +36,7 @@ const DELIVERY_LABEL = { regular: 'Regular', urgent: 'Urgent', sameDay: 'Same da
 function SubHeading({ children, actions }) {
   return (
     <div className="mb-2 flex items-center justify-between gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{children}</p>
+      <p className="text-[13px] font-medium text-slate-900">{children}</p>
       {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
     </div>
   );
@@ -44,7 +45,7 @@ function SubHeading({ children, actions }) {
 function ContactLine({ icon: Icon, children, copy, copyLabel }) {
   return (
     <p className="flex items-center gap-2 text-[13px] text-slate-700">
-      <Icon size={13} className="shrink-0 text-slate-500" />
+      <Icon size={14} className="shrink-0 text-slate-400" aria-hidden />
       <span className="min-w-0 truncate">{children}</span>
       {copy ? <CopyButton value={copy} label={copyLabel} /> : null}
     </p>
@@ -66,7 +67,7 @@ export function NotePanel({ note }) {
 
 /* ── customer, contact and delivery address ──────────────────────────────── */
 
-export function CustomerPanel({ order, onEditAddress }) {
+export function CustomerPanel({ order, onEdit }) {
   const customer = order.user || null;
   const address = order.shippingAddress || {};
   const name = customer?.name || order.guestName || address.name || 'Guest customer';
@@ -82,20 +83,27 @@ export function CustomerPanel({ order, onEditAddress }) {
   const hasAddress = Boolean(street || region || address.name);
 
   return (
-    <Card title="Customer" icon={FiUser}>
+    <Card
+      title="Customer"
+      actions={
+        <button type="button" onClick={onEdit} className="btn-ghost btn-sm">
+          <FiEdit2 size={14} aria-hidden /> Edit
+        </button>
+      }
+    >
       <div className="border-t border-slate-100 px-5 py-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-bold text-[var(--brand-strong)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700 ring-1 ring-slate-200" aria-hidden>
             {name.trim().charAt(0).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
             {phone ? (
-              <a
+              <Link
                 href={`/users/${encodeURIComponent(phone)}`}
-                className="block truncate text-sm font-semibold text-[var(--brand-strong)] hover:underline"
+                className="block truncate text-sm font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-600"
               >
                 {name}
-              </a>
+              </Link>
             ) : (
               <p className="truncate text-sm font-semibold text-slate-900">{name}</p>
             )}
@@ -129,13 +137,6 @@ export function CustomerPanel({ order, onEditAddress }) {
           actions={
             <>
               {hasAddress ? <CopyButton value={clipboard} label="Copy the whole address" /> : null}
-              <button
-                type="button"
-                onClick={onEditAddress}
-                className="text-xs font-semibold text-[var(--brand-strong)] hover:underline"
-              >
-                Edit
-              </button>
             </>
           }
         >
@@ -145,10 +146,10 @@ export function CustomerPanel({ order, onEditAddress }) {
           <address className="space-y-0.5 text-[13px] not-italic leading-relaxed text-slate-700">
             {address.name ? <p className="font-medium text-slate-900">{address.name}</p> : null}
             {address.phone && address.phone !== phone ? <p>{address.phone}</p> : null}
-            {street ? <p>{street}</p> : <p className="text-amber-600">Street not given</p>}
+            {street ? <p>{street}</p> : <p className="font-medium text-amber-700">Street not given</p>}
             {region ? (
               <p className="flex items-start gap-1.5">
-                <FiMapPin size={12} className="mt-1 shrink-0 text-slate-400" />
+                <FiMapPin size={13} className="mt-1 shrink-0 text-slate-400" aria-hidden />
                 {region}
               </p>
             ) : null}
@@ -190,13 +191,9 @@ export function MetaPanel({ order }) {
             {tags.map((tag) => (
               <span
                 key={tagId(tag)}
-                className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold"
-                style={
-                  tagColor(tag)
-                    ? { borderColor: `${tagColor(tag)}55`, color: tagColor(tag), backgroundColor: `${tagColor(tag)}1a` }
-                    : { borderColor: '#e2e8f0', color: '#475569', backgroundColor: '#f8fafc' }
-                }
+                className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-500/10"
               >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tagColor(tag) || '#94a3b8' }} aria-hidden />
                 {tagName(tag)}
               </span>
             ))}

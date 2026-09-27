@@ -1,100 +1,99 @@
 'use client';
 import { useState } from 'react';
 import { useMutation } from 'react-query';
-import Swal from 'sweetalert2';
 import * as api from 'src/services';
+import { toastSuccess, alertError } from 'src/utils/swal';
+import { Field, ModalShell, fieldClass, selectClass } from 'src/components/_admin/ui/primitives';
 
+/**
+ * Record money that arrived outside the automatic channels. The note is
+ * required because a manual entry is exactly what someone will audit later.
+ */
 export default function AddPaymentModal({ types = [], onClose, onDone }) {
   const [form, setForm] = useState({ type: types[0]?.slug || '', amount: '', trxId: '', account: '', note: '' });
+  const [errors, setErrors] = useState({});
 
-  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    setForm((p) => ({ ...p, [k]: e.target.value }));
+    setErrors((p) => ({ ...p, [k]: undefined }));
+  };
 
   const { mutate, isLoading } = useMutation(() => api.createPaymentByAdmin({ ...form, amount: Number(form.amount) }), {
     onSuccess: () => {
-      Swal.fire({ title: 'Payment added', icon: 'success', timer: 1200, showConfirmButton: false });
+      toastSuccess('Payment recorded');
       onDone();
       onClose();
     },
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onError: (e) => alertError(e, { title: 'The payment was not recorded' })
   });
 
   const submit = () => {
-    if (!form.type) return Swal.fire('Select payment type', '', 'warning');
-    if (!form.amount || Number(form.amount) <= 0) return Swal.fire('Enter amount', '', 'warning');
-    if (!form.note.trim()) return Swal.fire('Note is required for manual payments', '', 'warning');
+    const next = {};
+    if (!form.type) next.type = 'Choose the payment type.';
+    if (!form.amount || Number(form.amount) <= 0) next.amount = 'Enter an amount greater than zero.';
+    if (!form.note.trim()) next.note = 'Say why this is entered by hand.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
     mutate();
   };
 
-  const inp =
-    'border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-[var(--brand)]';
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-md shadow-xl w-full max-w-md p-6 space-y-4">
-        <h3 className="font-semibold text-gray-800 text-base">Add Manual Payment</h3>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">
-              Type <span className="text-red-500">*</span>
-            </label>
-            <select value={form.type} onChange={set('type')} className={inp}>
-              {types.map((t) => (
-                <option key={t.slug} value={t.slug}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">
-              Amount <span className="text-red-500">*</span>
-            </label>
-            <input type="number" min="0" value={form.amount} onChange={set('amount')} placeholder="0" className={inp} />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Transaction ID</label>
-          <input value={form.trxId} onChange={set('trxId')} placeholder="Optional" className={inp} />
-        </div>
-
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">Account</label>
+    <ModalShell
+      title="Add a manual payment"
+      subtitle="Payments"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={isLoading}>
+            Cancel
+          </button>
+          <button type="button" onClick={submit} disabled={isLoading} className="btn-brand">
+            {isLoading ? 'Recording…' : 'Record payment'}
+          </button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Type" required error={errors.type}>
+          <select value={form.type} onChange={set('type')} className={selectClass}>
+            {!types.length ? <option value="">No payment types set up</option> : null}
+            {types.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Amount (৳)" required error={errors.amount}>
           <input
-            value={form.account}
-            onChange={set('account')}
-            placeholder="Receiving account number"
-            className={inp}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            value={form.amount}
+            onChange={set('amount')}
+            placeholder="0"
+            className={`${fieldClass} tabular-nums`}
+            aria-invalid={Boolean(errors.amount)}
+            autoFocus
           />
-        </div>
-
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">
-            Note <span className="text-red-500">*</span>
-          </label>
+        </Field>
+        <Field label="Transaction ID" optional>
+          <input value={form.trxId} onChange={set('trxId')} className={`${fieldClass} ops-code`} spellCheck={false} />
+        </Field>
+        <Field label="Receiving account" optional>
+          <input value={form.account} onChange={set('account')} placeholder="Account or wallet number" className={fieldClass} />
+        </Field>
+        <Field label="Note" required error={errors.note} className="sm:col-span-2">
           <textarea
             value={form.note}
             onChange={set('note')}
             rows={2}
-            placeholder="Required — reason for manual entry"
-            className={`${inp} resize-none`}
+            placeholder="Why this payment is entered by hand"
+            className={`${fieldClass} resize-none`}
+            aria-invalid={Boolean(errors.note)}
           />
-        </div>
-
-        <div className="flex gap-2 justify-end pt-1">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-md transition">
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={isLoading}
-            className="px-5 py-2 bg-[var(--brand)] hover:brightness-95 text-white text-sm font-semibold rounded-md transition disabled:opacity-50"
-          >
-            {isLoading ? 'Adding…' : 'Add Payment'}
-          </button>
-        </div>
+        </Field>
       </div>
-    </div>
+    </ModalShell>
   );
 }

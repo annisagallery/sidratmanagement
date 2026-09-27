@@ -77,7 +77,7 @@ export default function ReturnReceiptCard({ order, orderNo, onReceived }) {
               >
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-semibold text-slate-800">{itemName(item)}</p>
-                  {item.isCustom ? <p className="text-[11px] text-amber-600">Custom piece</p> : null}
+                  {item.isCustom ? <p className="text-xs text-amber-700">Custom piece</p> : null}
                 </div>
                 <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-200 text-xs font-semibold">
                   <button
@@ -101,7 +101,7 @@ export default function ReturnReceiptCard({ order, orderNo, onReceived }) {
             );
           })}
         </ul>
-        <button type="button" onClick={() => mutate()} disabled={isLoading} className="btn-brand h-9 w-full !text-xs">
+        <button type="button" onClick={() => mutate()} disabled={isLoading} className="btn-brand btn-sm w-full">
           {isLoading
             ? 'Receiving…'
             : `Receive return — ${restockCount} to stock, ${items.length - restockCount} written off`}

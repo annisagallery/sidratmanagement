@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import * as api from 'src/services';
-import { confirmDelete } from 'src/utils/swal';
+import { confirmDelete, toastSuccess, alertError, confirmAction } from 'src/utils/swal';
 import {
   FiAlertTriangle,
   FiArrowLeft,
@@ -27,6 +27,8 @@ import {
   FiX
 } from 'react-icons/fi';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { ErrorState } from 'src/components/_admin/ui/TableStates';
 import { CopyButton, toast } from 'src/components/_admin/ui/primitives';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
@@ -45,11 +47,13 @@ const actionFor = (accountType) => ACCOUNT_TYPES.find((a) => a.value === account
 
 function Section({ title, description, actions, children, id }) {
   return (
-    <section id={id} className="card-ui p-5 sm:p-6">
+    <section id={id} className="card-ui p-5" aria-labelledby={id ? `${id}-title` : undefined}>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-bold text-slate-900">{title}</h2>
-          {description && <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-slate-400">{description}</p>}
+          <h2 id={id ? `${id}-title` : undefined} className="text-[15px] font-semibold text-slate-900">
+            {title}
+          </h2>
+          {description && <p className="mt-0.5 max-w-2xl text-[13px] leading-relaxed text-slate-500">{description}</p>}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
@@ -59,15 +63,19 @@ function Section({ title, description, actions, children, id }) {
 }
 
 function CopyField({ label, value, type = 'text', children }) {
+  const id = useId();
   const copy = () => {
     navigator.clipboard?.writeText(value);
-    Swal.fire({ title: 'Copied', icon: 'success', timer: 900, showConfirmButton: false });
+    toastSuccess('Copied');
   };
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-slate-800">
+        {label}
+      </label>
       <div className="flex gap-2">
         <input
+          id={id}
           readOnly
           type={type}
           value={value}
@@ -282,7 +290,7 @@ function MethodMark({ name, color, logoUrl, size = 'md' }) {
   }
   return (
     <span
-      className={`flex ${box} shrink-0 items-center justify-center rounded-lg font-black text-white`}
+      className={`flex ${box} shrink-0 items-center justify-center rounded-lg font-semibold text-white`}
       style={{ backgroundColor: color || '#6b7280' }}
       aria-hidden="true"
     >
@@ -297,7 +305,7 @@ function MethodMark({ name, color, logoUrl, size = 'md' }) {
 function StepDot({ n, color }) {
   return (
     <span
-      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black"
+      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold"
       style={{ color }}
       aria-hidden="true"
     >
@@ -309,11 +317,11 @@ function StepDot({ n, color }) {
 function VerifyTag({ slug }) {
   const wallet = walletOf(slug);
   return wallet ? (
-    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
       <FiCheckCircle size={12} /> Auto-verified from {wallet.name} SMS
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
       <FiAlertTriangle size={12} /> Checked by hand
     </span>
   );
@@ -329,9 +337,9 @@ function CustomerPreview({ form }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Customer sees</p>
+        <p className="section-label">Customer sees</p>
         {!form.isActive && (
-          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs font-semibold text-slate-600">
             <FiEyeOff size={10} /> Hidden
           </span>
         )}
@@ -340,16 +348,16 @@ function CustomerPreview({ form }) {
       <div className="rounded-[1.5rem] border border-slate-200 bg-white p-2 shadow-sm">
         <div className="mx-auto mb-2 mt-0.5 h-1 w-10 rounded-full bg-slate-200" aria-hidden="true" />
         <div
-          className={`overflow-hidden rounded-2xl text-white transition ${form.isActive ? '' : 'opacity-50 grayscale'}`}
+          className={`overflow-hidden rounded-lg text-white transition ${form.isActive ? '' : 'opacity-50 grayscale'}`}
           style={{ backgroundColor: color }}
         >
           <div className="flex items-center gap-2.5 px-3 py-3">
             <MethodMark name={form.name} color="rgba(255,255,255,0.2)" logoUrl={form.logoUrl.trim()} />
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wide text-white/75">Pay with</p>
-              <p className="truncate text-sm font-bold">{form.name.trim() || 'Method name'}</p>
+              <p className="section-label text-white/75">Pay with</p>
+              <p className="truncate text-sm font-semibold">{form.name.trim() || 'Method name'}</p>
             </div>
-            <p className="text-sm font-bold tabular-nums">৳1,250</p>
+            <p className="text-sm font-semibold tabular-nums">৳1,250</p>
           </div>
           <ol className="space-y-2 border-t border-white/20 px-3 py-3 text-xs">
             <li className="flex items-center">
@@ -359,7 +367,7 @@ function CustomerPreview({ form }) {
             <li className="flex flex-wrap items-center gap-y-1">
               <StepDot n={2} color={color} />
               <span className="mr-1">Enter</span>
-              <span className="rounded bg-white px-1.5 py-0.5 font-mono font-bold text-slate-900">
+              <span className="rounded bg-white px-1.5 py-0.5 font-mono font-semibold text-slate-900">
                 {number || 'no number'}
               </span>
             </li>
@@ -369,13 +377,13 @@ function CustomerPreview({ form }) {
             </li>
           </ol>
           {form.instructions.trim() && (
-            <p className="border-t border-white/20 px-3 py-2 text-[11px] leading-relaxed text-white/90">
+            <p className="border-t border-white/20 px-3 py-2 text-xs leading-relaxed text-white/90">
               {form.instructions.trim()}
             </p>
           )}
           <div className="px-3 pb-3">
             <span
-              className="block rounded-lg bg-white/95 py-2 text-center text-xs font-black tracking-wide"
+              className="block rounded-lg bg-white/95 py-2 text-center text-xs font-semibold tracking-wide"
               style={{ color }}
             >
               VERIFY
@@ -396,18 +404,18 @@ function CustomerPreview({ form }) {
 function FieldNote({ error, warning, hint, id }) {
   if (error)
     return (
-      <p id={id} className="mt-1.5 flex items-start gap-1 text-[11px] font-medium text-rose-600">
+      <p id={id} className="mt-1.5 flex items-start gap-1 text-xs font-medium text-rose-700">
         <FiAlertTriangle className="mt-px shrink-0" size={11} /> {error}
       </p>
     );
   if (warning)
     return (
-      <p id={id} className="mt-1.5 flex items-start gap-1 text-[11px] text-amber-700">
+      <p id={id} className="mt-1.5 flex items-start gap-1 text-xs text-amber-700">
         <FiAlertTriangle className="mt-px shrink-0" size={11} /> {warning}
       </p>
     );
   return hint ? (
-    <p id={id} className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+    <p id={id} className="mt-1.5 text-xs leading-relaxed text-slate-500">
       {hint}
     </p>
   ) : null;
@@ -420,10 +428,10 @@ function FormBlock({ n, title, aside, children }) {
   return (
     <fieldset className="min-w-0">
       <legend className="mb-3 flex w-full items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
           {n}
         </span>
-        <span className="text-sm font-bold text-slate-900">{title}</span>
+        <span className="text-sm font-semibold text-slate-900">{title}</span>
         {aside ? <span className="ml-auto">{aside}</span> : null}
       </legend>
       <div className="space-y-4 sm:pl-7">{children}</div>
@@ -453,7 +461,7 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
       <FormBlock n={1} title="Method">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor={`${uid}-name`} className="mb-1 block text-xs font-semibold text-slate-600">
+            <label htmlFor={`${uid}-name`} className="block mb-1.5 text-[13px] font-medium text-slate-800">
               Name customers see
             </label>
             <input
@@ -473,11 +481,11 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
           <div>
             <label
               htmlFor={`${uid}-slug`}
-              className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600"
+              className="flex items-center justify-between text-[13px] font-medium text-slate-800"
             >
               Short code
               {form.slug && (
-                <span className={`text-[10px] font-semibold ${wallet ? 'text-emerald-700' : 'text-slate-400'}`}>
+                <span className={`text-xs font-semibold ${wallet ? 'text-emerald-700' : 'text-slate-500'}`}>
                   {wallet ? `Matches ${wallet.name} SMS` : 'No SMS match'}
                 </span>
               )}
@@ -517,9 +525,9 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
               return (
                 <label
                   key={option.value}
-                  className={`relative flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--brand-ring)] ${
+                  className={`relative flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-slate-900/30 ${
                     active
-                      ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand-ring)]'
+                      ? 'border-slate-900 bg-white ring-1 ring-slate-900'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
@@ -533,23 +541,19 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
                   />
                   <span
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
-                      active ? 'bg-white text-[var(--brand-strong)]' : 'bg-slate-100 text-slate-500'
+                      active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
                     }`}
                   >
                     <Icon size={15} />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-bold text-slate-900">{option.label}</span>
-                    <span className="block text-[11px] leading-snug text-slate-500">
+                    <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
+                    <span className="block text-xs leading-snug text-slate-500">
                       Customer taps <strong className="font-semibold text-slate-700">{option.action}</strong>
                     </span>
                   </span>
                   {active && (
-                    <FiCheck
-                      className="absolute right-2.5 top-2.5 text-[var(--brand-strong)]"
-                      size={14}
-                      aria-hidden="true"
-                    />
+                    <FiCheckCircle className="absolute right-2.5 top-2.5 text-slate-900" size={15} aria-hidden="true" />
                   )}
                 </label>
               );
@@ -568,8 +572,8 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
                 <div key={index}>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`w-20 shrink-0 text-[10px] font-bold uppercase tracking-wide ${
-                        index === 0 ? 'text-slate-600' : 'text-slate-400'
+                      className={`section-label w-20 shrink-0 ${
+                        index === 0 ? 'text-slate-600' : 'text-slate-500'
                       }`}
                     >
                       {index === 0 ? 'Pays to' : `Spare ${index}`}
@@ -588,7 +592,7 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
                       type="button"
                       onClick={() => removeAccount(index)}
                       disabled={form.accounts.length === 1}
-                      className="btn-icon shrink-0 text-slate-400 hover:text-rose-600 disabled:invisible"
+                      className="btn-icon shrink-0 text-slate-500 hover:text-rose-600 disabled:invisible"
                       aria-label={`Remove ${account || 'this number'}`}
                     >
                       <FiX size={14} />
@@ -605,11 +609,11 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
             <button
               type="button"
               onClick={addAccount}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-strong)] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-900 hover:underline"
             >
               <FiPlus size={12} /> Add a spare number
             </button>
-            <span className="text-[11px] text-slate-400">Only the first number is shown at checkout.</span>
+            <span className="text-xs text-slate-500">Only the first number is shown at checkout.</span>
           </div>
         </div>
       </FormBlock>
@@ -662,8 +666,8 @@ function MethodForm({ form, setForm, check, showErrors, slugLocked, setSlugTouch
         </div>
 
         <div>
-          <label htmlFor={`${uid}-logo`} className="mb-1 block text-xs font-semibold text-slate-600">
-            Logo address <span className="font-normal text-slate-400">(optional)</span>
+          <label htmlFor={`${uid}-logo`} className="block mb-1.5 text-[13px] font-medium text-slate-800">
+            Logo address <span className="font-normal text-slate-500">(optional)</span>
           </label>
           <input
             id={`${uid}-logo`}
@@ -741,14 +745,14 @@ function Dialog({ labelledBy, onClose, children }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 backdrop-blur-[2px] sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[80] !m-0 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4">
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:max-h-[90vh] sm:rounded-xl"
+        className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:max-h-[90vh] sm:rounded-lg"
       >
         {children}
       </div>
@@ -760,7 +764,7 @@ function WalletPicker({ types, onPick }) {
   return (
     <div className="space-y-6 p-5 sm:p-6">
       <div>
-        <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+        <p className="section-label mb-2.5">
           Verified automatically from SMS
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -775,12 +779,12 @@ function WalletPicker({ types, onPick }) {
                 type="button"
                 disabled={full}
                 onClick={() => onPick(preset)}
-                className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
+                className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
               >
                 <MethodMark name={preset.name} color={preset.color} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-slate-900">{preset.name}</span>
-                  <span className="block truncate text-[11px] text-slate-500">
+                  <span className="block text-sm font-semibold text-slate-900">{preset.name}</span>
+                  <span className="block truncate text-xs text-slate-500">
                     {full
                       ? 'Personal, merchant and agent all added'
                       : used.size
@@ -789,12 +793,12 @@ function WalletPicker({ types, onPick }) {
                   </span>
                 </span>
                 {used.size ? (
-                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                     {used.size} added
                   </span>
                 ) : (
                   <FiArrowRight
-                    className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
+                    className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
                     size={15}
                   />
                 )}
@@ -805,23 +809,23 @@ function WalletPicker({ types, onPick }) {
       </div>
 
       <div>
-        <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Something else</p>
+        <p className="section-label mb-2.5">Something else</p>
         <button
           type="button"
           onClick={() => onPick(null)}
-          className="group flex w-full items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-3 text-left transition hover:border-slate-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+          className="group flex w-full items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-left transition hover:border-slate-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500">
             <FiPlus size={16} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold text-slate-900">Custom method</span>
-            <span className="block text-[11px] text-slate-500">
+            <span className="block text-sm font-semibold text-slate-900">Custom method</span>
+            <span className="block text-xs text-slate-500">
               Any other way to be paid. With no SMS to match, each payment is checked by hand.
             </span>
           </span>
           <FiArrowRight
-            className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
+            className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
             size={15}
           />
         </button>
@@ -881,17 +885,17 @@ function MethodDialog({ original, types, saving, onSubmit, onDelete, onClose }) 
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="section-label">
             {editing ? 'Edit payment method' : step === 'pick' ? 'Step 1 of 2' : 'Step 2 of 2'}
           </p>
-          <h2 id={titleId} className="truncate text-lg font-bold text-slate-900">
+          <h2 id={titleId} className="truncate text-lg font-semibold text-slate-900">
             {step === 'pick' ? 'Which wallet will customers pay with?' : form.name.trim() || 'New payment method'}
           </h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="btn-icon btn-icon-sm"
           aria-label="Close"
         >
           <FiX size={18} />
@@ -939,7 +943,7 @@ function MethodDialog({ original, types, saving, onSubmit, onDelete, onClose }) 
                 <button
                   type="button"
                   onClick={() => onDelete(original)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
                 >
                   <FiTrash2 size={13} /> Remove
                 </button>
@@ -947,7 +951,7 @@ function MethodDialog({ original, types, saving, onSubmit, onDelete, onClose }) 
             </div>
             <div className="flex flex-1 items-center justify-end gap-2">
               {showErrors && errorCount > 0 && (
-                <span className="mr-1 text-[11px] font-medium text-rose-600">
+                <span className="mr-1 text-xs font-medium text-rose-700">
                   Fix {errorCount === 1 ? 'the highlighted field' : `${errorCount} highlighted fields`}
                 </span>
               )}
@@ -998,12 +1002,12 @@ function MethodCard({ type, onToggle, onEdit, onDelete }) {
       <div className={`flex items-start gap-3 p-4 ${inactive ? 'opacity-60' : ''}`}>
         <MethodMark name={type.name} color={type.color} logoUrl={type.logoUrl} size="lg" />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-bold text-slate-900">{type.name}</h3>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">
+          <h3 className="truncate text-sm font-semibold text-slate-900">{type.name}</h3>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">
               {kind.label} · {kind.action}
             </span>
-            <span className="font-mono text-slate-400">{type.slug}</span>
+            <span className="font-mono text-slate-500">{type.slug}</span>
           </p>
         </div>
         <Switch
@@ -1018,7 +1022,7 @@ function MethodCard({ type, onToggle, onEdit, onDelete }) {
           accounts.map((account, index) => (
             <div key={account} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-3 py-1.5">
               <span className="min-w-0">
-                <span className="block text-[10px] uppercase tracking-wide text-slate-400">
+                <span className="section-label block">
                   {index === 0 ? 'Customers pay to' : 'Spare'}
                 </span>
                 <span className="font-mono text-sm font-semibold text-slate-800">{account}</span>
@@ -1037,21 +1041,17 @@ function MethodCard({ type, onToggle, onEdit, onDelete }) {
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2">
-        <span className={inactive ? 'text-[11px] font-medium text-slate-400' : ''}>
+        <span className={inactive ? 'text-xs font-medium text-slate-500' : ''}>
           {inactive ? 'Hidden from customers' : <VerifyTag slug={type.slug} />}
         </span>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => onEdit(type)} className="btn-ghost h-8 px-3 text-xs">
-            <FiEdit2 size={12} /> Edit
+          <button type="button" onClick={() => onEdit(type)} className="btn-ghost btn-sm">
+            <FiEdit2 size={13} aria-hidden /> Edit
           </button>
-          <button
-            type="button"
-            onClick={() => onDelete(type)}
-            className="btn-icon h-8 w-8 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-            aria-label={`Remove ${type.name}`}
-          >
-            <FiTrash2 size={13} />
-          </button>
+          <ActionMenu
+            label={`More actions for ${type.name}`}
+            items={[{ label: 'Remove method…', icon: FiTrash2, tone: 'danger', onClick: () => onDelete(type) }]}
+          />
         </div>
       </div>
     </div>
@@ -1078,11 +1078,17 @@ function PaymentMethodsSection() {
   // null, { mode: 'add' } or { mode: 'edit', type }
   const [dialog, setDialog] = useState(null);
   const invalidate = () => qc.invalidateQueries(['payment-types']);
-  const onError = (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error');
+  const onError = (e) => alertError(e, { title: 'That change was not saved' });
 
-  const { data, isLoading } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, { staleTime: 0 });
+  const { data, isLoading, isError, error, refetch } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, { staleTime: 0 });
   const types = data?.data || [];
-  const { data: checkoutSettingsData, isLoading: settingsLoading } = useQuery(
+  const {
+    data: checkoutSettingsData,
+    isLoading: settingsLoading,
+    isError: settingsFailed,
+    error: settingsError,
+    refetch: retrySettings
+  } = useQuery(
     ['checkout-payment-settings'],
     api.getCheckoutPaymentSettings,
     { staleTime: 0 }
@@ -1100,14 +1106,29 @@ function PaymentMethodsSection() {
     onSuccess: invalidate,
     onError
   });
-  const { mutate: remove } = useMutation(api.deletePaymentTypeByAdmin, { onSuccess: invalidate, onError });
+  const { mutate: remove } = useMutation(api.deletePaymentTypeByAdmin, {
+    onSuccess: () => {
+      invalidate();
+      toast('Payment method removed');
+    },
+    onError
+  });
   const { mutate: updateCheckoutSettings, isLoading: savingCheckoutSettings } = useMutation(
     api.updateCheckoutPaymentSettings,
     {
-      onSuccess: (response) => qc.setQueryData(['checkout-payment-settings'], response),
+      onSuccess: (response) => {
+        qc.setQueryData(['checkout-payment-settings'], response);
+        toast('Checkout updated');
+      },
       onError
     }
   );
+
+  const toggleMethod = (target, checked) =>
+    update(
+      { id: target.id, ...toPayload(toForm(target)), isActive: checked },
+      { onSuccess: () => toast(checked ? `${target.name} is shown at checkout` : `${target.name} is hidden from checkout`) }
+    );
 
   const setCheckoutOption = (key, checked) => {
     updateCheckoutSettings({ ...checkoutSettings, [key]: checked });
@@ -1153,6 +1174,17 @@ function PaymentMethodsSection() {
         title="At checkout"
         description="The two ways a customer can pay on the shop. Switching one off hides it from checkout straight away."
       >
+        {settingsFailed ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800" role="alert">
+            <span>
+              The current checkout settings could not be loaded, so they cannot be changed right now.
+              {settingsError?.response?.data?.message ? ` ${settingsError.response.data.message}` : ''}
+            </span>
+            <button type="button" onClick={() => retrySettings()} className="btn-ghost btn-sm">
+              Try again
+            </button>
+          </div>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {CHECKOUT_OPTIONS.map((option) => {
             const on = checkoutSettings[option.key] !== false;
@@ -1160,20 +1192,22 @@ function PaymentMethodsSection() {
             return (
               <div
                 key={option.key}
-                className={`flex items-center gap-3 rounded-lg border px-4 py-3.5 transition ${
-                  on ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-white'
-                }`}
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3.5"
               >
                 <span
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    on ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                    on ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
                   }`}
+                  aria-hidden
                 >
                   <Icon size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-slate-900">{option.label}</span>
-                  <span className="block text-[11px] leading-4 text-slate-500">{option.description}</span>
+                  <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
+                  <span className="block text-[13px] leading-snug text-slate-500">{option.description}</span>
+                  <span className={`mt-0.5 block text-xs font-medium ${on ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    {settingsLoading ? 'Loading…' : on ? 'On' : 'Off'}
+                  </span>
                 </span>
                 <Switch
                   checked={on}
@@ -1185,6 +1219,7 @@ function PaymentMethodsSection() {
             );
           })}
         </div>
+        )}
       </Section>
 
       <Section
@@ -1194,13 +1229,13 @@ function PaymentMethodsSection() {
         actions={
           <>
             {types.length > 0 && (
-              <span className="text-xs text-slate-500">
+              <span className="text-[13px] text-slate-500">
                 <strong className="font-semibold text-slate-800">{shown}</strong> shown
                 {types.length - shown > 0 && <> · {types.length - shown} hidden</>}
               </span>
             )}
-            <button type="button" onClick={() => setDialog({ mode: 'add' })} className="btn-brand">
-              <FiPlus size={15} /> Add method
+            <button type="button" onClick={() => setDialog({ mode: 'add' })} className="btn-brand" disabled={isError}>
+              <FiPlus size={15} aria-hidden /> Add method
             </button>
           </>
         }
@@ -1216,18 +1251,20 @@ function PaymentMethodsSection() {
         )}
 
         {isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3" aria-busy="true">
             {[0, 1, 2].map((key) => (
-              <div key={key} className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div key={key} className="skeleton h-44" />
             ))}
           </div>
+        ) : isError ? (
+          <ErrorState error={error} title="Payment methods could not be loaded" onRetry={refetch} />
         ) : types.length === 0 ? (
           <div className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 px-6 py-10 text-center">
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
               <FiCreditCard size={20} />
             </span>
-            <p className="text-sm font-bold text-slate-700">No payment methods yet</p>
-            <p className="mt-0.5 max-w-sm text-xs text-slate-400">
+            <p className="text-sm font-semibold text-slate-700">No payment methods yet</p>
+            <p className="mt-0.5 max-w-sm text-xs text-slate-500">
               Add bKash, Nagad or another wallet so customers have somewhere to send money.
             </p>
             <button type="button" onClick={() => setDialog({ mode: 'add' })} className="btn-brand mt-4">
@@ -1240,9 +1277,7 @@ function PaymentMethodsSection() {
               <MethodCard
                 key={type.id}
                 type={type}
-                onToggle={(target, checked) =>
-                  update({ id: target.id, ...toPayload(toForm(target)), isActive: checked })
-                }
+                onToggle={toggleMethod}
                 onEdit={(target) => setDialog({ mode: 'edit', type: target })}
                 onDelete={handleDelete}
               />
@@ -1250,7 +1285,7 @@ function PaymentMethodsSection() {
             <button
               type="button"
               onClick={() => setDialog({ mode: 'add' })}
-              className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 text-slate-400 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-600"
             >
               <FiPlus size={20} />
               <span className="text-xs font-semibold">Add another method</span>
@@ -1280,7 +1315,7 @@ function PaymentMethodsSection() {
 // reads the confirmation SMS is off. The state belongs on this page, next to
 // the methods it makes work.
 function CollectorSection() {
-  const { data } = useQuery(['sms-devices-status'], api.getSmsDevices, { staleTime: 30_000, retry: false });
+  const { data, isError, refetch } = useQuery(['sms-devices-status'], api.getSmsDevices, { staleTime: 30_000, retry: false });
   const devices = data?.data || [];
   const offline = devices.filter((device) => device.status === 'offline');
   const active = devices.filter((device) => device.isActive);
@@ -1308,20 +1343,27 @@ function CollectorSection() {
           <span
             className={`flex h-10 w-10 items-center justify-center rounded-lg ${
               devices.length === 0
-                ? 'bg-slate-100 text-slate-400'
+                ? 'bg-slate-100 text-slate-500'
                 : offline.length
-                  ? 'bg-rose-50 text-rose-600'
+                  ? 'bg-rose-50 text-rose-700'
                   : 'bg-emerald-50 text-emerald-700'
             }`}
           >
             <FiSmartphone size={17} />
           </span>
-          {devices.length === 0 ? (
+          {isError ? (
+            <span>
+              Phone status could not be loaded.{' '}
+              <button type="button" onClick={() => refetch()} className="font-medium text-slate-900 underline underline-offset-2">
+                Try again
+              </button>
+            </span>
+          ) : devices.length === 0 ? (
             'No phone paired yet'
           ) : (
             <span>
               <strong className="font-semibold text-slate-800">{active.length}</strong> paired
-              {offline.length > 0 && <span className="text-rose-600"> · {offline.length} offline</span>}
+              {offline.length > 0 && <span className="text-rose-700"> · {offline.length} offline</span>}
             </span>
           )}
         </p>
@@ -1340,7 +1382,7 @@ function WebhookSection() {
   const [secret, setSecret] = useState(null);
   const seeded = useRef(false);
 
-  const { isLoading } = useQuery(['webhook-config'], api.getWebhookConfig, {
+  const { isLoading, isError: secretFailed, refetch: retrySecret } = useQuery(['webhook-config'], api.getWebhookConfig, {
     staleTime: 60_000,
     onSuccess: (response) => {
       if (!seeded.current) {
@@ -1351,19 +1393,20 @@ function WebhookSection() {
   });
 
   const { mutate: regenerate, isLoading: regenerating } = useMutation(api.regenerateWebhookSecret, {
-    onSuccess: (response) => setSecret(response?.data?.secret || ''),
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onSuccess: (response) => {
+      setSecret(response?.data?.secret || '');
+      toast('New secret created');
+    },
+    onError: (e) => alertError(e, { title: 'The secret was not changed' })
   });
 
   const handleRegenerate = () =>
-    Swal.fire({
+    confirmAction({
+      tone: 'danger',
       title: 'Regenerate the secret?',
       text: 'Anything posting payments with the old secret stops working immediately.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Regenerate',
-      confirmButtonColor: '#ef4444'
-    }).then((result) => result.isConfirmed && regenerate());
+      confirmText: 'Regenerate secret'
+    }).then((confirmed) => confirmed && regenerate());
 
   return (
     <Section
@@ -1373,6 +1416,14 @@ function WebhookSection() {
     >
       <div className="space-y-3">
         <CopyField label="Address to post to" value={WEBHOOK_URL} />
+        {secretFailed && (
+          <p className="flex flex-wrap items-center gap-2 text-[13px] text-rose-700" role="alert">
+            The secret could not be loaded.
+            <button type="button" onClick={() => retrySecret()} className="btn-ghost btn-sm">
+              Try again
+            </button>
+          </p>
+        )}
         <CopyField label="Secret" value={isLoading ? 'Loading…' : secret || ''} type={showSecret ? 'text' : 'password'}>
           <button
             type="button"
@@ -1386,7 +1437,7 @@ function WebhookSection() {
             type="button"
             onClick={handleRegenerate}
             disabled={regenerating}
-            className="btn-icon text-rose-500 hover:border-rose-200 hover:bg-rose-50"
+            className="btn-icon text-rose-700 hover:border-rose-200 hover:bg-rose-50"
             title="Regenerate secret"
             aria-label="Regenerate secret"
           >
@@ -1395,13 +1446,13 @@ function WebhookSection() {
         </CopyField>
 
         <details className="rounded-md border border-slate-200">
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600">What to send</summary>
+          <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-slate-900">What to send</summary>
           <div className="space-y-2 border-t border-slate-100 p-3 text-xs text-slate-500">
             <p>
               Send the secret as the header{' '}
               <code className="rounded bg-slate-100 px-1 font-mono">X-Webhook-Secret</code>, with a JSON body:
             </p>
-            <pre className="overflow-x-auto rounded-md bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
+            <pre className="overflow-x-auto rounded-md bg-slate-50 p-3 font-mono text-xs leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200">
               {JSON.stringify(
                 {
                   trxId: 'TXN123',
@@ -1430,11 +1481,11 @@ function WebhookSection() {
 
 export default function PaymentSettings() {
   return (
-    <div className="space-y-4">
-      <PageHeader title="Payment settings" subtitle="How money comes in, and what customers are told to do" />
-      <div className="space-y-4">
+    <div className="space-y-6">
+      <PageHeader title="Payment settings" subtitle="How money comes in, and what customers are told to do." />
+      <div className="space-y-6">
         <PaymentMethodsSection />
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
           <CollectorSection />
           <WebhookSection />
         </div>

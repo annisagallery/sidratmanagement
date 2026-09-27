@@ -57,16 +57,16 @@ export default function ShipmentsCard({
     <Card
       title="Shipping"
       icon={FiTruck}
-      badge={shipments.length > 1 ? <Pill tone="neutral">{shipments.length} attempts</Pill> : null}
+      badge={shipments.length > 1 ? <span className="text-[13px] text-slate-500">{shipments.length} attempts</span> : null}
       actions={
         <button
           type="button"
           onClick={onSend}
           disabled={!meta.canSend}
           title={meta.canSend ? sendLabel : 'Pack the order first'}
-          className={meta.canSend ? 'btn-brand h-8 !px-3 !text-xs' : 'btn-ghost h-8 !px-2.5 !text-xs'}
+          className="btn-ghost btn-sm"
         >
-          <FiTruck size={14} /> {sendLabel}
+          <FiTruck size={14} aria-hidden /> {sendLabel}
         </button>
       }
     >
@@ -85,13 +85,13 @@ export default function ShipmentsCard({
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 text-[13px] font-bold text-slate-800">
+                      <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-800">
                         {PROVIDER_LABEL[shipment.provider] || shipment.provider}
                         <span className="font-medium text-slate-500">{shipment.accountName}</span>
                         {shipment.attempt > 1 ? <Pill tone="neutral">Attempt {shipment.attempt}</Pill> : null}
                         {!shipment.isActive ? <Pill tone="neutral">Superseded</Pill> : null}
                       </p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-slate-500">
+                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500">
                         {shipment.consignmentId ? (
                           <>
                             <span className="ops-code font-semibold text-slate-600">{shipment.consignmentId}</span>
@@ -116,9 +116,9 @@ export default function ShipmentsCard({
                         disabled={refreshingId === id}
                         title="Refresh status from the courier"
                         aria-label="Refresh status from the courier"
-                        className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                        className="btn-icon btn-icon-sm disabled:opacity-50"
                       >
-                        <FiRefreshCw size={13} className={refreshingId === id ? 'animate-spin' : ''} />
+                        <FiRefreshCw size={15} className={refreshingId === id ? 'animate-spin' : ''} aria-hidden />
                       </button>
                       {url ? (
                         <a
@@ -126,18 +126,18 @@ export default function ShipmentsCard({
                           target="_blank"
                           rel="noreferrer"
                           title="Track parcel"
-                          aria-label="Track parcel"
-                          className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                          aria-label="Track this parcel on Steadfast (opens in a new tab)"
+                          className="btn-icon btn-icon-sm"
                         >
-                          <FiExternalLink size={13} />
+                          <FiExternalLink size={15} aria-hidden />
                         </a>
                       ) : null}
                     </div>
                   </div>
 
                   {intentNote ? (
-                    <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-700">
-                      <FiAlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
+                      <FiAlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden />
                       {intentNote}
                       {shipment.lastSubmissionError ? (
                         <span className="font-normal opacity-80"> {shipment.lastSubmissionError}</span>
@@ -145,13 +145,15 @@ export default function ShipmentsCard({
                     </p>
                   ) : null}
 
-                  {shipment.note ? <p className="mt-2 text-[11px] text-slate-500">Note: {shipment.note}</p> : null}
+                  {shipment.note ? <p className="mt-2 text-xs text-slate-500">Note: {shipment.note}</p> : null}
                 </li>
               );
             })}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">No parcel yet</p>
+          <p className="text-[13px] text-slate-500">
+            {meta.canSend ? 'No parcel yet — send it to a courier when you are ready.' : 'No parcel yet. It can be sent once the order is packed.'}
+          </p>
         )}
       </div>
     </Card>

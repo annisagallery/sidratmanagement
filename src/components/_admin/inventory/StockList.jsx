@@ -17,7 +17,7 @@ import { MdOutlineInventory2 } from 'react-icons/md';
 
 import { adminGetBranches, getProductStockList } from 'src/services';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
-import { EmptyRow, PageBar, Section, StatTile, Toolbar, oid, qty } from 'src/components/_admin/ui/primitives';
+import { EmptyRow, PageBar, Section, StatTile, Toolbar, oid, qty, LoadingRows, ErrorRow } from 'src/components/_admin/ui/primitives';
 import { StockPill, availableOf, stockState } from './shared';
 
 const FILTERS = {
@@ -83,7 +83,7 @@ export default function StockList() {
   const toggle = (key) => setFilter((current) => (current === key ? 'all' : key));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         title="Stock"
         subtitle="Production lands at HQ; transfers move quantity between branches."
@@ -124,7 +124,7 @@ export default function StockList() {
         actions={
           <Toolbar>
             <div className="relative">
-              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -173,22 +173,24 @@ export default function StockList() {
           </thead>
           <tbody>
             {stockQuery.isLoading ? (
-              <EmptyRow colSpan={6} title="Loading stock…" />
+              <LoadingRows colSpan={6} />
+            ) : stockQuery.isError ? (
+              <ErrorRow colSpan={6} error={stockQuery.error} onRetry={stockQuery.refetch} />
             ) : visible.length ? (
               visible.map((row) => (
                 <tr key={row.id}>
                   <td>
                     <Link href={`/inventory/products/${row.id}`} className="block">
                       <p className="font-semibold text-slate-800 hover:underline">{row.product?.name}</p>
-                      <p className="ops-code text-[11px] text-slate-400">#{row.product?.code}</p>
+                      <p className="ops-code text-xs text-slate-500">#{row.product?.code}</p>
                     </Link>
                   </td>
                   <td className="text-right tabular-nums text-slate-700">{qty(row.onHand)}</td>
                   <td className="text-right tabular-nums text-amber-700">{qty(row.reserved)}</td>
                   <td className="text-right">
                     <span
-                      className={`text-[13px] font-bold tabular-nums ${
-                        row.available === 0 ? 'text-rose-600' : row.available < 5 ? 'text-amber-700' : 'text-emerald-700'
+                      className={`text-[13px] font-semibold tabular-nums ${
+                        row.available === 0 ? 'text-rose-700' : row.available < 5 ? 'text-amber-700' : 'text-emerald-700'
                       }`}
                     >
                       {qty(row.available)}
@@ -201,7 +203,7 @@ export default function StockList() {
                     <Link
                       href={`/inventory/products/${row.id}`}
                       aria-label={`Open ${row.product?.name}`}
-                      className="inline-flex rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      className="inline-flex rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                     >
                       <FiChevronRight size={16} />
                     </Link>

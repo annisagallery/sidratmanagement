@@ -1,28 +1,41 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import Swal from 'sweetalert2';
+import { MdClose, MdSearch } from 'react-icons/md';
+import { toastSuccess, alertError } from 'src/utils/swal';
 import { adminAdjustCash, getUserCashList } from 'src/services';
-import { MdClose, MdSearch, MdPerson } from 'react-icons/md';
+import { Field, ModalShell, fieldClass } from 'src/components/_admin/ui/primitives';
+import Segmented from 'src/components/_admin/ui/Segmented';
 
 const BDT = '৳';
+const initials = (name) => name?.slice(0, 2)?.toUpperCase() || '?';
 
-export default function CashModal({ prefilledUser = null, onClose, onDone }) {
-  const [user, setUser] = useState(prefilledUser);
+/**
+ * Credit or debit a customer's cashback balance. Opened from the cashback
+ * balances list (search for the customer) or from a customer's page (`user`
+ * given, fixed).
+ */
+export default function CashModal({ prefilledUser = null, user: fixedUser = null, onClose, onDone }) {
+  const locked = prefilledUser || fixedUser;
+  const [user, setUser] = useState(locked);
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [form, setForm] = useState({ type: 'manual_credit', amount: '', message: '' });
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef(null);
 
   const isCredit = form.type === 'manual_credit';
-  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    setForm((p) => ({ ...p, [k]: e.target.value }));
+    setErrors((p) => ({ ...p, [k]: undefined }));
+  };
 
   useEffect(() => {
-    if (prefilledUser) return;
+    if (locked) return undefined;
     if (!search.trim()) {
       setResults([]);
-      return;
+      return undefined;
     }
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -37,28 +50,23 @@ export default function CashModal({ prefilledUser = null, onClose, onDone }) {
       }
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [search, prefilledUser]);
+  }, [search, locked]);
 
   const selectUser = (u) => {
     setUser(u);
     setSearch('');
     setResults([]);
+    setErrors((p) => ({ ...p, user: undefined }));
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!user) {
-      Swal.fire('Select a user', 'Please choose a user first.', 'warning');
-      return;
-    }
-    if (!form.amount || Number(form.amount) <= 0) {
-      Swal.fire('Validation', 'Enter a valid amount.', 'warning');
-      return;
-    }
-    if (!form.message.trim()) {
-      Swal.fire('Validation', 'Enter a message for this adjustment.', 'warning');
-      return;
-    }
+  const submit = async () => {
+    const next = {};
+    if (!user) next.user = 'Choose the customer first.';
+    if (!form.amount || Number(form.amount) <= 0) next.amount = 'Enter an amount greater than zero.';
+    if (!form.message.trim()) next.message = 'Say why — it is shown in the customer’s history.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
     setSaving(true);
     try {
       await adminAdjustCash({
@@ -67,177 +75,147 @@ export default function CashModal({ prefilledUser = null, onClose, onDone }) {
         type: form.type,
         message: form.message.trim()
       });
-      Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: `Cashback ${isCredit ? 'credited' : 'debited'}!`,
-        showConfirmButton: false,
-        timer: 2000
-      });
+      toastSuccess(`${BDT}${Number(form.amount).toLocaleString()} ${isCredit ? 'credited to' : 'debited from'} ${user.name}`);
       onDone?.();
       onClose();
     } catch (err) {
-      Swal.fire('Error', err?.response?.data?.message || err.message, 'error');
+      alertError(err, { title: 'The balance was not changed' });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-md shadow-2xl w-full max-w-sm">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h2 className="font-bold text-gray-800">Give Cashback</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100 transition"
-          >
-            <MdClose size={18} />
+    <ModalShell
+      title="Adjust cashback"
+      subtitle="Cashback balance"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancel
           </button>
-        </div>
-
-        <form onSubmit={submit} className="p-5 space-y-4">
-          {/* User picker */}
-          {user ? (
-            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-md px-4 py-3">
-              <div className="w-9 h-9 rounded-md bg-green-200 text-green-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                {user.name?.slice(0, 2)?.toUpperCase() || '?'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-                <p className="text-xs text-gray-500">
-                  {user.phone} · Balance:{' '}
-                  <span className="text-green-700 font-semibold">
-                    {BDT}
-                    {(user.cash || 0).toLocaleString()}
-                  </span>
-                </p>
-              </div>
-              {!prefilledUser && (
-                <button
-                  type="button"
-                  onClick={() => setUser(null)}
-                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
-                >
-                  <MdClose size={16} />
-                </button>
-              )}
+          <button type="button" onClick={submit} disabled={saving} className={isCredit ? 'btn-brand' : 'btn-danger'}>
+            {saving ? 'Saving…' : isCredit ? 'Credit balance' : 'Debit balance'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {user ? (
+          <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-4 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-700 ring-1 ring-slate-200" aria-hidden>
+              {initials(user.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">{user.name}</p>
+              <p className="text-[13px] text-slate-500">
+                {user.phone ? `${user.phone} · ` : ''}Balance{' '}
+                <span className="font-semibold tabular-nums text-slate-900">
+                  {BDT}
+                  {(user.cash || 0).toLocaleString()}
+                </span>
+              </p>
             </div>
-          ) : (
-            <div className="relative">
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Search User</label>
-              <div className="relative">
-                <MdSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            {!locked && (
+              <button
+                aria-label="Choose a different customer"
+                title="Choose a different customer"
+                type="button"
+                onClick={() => setUser(null)}
+                className="btn-icon btn-icon-sm"
+              >
+                <MdClose size={16} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="relative">
+            <Field label="Customer" error={errors.user}>
+              <span className="relative block">
+                <MdSearch size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Name or phone number…"
-                  className="w-full border rounded-md pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                  placeholder="Search by name or phone"
+                  className={`${fieldClass} pl-9`}
                   autoFocus
+                  role="combobox"
+                  aria-expanded={results.length > 0}
+                  aria-autocomplete="list"
                 />
+              </span>
+            </Field>
+            {(results.length > 0 || searching) && (
+              <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl" role="listbox">
+                {searching ? (
+                  <div className="px-4 py-3 text-[13px] text-slate-500">Searching…</div>
+                ) : (
+                  results.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => selectUser(u)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700" aria-hidden>
+                        {initials(u.name)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-900">{u.name}</span>
+                        <span className="block text-xs text-slate-500">
+                          {u.phone} · {BDT}
+                          {(u.cash || 0).toLocaleString()}
+                        </span>
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
-              {(results.length > 0 || searching) && (
-                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg overflow-hidden">
-                  {searching ? (
-                    <div className="px-4 py-3 text-xs text-gray-400">Searching…</div>
-                  ) : (
-                    results.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => selectUser(u)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-green-50 transition text-left"
-                      >
-                        <div className="w-7 h-7 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {u.name?.slice(0, 2)?.toUpperCase() || '?'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{u.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {u.phone} · {BDT}
-                            {(u.cash || 0).toLocaleString()}
-                          </p>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Operation toggle */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Operation</label>
-            <div className="flex gap-2">
-              {[
-                { value: 'manual_credit', label: '+ Credit' },
-                { value: 'manual_debit', label: '- Debit' }
-              ].map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, type: o.value }))}
-                  className={`flex-1 py-2 rounded-md border text-sm font-semibold transition ${
-                    form.type === o.value
-                      ? o.value === 'manual_credit'
-                        ? 'bg-green-50 border-green-400 text-green-700'
-                        : 'bg-red-50 border-red-400 text-red-600'
-                      : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+            )}
           </div>
+        )}
 
-          {/* Amount */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Amount ({BDT})</label>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={form.amount}
-              onChange={set('amount')}
-              placeholder="e.g. 50"
-              className="w-full border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-            />
-          </div>
+        <div>
+          <p className="mb-1.5 text-[13px] font-medium text-slate-800">Change</p>
+          <Segmented
+            label="Credit or debit"
+            options={[
+              { id: 'manual_credit', label: 'Add to balance' },
+              { id: 'manual_debit', label: 'Take from balance' }
+            ]}
+            value={form.type}
+            onChange={(type) => setForm((p) => ({ ...p, type }))}
+          />
+        </div>
 
-          {/* Message */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Message</label>
-            <input
-              value={form.message}
-              onChange={set('message')}
-              placeholder="Explain this adjustment"
-              required
-              className="w-full border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-            />
-          </div>
+        <Field label={`Amount (${BDT})`} required error={errors.amount}>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={form.amount}
+            onChange={set('amount')}
+            placeholder="e.g. 50"
+            className={`${fieldClass} tabular-nums`}
+            aria-invalid={Boolean(errors.amount)}
+            autoFocus={Boolean(locked)}
+          />
+        </Field>
 
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 border rounded-md text-sm text-gray-600 hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !user}
-              className={`flex-1 py-2.5 rounded-md text-sm font-semibold text-white disabled:opacity-50 transition ${isCredit ? 'bg-green-600 hover:bg-green-700' : 'bg-red-500 hover:bg-red-600'}`}
-            >
-              {saving ? 'Saving…' : isCredit ? `Credit ${BDT}` : `Debit ${BDT}`}
-            </button>
-          </div>
-        </form>
+        <Field label="Reason" required error={errors.message}>
+          <input
+            value={form.message}
+            onChange={set('message')}
+            placeholder="e.g. Goodwill for a delayed delivery"
+            className={fieldClass}
+            aria-invalid={Boolean(errors.message)}
+          />
+        </Field>
       </div>
-    </div>
+    </ModalShell>
   );
 }

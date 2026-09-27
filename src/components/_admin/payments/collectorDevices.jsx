@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
 import QRCode from 'qrcode';
 import * as api from 'src/services';
 import { FiSmartphone, FiCopy, FiAlertTriangle, FiTrash2 } from 'react-icons/fi';
@@ -12,6 +12,8 @@ import DataTable from 'src/components/_admin/ui/DataTable';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
 import BalanceVerification from './balanceVerification';
+import { OverlayPanel } from 'src/components/_admin/ui/Drawer';
+import { Field, ModalShell, fieldClass } from 'src/components/_admin/ui/primitives';
 
 // The API the collector phone talks to. Same origin the management app uses.
 const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5001';
@@ -38,7 +40,7 @@ const STATUS_META = {
   idle: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'Idle' },
   offline: { dot: 'bg-rose-500', text: 'text-rose-700', label: 'Offline' },
   never_seen: { dot: 'bg-slate-300', text: 'text-slate-500', label: 'Never connected' },
-  revoked: { dot: 'bg-slate-300', text: 'text-slate-400', label: 'Revoked' }
+  revoked: { dot: 'bg-slate-300', text: 'text-slate-500', label: 'Revoked' }
 };
 
 export function StatusDot({ status, withLabel = true }) {
@@ -60,7 +62,7 @@ export function StatusDot({ status, withLabel = true }) {
 function PairedModal({ device, onClose }) {
   const [qr, setQr] = useState(null);
   const heading = device.repaired ? 'Device re-paired' : 'Device paired';
-  const copy = (value) => navigator.clipboard?.writeText(value);
+  const copy = (value) => navigator.clipboard?.writeText(value).then(() => toastSuccess('Copied'));
 
   // Short keys keep the QR low-density, so it scans on a cheap handset camera.
   const payload = JSON.stringify({
@@ -87,24 +89,24 @@ function PairedModal({ device, onClose }) {
   }, [payload]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="my-8 w-full max-w-md space-y-4 rounded-md bg-white p-6 shadow-xl">
-        <h3 className="font-semibold text-slate-800">{heading}</h3>
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <FiAlertTriangle className="mr-1 inline" size={12} />
+    <div className="fixed inset-0 z-[80] !m-0 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4">
+      <OverlayPanel onClose={onClose} label={heading} className="my-8 w-full max-w-md space-y-4 rounded-lg bg-white p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-slate-900">{heading}</h2>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] leading-relaxed text-amber-900" role="note">
+          <FiAlertTriangle className="mr-1 inline" size={13} aria-hidden />
           Pair the phone now. The token is shown once and cannot be retrieved later — if you
           lose it, revoke the device and pair again.
         </div>
 
         <div className="rounded-md border border-slate-200 p-4 text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="section-label mb-3">
             Scan with the collector app
           </p>
           {qr ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={qr} alt="Pairing QR code" className="mx-auto h-56 w-56" />
           ) : (
-            <div className="mx-auto flex h-56 w-56 items-center justify-center text-xs text-slate-400">
+            <div className="mx-auto flex h-56 w-56 items-center justify-center text-xs text-slate-500">
               QR unavailable — use the fields below
             </div>
           )}
@@ -124,17 +126,18 @@ function PairedModal({ device, onClose }) {
               { label: 'Token', value: device.token }
             ].map((field) => (
               <div key={field.label}>
-                <label className="mb-1 block text-xs font-medium text-slate-500">{field.label}</label>
+                <p className="mb-1.5 text-[13px] font-medium text-slate-800">{field.label}</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 overflow-x-auto rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-100">
+                  <code className="flex-1 overflow-x-auto rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-900 ring-1 ring-inset ring-slate-200">
                     {field.value}
                   </code>
                   <button
+                    type="button"
                     onClick={() => copy(field.value)}
-                    className="btn-ghost"
+                    className="btn-icon"
                     aria-label={`Copy ${field.label}`}
                   >
-                    <FiCopy size={14} />
+                    <FiCopy size={15} aria-hidden />
                   </button>
                 </div>
               </div>
@@ -143,11 +146,11 @@ function PairedModal({ device, onClose }) {
         </details>
 
         <div className="flex justify-end">
-          <button onClick={onClose} className="btn-brand">
+          <button type="button" onClick={onClose} className="btn-brand">
             Done
           </button>
         </div>
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -156,48 +159,58 @@ function AddDeviceModal({ onClose, onPaired }) {
   const [name, setName] = useState('');
   const [msisdn, setMsisdn] = useState('');
 
-  const { mutate, isLoading } = useMutation(() => api.createSmsDevice({ name, msisdn }), {
+  const [nameError, setNameError] = useState('');
+
+  const { mutate, isLoading } = useMutation(() => api.createSmsDevice({ name: name.trim(), msisdn: msisdn.trim() }), {
     onSuccess: (res) => {
       onPaired(res.data);
       onClose();
     },
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onError: (e) => alertError(e, { title: 'The phone was not paired' })
   });
 
+  const submit = () => {
+    if (!name.trim()) {
+      setNameError('Give the phone a name you will recognise.');
+      return;
+    }
+    mutate();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm space-y-4 rounded-md bg-white p-6 shadow-xl">
-        <h3 className="font-semibold text-slate-800">Pair a collector phone</h3>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Device name</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Shop counter phone"
-            className="input-ui"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            SIM number <span className="text-slate-400">(optional)</span>
-          </label>
-          <input
-            value={msisdn}
-            onChange={(e) => setMsisdn(e.target.value)}
-            placeholder="01XXXXXXXXX"
-            className="input-ui"
-          />
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-ghost">
+    <ModalShell
+      title="Pair a collector phone"
+      subtitle="Collector devices"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={isLoading}>
             Cancel
           </button>
-          <button onClick={() => mutate()} disabled={!name.trim() || isLoading} className="btn-brand">
-            {isLoading ? 'Pairing…' : 'Pair device'}
+          <button type="button" onClick={submit} disabled={isLoading} className="btn-brand">
+            {isLoading ? 'Pairing…' : 'Pair phone'}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Phone name" required error={nameError}>
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError('');
+            }}
+            placeholder="e.g. Shop counter phone"
+            className={fieldClass}
+            autoFocus
+          />
+        </Field>
+        <Field label="SIM number" optional>
+          <input value={msisdn} onChange={(e) => setMsisdn(e.target.value)} placeholder="01XXXXXXXXX" inputMode="tel" className={fieldClass} />
+        </Field>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -208,17 +221,19 @@ export default function CollectorDevices() {
 
   // Poll: this page exists to answer "is it alive right now", so a stale view
   // would defeat its purpose.
-  const { data, isLoading, isFetching, refetch } = useQuery(['sms-devices'], api.getSmsDevices, {
+  const { data, isLoading, isFetching, refetch, isError, error: loadError } = useQuery(['sms-devices'], api.getSmsDevices, {
     refetchInterval: 30_000
   });
 
   const rows = data?.data || [];
 
-  const onMutationError = (e) =>
-    Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error');
+  const onMutationError = (e) => alertError(e, { title: 'That did not work' });
 
   const { mutate: revoke } = useMutation(api.revokeSmsDevice, {
-    onSuccess: () => qc.invalidateQueries(['sms-devices']),
+    onSuccess: () => {
+      toastSuccess('Phone revoked');
+      qc.invalidateQueries(['sms-devices']);
+    },
     onError: onMutationError
   });
 
@@ -238,36 +253,32 @@ export default function CollectorDevices() {
   });
 
   const confirmRevoke = (device) => {
-    Swal.fire({
+    confirmAction({
+      tone: 'danger',
       title: `Revoke "${device.name}"?`,
       text: 'The phone will stop being able to send messages immediately.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Revoke'
-    }).then((r) => r.isConfirmed && revoke(deviceKey(device)));
+      confirmText: 'Revoke'
+    }).then((confirmed) => confirmed && revoke(deviceKey(device)));
   };
 
   const confirmRepair = (device) => {
-    Swal.fire({
+    confirmAction({
+      tone: 'warning',
       title: `Re-pair "${device.name}"?`,
       text: device.isActive
         ? 'A new token is issued and the phone must scan it again. The credential it holds now stops working immediately.'
         : 'The device is put back in service with a new token. The phone must scan it again.',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Re-pair'
-    }).then((r) => r.isConfirmed && repair(deviceKey(device)));
+      confirmText: 'Re-pair'
+    }).then((confirmed) => confirmed && repair(deviceKey(device)));
   };
 
   const confirmDelete = (device) => {
-    Swal.fire({
+    confirmAction({
+      tone: 'warning',
       title: `Delete "${device.name}"?`,
       text: 'The device is removed from this list for good. Messages it already collected are kept — they are payment evidence.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Delete',
-      confirmButtonColor: '#e11d48'
-    }).then((r) => r.isConfirmed && remove(deviceKey(device)));
+      confirmText: 'Delete'
+    }).then((confirmed) => confirmed && remove(deviceKey(device)));
   };
 
   const columns = [
@@ -277,7 +288,7 @@ export default function CollectorDevices() {
       render: (d) => (
         <div>
           <p className="font-medium text-slate-800">{d.name}</p>
-          {d.msisdn && <p className="font-mono text-xs text-slate-400">{d.msisdn}</p>}
+          {d.msisdn && <p className="font-mono text-xs text-slate-500">{d.msisdn}</p>}
         </div>
       )
     },
@@ -306,7 +317,7 @@ export default function CollectorDevices() {
       align: 'right',
       render: (d) => (
         <span
-          className={`text-xs font-medium ${d.queueDepth > 0 ? 'text-amber-600' : 'text-slate-400'}`}
+          className={`text-xs font-medium ${d.queueDepth > 0 ? 'text-amber-700' : 'text-slate-500'}`}
         >
           {d.queueDepth || 0}
         </span>
@@ -327,7 +338,7 @@ export default function CollectorDevices() {
           {/* Android will kill a background app that is not exempt, which is
               the usual reason a collector goes quiet without anyone noticing. */}
           {d.batteryOptimised === true && (
-            <span className="ml-1 text-amber-600" title="Not exempt from battery optimisation">
+            <span className="ml-1 text-amber-700" title="Not exempt from battery optimisation">
               <FiAlertTriangle size={11} className="inline" />
             </span>
           )}
@@ -337,7 +348,7 @@ export default function CollectorDevices() {
     {
       key: 'appVersion',
       label: 'App',
-      render: (d) => <span className="text-xs text-slate-400">{d.appVersion || '—'}</span>
+      render: (d) => <span className="text-xs text-slate-500">{d.appVersion || '—'}</span>
     },
     {
       key: 'actions',
@@ -348,24 +359,24 @@ export default function CollectorDevices() {
           {/* Revoking a device that is already revoked does nothing, so that
               state offers re-pairing and deletion instead. */}
           {d.isActive && (
-            <button
+            <button type="button"
               onClick={() => confirmRevoke(d)}
-              className="whitespace-nowrap rounded-md border border-rose-200 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
+              className="btn-danger btn-sm"
             >
               Revoke
             </button>
           )}
-          <button
+          <button type="button"
             onClick={() => confirmRepair(d)}
             disabled={repairing}
-            className="whitespace-nowrap rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            className="btn-ghost btn-sm"
           >
             {d.isActive ? 'Re-pair' : 'Reconnect'}
           </button>
-          <button
+          <button type="button"
             onClick={() => confirmDelete(d)}
             aria-label={`Delete ${d.name}`}
-            className="whitespace-nowrap rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+            className="btn-danger btn-sm"
           >
             <FiTrash2 size={13} />
           </button>
@@ -377,13 +388,13 @@ export default function CollectorDevices() {
   const offline = rows.filter((d) => d.status === 'offline');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         title="Collector Devices"
         subtitle={`${rows.length} paired`}
         icon={FiSmartphone}
       >
-        <button onClick={() => setAddOpen(true)} className="btn-brand">
+        <button type="button" onClick={() => setAddOpen(true)} className="btn-brand">
           + Pair Device
         </button>
       </PageHeader>
@@ -406,6 +417,8 @@ export default function CollectorDevices() {
       <ListToolbar refreshing={isFetching} onRefresh={refetch} />
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={rows}
         selectionLabel="devices"

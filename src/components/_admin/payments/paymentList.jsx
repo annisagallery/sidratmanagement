@@ -1,16 +1,18 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { alertError, toastSuccess } from 'src/utils/swal';
 import Link from 'next/link';
 import * as api from 'src/services';
-import { FiExternalLink } from 'react-icons/fi';
-import { MdInbox } from 'react-icons/md';
+import { MdAdd, MdInbox } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Badge from 'src/components/_admin/ui/Badge';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { Field, ModalShell, fieldClass } from 'src/components/_admin/ui/primitives';
 import AddPaymentModal from './addPaymentModal';
 import { fDateTime } from 'src/utils/formatTime';
 
@@ -25,70 +27,82 @@ function dtStr(d) {
 // decode: it means the system recorded it by itself — an SMS match or an
 // outside system — as opposed to someone on staff entering it.
 function SourceBadge({ source }) {
-  return source === 'webhook' ? (
-    <span className="whitespace-nowrap rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-      Automatic
-    </span>
-  ) : (
-    <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700">
-      Added by staff
-    </span>
-  );
+  return source === 'webhook' ? <Badge tone="violet">Automatic</Badge> : <Badge tone="info">Added by staff</Badge>;
 }
 
 function AssignModal({ payment, onClose, onDone }) {
   const [orderNo, setOrderNo] = useState('');
-  const { mutate, isLoading } = useMutation(() => api.assignPaymentByAdmin({ id: payment.id, orderNo }), {
+  const [error, setError] = useState('');
+  const { mutate, isLoading } = useMutation(() => api.assignPaymentByAdmin({ id: payment.id, orderNo: orderNo.trim() }), {
     onSuccess: () => {
+      toastSuccess('Payment assigned', `Now counted against order #${orderNo.trim()}.`);
       onDone();
       onClose();
     },
     onError: (e) => {
-      const msg = e?.response?.data?.message || 'Failed';
+      const msg = e?.response?.data?.message || 'The payment was not assigned.';
       const alreadyOrderNo = e?.response?.data?.orderNo;
-      Swal.fire('Error', alreadyOrderNo ? `${msg}: ${alreadyOrderNo}` : msg, 'error');
+      alertError(null, { title: 'The payment was not assigned', text: alreadyOrderNo ? `${msg}: ${alreadyOrderNo}` : msg });
     }
   });
 
+  const submit = (e) => {
+    e?.preventDefault?.();
+    if (!orderNo.trim()) {
+      setError('Enter the order number.');
+      return;
+    }
+    mutate();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm space-y-4 rounded-md bg-white p-6 shadow-xl">
-        <h3 className="font-semibold text-slate-800">Assign to Order</h3>
-        <div className="space-y-1 rounded-md bg-slate-50 p-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-slate-500">Amount</span>
-            <span className="font-bold">{fmt(payment.amount)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Type</span>
-            <span className="font-mono uppercase">{payment.type}</span>
-          </div>
-          {payment.trxId && (
-            <div className="flex justify-between">
-              <span className="text-slate-500">TrxID</span>
-              <span className="font-mono text-xs">{payment.trxId}</span>
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Order No</label>
-          <input
-            value={orderNo}
-            onChange={(e) => setOrderNo(e.target.value)}
-            placeholder="e.g. 1001"
-            className="input-ui"
-          />
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-ghost">
+    <ModalShell
+      title="Assign to an order"
+      subtitle="Payments"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={isLoading}>
             Cancel
           </button>
-          <button onClick={() => mutate()} disabled={!orderNo.trim() || isLoading} className="btn-brand">
-            {isLoading ? 'Assigning…' : 'Assign'}
+          <button type="button" onClick={submit} disabled={isLoading} className="btn-brand">
+            {isLoading ? 'Assigning…' : 'Assign payment'}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5">
+        <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-[13px]">
+          <div className="flex justify-between gap-4 px-4 py-2.5">
+            <dt className="text-slate-500">Amount</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{fmt(payment.amount)}</dd>
+          </div>
+          <div className="flex justify-between gap-4 px-4 py-2.5">
+            <dt className="text-slate-500">Type</dt>
+            <dd className="uppercase text-slate-900">{payment.type}</dd>
+          </div>
+          {payment.trxId && (
+            <div className="flex justify-between gap-4 px-4 py-2.5">
+              <dt className="text-slate-500">Transaction ID</dt>
+              <dd className="ops-code text-slate-900">{payment.trxId}</dd>
+            </div>
+          )}
+        </dl>
+        <Field label="Order number" required error={error}>
+          <input
+            value={orderNo}
+            onChange={(e) => {
+              setOrderNo(e.target.value);
+              setError('');
+            }}
+            placeholder="e.g. 1001"
+            inputMode="numeric"
+            className={`${fieldClass} ops-code`}
+            autoFocus
+          />
+        </Field>
+      </form>
+    </ModalShell>
   );
 }
 
@@ -100,7 +114,7 @@ export default function PaymentList({ initialAddOpen = false }) {
   const limit = 20;
   const qc = useQueryClient();
 
-  const { data, isLoading, isFetching, refetch } = useQuery(
+  const { data, isLoading, isFetching, refetch, isError, error: loadError } = useQuery(
     ['payments', filters, page],
     () => api.getPaymentsByAdmin({ ...filters, unassigned: filters.unassigned || undefined, page, limit }),
     { staleTime: 30_000 }
@@ -119,68 +133,68 @@ export default function PaymentList({ initialAddOpen = false }) {
     {
       key: 'type',
       label: 'Type',
-      render: (p) => <span className="text-xs font-semibold uppercase text-slate-700">{p.type}</span>
+      render: (p) => <span className="text-[13px] font-medium uppercase text-slate-900">{p.type}</span>
     },
     {
       key: 'amount',
       label: 'Amount',
       align: 'right',
-      render: (p) => <span className="whitespace-nowrap font-bold text-slate-800">{fmt(p.amount)}</span>
+      render: (p) => <span className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{fmt(p.amount)}</span>
     },
     {
       key: 'trxId',
-      label: 'TrxID',
-      render: (p) => <span className="font-mono text-xs text-slate-500">{p.trxId || '—'}</span>
+      label: 'Transaction ID',
+      render: (p) => <span className="ops-code text-[13px] text-slate-700">{p.trxId || '—'}</span>
     },
     {
       key: 'account',
       label: 'Account',
-      render: (p) => <span className="font-mono text-xs text-slate-500">{p.account || '—'}</span>
+      hideBelow: 'lg',
+      render: (p) => <span className="ops-code text-[13px] text-slate-600">{p.account || '—'}</span>
     },
     {
       key: 'note',
       label: 'Note',
-      render: (p) => <span className="block max-w-[160px] truncate text-xs text-slate-500">{p.note || '—'}</span>
+      hideBelow: 'xl',
+      render: (p) => (
+        <span className="block max-w-[180px] truncate text-[13px] text-slate-600" title={p.note || undefined}>
+          {p.note || '—'}
+        </span>
+      )
     },
     {
       key: 'createdBy',
-      label: 'Created By',
-      render: (p) => <span className="text-xs text-slate-500">{p.createdBy || '—'}</span>
+      label: 'Added by',
+      hideBelow: 'xl',
+      render: (p) => <span className="text-[13px] text-slate-600">{p.createdBy || '—'}</span>
     },
     {
       key: 'createdAt',
       label: 'Date',
-      render: (p) => <span className="whitespace-nowrap text-xs text-slate-400">{dtStr(p.createdAt)}</span>
+      hideBelow: 'md',
+      render: (p) => <span className="whitespace-nowrap text-[13px] text-slate-600">{dtStr(p.createdAt)}</span>
     },
     {
       key: 'order',
       label: 'Order',
       render: (p) =>
         p.orderNo ? (
-          <Link
-            href={`/orders/${p.orderNo}`}
-            className="flex items-center gap-1 font-mono text-xs hover:underline"
-            style={{ color: 'var(--brand-strong)' }}
-          >
+          <Link href={`/orders/${p.orderNo}`} onClick={stopRow} className="ops-code text-[13px] font-semibold text-slate-900 hover:underline">
             #{p.orderNo}
-            <FiExternalLink size={11} />
           </Link>
         ) : (
-          <span className="text-xs text-amber-500">Unassigned</span>
+          <Badge tone="warning">Unassigned</Badge>
         )
     },
-    { key: 'source', label: 'Source', render: (p) => <SourceBadge source={p.source} /> },
+    { key: 'source', label: 'Source', hideBelow: 'lg', render: (p) => <SourceBadge source={p.source} /> },
     {
       key: 'actions',
       label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (p) =>
         !p.orderId && (
-          <button
-            onClick={() => setAssignTarget(p)}
-            className="whitespace-nowrap rounded-md border px-3 py-1 text-xs font-medium transition hover:bg-slate-50"
-            style={{ color: 'var(--brand-strong)', borderColor: 'var(--brand-ring)' }}
-          >
+          <button type="button" onClick={() => setAssignTarget(p)} className="btn-ghost btn-sm">
             Assign
           </button>
         )
@@ -188,34 +202,37 @@ export default function PaymentList({ initialAddOpen = false }) {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Payments" subtitle={`${data?.total ?? 0} total`}>
-        <button onClick={() => setAddOpen(true)} className="btn-brand">
-          + Manual Payment
+        <button type="button" onClick={() => setAddOpen(true)} className="btn-brand">
+          <MdAdd size={18} aria-hidden /> Add manual payment
         </button>
       </PageHeader>
 
       <ListToolbar
         refreshing={isFetching}
         onRefresh={refetch}
-        onReset={() => {
-          setFilters({ unassigned: false, type: '' });
-          setPage(1);
-        }}
+        onReset={
+          filters.unassigned || filters.type
+            ? () => {
+                setFilters({ unassigned: false, type: '' });
+                setPage(1);
+              }
+            : undefined
+        }
       >
-        <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={filters.unassigned}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, unassigned: e.target.checked }));
-              setPage(1);
-            }}
-            className="h-4 w-4"
-            style={{ accentColor: 'var(--brand)' }}
-          />
-          Unassigned only
-        </label>
+        <Segmented
+          label="Show"
+          options={[
+            { id: 'all', label: 'All payments' },
+            { id: 'unassigned', label: 'Unassigned' }
+          ]}
+          value={filters.unassigned ? 'unassigned' : 'all'}
+          onChange={(v) => {
+            setFilters((f) => ({ ...f, unassigned: v === 'unassigned' }));
+            setPage(1);
+          }}
+        />
         <select
           value={filters.type}
           onChange={(e) => {
@@ -223,6 +240,7 @@ export default function PaymentList({ initialAddOpen = false }) {
             setPage(1);
           }}
           className="select-ui"
+          aria-label="Payment type"
         >
           <option value="">All types</option>
           {types.map((t) => (
@@ -234,12 +252,21 @@ export default function PaymentList({ initialAddOpen = false }) {
       </ListToolbar>
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={rows}
         selectionLabel="payments"
         exportFileName="payments-selection.csv"
-        isLoading={isLoading || isFetching}
-        empty={<EmptyState title="No payments found" icon={MdInbox} />}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        empty={
+          filters.unassigned || filters.type ? (
+            <EmptyState title="No payments match" hint="Try another type, or show every payment." icon={MdInbox} />
+          ) : (
+            <EmptyState title="No payments yet" hint="Payments matched from SMS, and ones added by staff, appear here." icon={MdInbox} />
+          )
+        }
         footer={
           <Pagination
             page={page}

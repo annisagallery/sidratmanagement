@@ -90,13 +90,13 @@ export default function ReturnItemsModal({ order, orderNo, onClose, onDone }) {
           const id = oid(item);
           const on = id in chosen;
           return (
-            <li key={id} className={`rounded-md border p-3 ${on ? 'border-[var(--brand)] bg-[var(--brand-soft)]/40' : 'border-slate-100 bg-slate-50'}`}>
+            <li key={id} className={`rounded-md border p-3 ${on ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900/40' : 'border-slate-100 bg-slate-50'}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <label className="flex min-w-0 cursor-pointer items-center gap-2.5">
                   <input type="checkbox" checked={on} onChange={() => toggle(item)} />
                   <span className="min-w-0">
                     <span className="block truncate text-[13px] font-semibold text-slate-800">{itemName(item)}</span>
-                    <span className="text-[11px] text-slate-500">{money(item.price)}</span>
+                    <span className="text-xs text-slate-500">{money(item.price)}</span>
                   </span>
                 </label>
                 {on ? (

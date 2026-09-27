@@ -66,7 +66,7 @@ export default function BarcodeLookup() {
   const unit = result?.productionUnit;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Inventory"
         title="Barcode lookup"
@@ -101,18 +101,18 @@ export default function BarcodeLookup() {
         <Section title="Result" icon={FiExternalLink} hint={result ? result.code : 'Nothing scanned yet'}>
           <SectionBody>
             {!product ? (
-              <p className="py-6 text-center text-sm text-slate-400">
+              <p className="py-6 text-center text-sm text-slate-500">
                 Scan a barcode and the product, its price and its free stock appear here.
               </p>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-base font-bold text-slate-900">{product.name}</p>
-                    <p className="ops-code text-[11px] text-slate-400">#{product.code}</p>
+                    <p className="text-base font-semibold text-slate-900">{product.name}</p>
+                    <p className="ops-code text-xs text-slate-500">#{product.code}</p>
                   </div>
                   {product.slug ? (
-                    <Link href={`/products/${product.slug}/view`} className="btn-ghost h-8 !text-xs">
+                    <Link href={`/products/${product.slug}/view`} className="btn-ghost btn-sm">
                       <FiExternalLink size={13} /> Open
                     </Link>
                   ) : null}
@@ -124,8 +124,8 @@ export default function BarcodeLookup() {
                       key={`${price.salePrice}-${price.availableQuantity}`}
                       className="rounded-md border border-slate-900 p-4"
                     >
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current price</p>
-                      <p className="mt-1 text-3xl font-black tabular-nums text-slate-950">{money(price.salePrice)}</p>
+                      <p className="section-label">Current price</p>
+                      <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">{money(price.salePrice)}</p>
                       <p className="mt-1 text-sm text-slate-500">
                         {qty(price.availableQuantity)} available at {branchName}
                       </p>

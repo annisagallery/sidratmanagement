@@ -19,7 +19,7 @@
  * The consumer owns what a scan means; this owns making the scan arrive.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { FiCheckCircle, FiAlertTriangle, FiLoader } from 'react-icons/fi';
 import { MdQrCodeScanner } from 'react-icons/md';
 
@@ -65,6 +65,7 @@ export default function ScanStation({
   appearance = 'default'
 }) {
   const inputRef = useRef(null);
+  const inputId = useId();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -134,22 +135,16 @@ export default function ScanStation({
   return (
     <div className={isDesk ? 'space-y-4' : 'space-y-3'}>
       <form onSubmit={submit}>
-        <label
-          className={
-            isDesk
-              ? 'mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-slate-300'
-              : 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500'
-          }
-        >
+        <label htmlFor={inputId} className={isDesk ? 'mb-2 block text-sm font-semibold text-slate-900' : 'mb-1.5 block text-[13px] font-medium text-slate-800'}>
           {label}
         </label>
         <div className="relative">
           <MdQrCodeScanner
-            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${
-              isDesk ? 'text-2xl text-slate-400' : 'text-lg text-slate-400'
-            }`}
+            className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${isDesk ? 'text-2xl text-slate-400' : 'text-lg text-slate-400'}`}
+            aria-hidden
           />
           <input
+            id={inputId}
             ref={inputRef}
             value={code}
             onChange={(event) => setCode(event.target.value)}
@@ -159,38 +154,34 @@ export default function ScanStation({
             spellCheck={false}
             className={
               isDesk
-                ? 'ops-code h-16 w-full rounded-xl border-2 border-slate-500 bg-white pl-14 pr-12 text-lg font-bold uppercase text-slate-950 shadow-[0_8px_24px_rgba(2,6,23,0.28)] outline-none transition placeholder:font-medium placeholder:normal-case placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400'
+                ? 'ops-code h-16 w-full rounded-lg border-2 border-slate-300 bg-white pl-14 pr-12 text-lg font-semibold uppercase text-slate-900 outline-none transition placeholder:font-medium placeholder:normal-case placeholder:text-slate-400 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400'
                 : 'input-ui ops-code h-11 pl-10 text-base uppercase'
             }
           />
           {busy ? (
-            <FiLoader className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+            <FiLoader className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-slate-500" aria-label="Checking" />
           ) : null}
         </div>
-        {hint ? <p className={`mt-1.5 text-xs ${isDesk ? 'text-slate-400' : 'text-slate-500'}`}>{hint}</p> : null}
-        {disabled && disabledReason ? (
-          <p className={`mt-1.5 text-xs font-semibold ${isDesk ? 'text-amber-300' : 'text-amber-700'}`}>
-            {disabledReason}
-          </p>
-        ) : null}
+        {hint ? <p className="mt-1.5 text-[13px] text-slate-500">{hint}</p> : null}
+        {disabled && disabledReason ? <p className="mt-1.5 text-[13px] font-medium text-amber-800">{disabledReason}</p> : null}
       </form>
 
       {feedback ? (
         <div
           role="status"
           aria-live="assertive"
-          className={`flex items-start gap-3 border ${isDesk ? 'rounded-xl px-4 py-3' : 'rounded-md px-3 py-2'} ${
+          className={`flex items-start gap-3 border ${isDesk ? 'rounded-lg px-4 py-3' : 'rounded-md px-3 py-2'} ${
             feedback.ok ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
           }`}
         >
           {feedback.ok ? (
-            <FiCheckCircle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-emerald-600`} />
+            <FiCheckCircle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-emerald-700`} aria-hidden />
           ) : (
-            <FiAlertTriangle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-rose-600`} />
+            <FiAlertTriangle className={`${isDesk ? 'text-xl' : 'mt-0.5'} shrink-0 text-rose-700`} aria-hidden />
           )}
           <div className="min-w-0">
             <p
-              className={`${isDesk ? 'text-sm font-bold' : 'text-[13px] font-semibold'} ${
+              className={`${isDesk ? 'text-sm font-semibold' : 'text-[13px] font-semibold'} ${
                 feedback.ok ? 'text-emerald-800' : 'text-rose-800'
               }`}
             >
@@ -204,16 +195,16 @@ export default function ScanStation({
 
       {history.length ? (
         <ul
-          className={`${
-            isDesk ? 'overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60 divide-slate-700' : 'card-ui divide-slate-100'
-          } divide-y`}
+          className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white"
+          aria-label="Recent scans"
         >
           {history.map((entry, index) => (
             <li key={`${entry.code}-${index}`} className={`flex items-center gap-2 px-3 ${isDesk ? 'py-2.5' : 'py-1.5'}`}>
-              <span className={`h-2 w-2 shrink-0 rounded-full ${entry.ok ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span className={`ops-code text-xs font-semibold ${isDesk ? 'text-slate-100' : 'text-slate-700'}`}>{entry.code}</span>
-              <span className={`truncate text-xs ${isDesk ? 'text-slate-400' : 'text-slate-500'}`}>{entry.message}</span>
-              <span className={`ml-auto shrink-0 text-[10px] font-semibold ${isDesk ? 'text-slate-500' : 'text-slate-400'}`}>
+              <span className={`h-2 w-2 shrink-0 rounded-full ${entry.ok ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
+              <span className="sr-only">{entry.ok ? 'Accepted' : 'Rejected'}</span>
+              <span className="ops-code text-xs font-semibold text-slate-900">{entry.code}</span>
+              <span className="truncate text-xs text-slate-500">{entry.message}</span>
+              <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-500">
                 {entry.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </li>

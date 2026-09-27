@@ -14,6 +14,7 @@
  */
 
 import Swal from 'sweetalert2';
+import { toast as toastify } from 'react-toastify';
 
 // Session scope for password re-confirmation, and the CSS variable this app
 // paints its accents with. These two lines are what differ between apps.
@@ -423,7 +424,9 @@ export async function promptText({
   tone = 'question',
   required = true,
   requiredMessage = 'Write something first.',
-  multiline = true
+  multiline = true,
+  // Optional extra check: return a message to block confirming, or nothing.
+  validate
 } = {}) {
   const result = await Swal.fire(
     baseDialog({
@@ -436,7 +439,8 @@ export async function promptText({
       showCancelButton: true,
       confirmButtonText: confirmText,
       cancelButtonText: 'Cancel',
-      inputValidator: (value) => (required && !String(value || '').trim() ? requiredMessage : undefined)
+      inputValidator: (value) =>
+        required && !String(value || '').trim() ? requiredMessage : validate ? validate(String(value || '').trim()) || undefined : undefined
     })
   );
   return result.isConfirmed ? String(result.value || '').trim() : null;
@@ -539,26 +543,13 @@ export function alertBulkResult({ action = 'Updated', unit = 'records', succeede
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
 
+// Toasts go through react-toastify — the same toasts the pages raise
+// directly — so every confirmation appears in one place with one look.
 const toast = (tone, title, text) => {
-  ensureStyles();
-  const { accent, ring } = TONES[tone] || TONES.info;
-  return Swal.fire({
-    toast: true,
-    position: 'top-end',
-    timer: tone === 'danger' ? 5000 : 2800,
-    timerProgressBar: true,
-    showConfirmButton: false,
-    heightAuto: false,
-    html: `<div class="sw-toast-body">${iconMarkup(tone)}<div>
-        <p class="sw-title">${escapeHtml(title)}</p>
-        ${text ? `<p class="sw-text">${escapeHtml(text)}</p>` : ''}
-      </div></div>`,
-    customClass: { popup: 'sw-popup sw-toast', htmlContainer: 'sw-html' },
-    didOpen: (popup) => {
-      popup.style.setProperty('--sw-accent', tone === 'info' ? brandColor() : accent);
-      popup.style.setProperty('--sw-ring', ring);
-    }
-  });
+  const message = text ? `${title} — ${text}` : title;
+  if (tone === 'danger') return toastify.error(message);
+  if (tone === 'success') return toastify.success(message);
+  return toastify.info(message);
 };
 
 export const toastSuccess = (title, text) => toast('success', title, text);

@@ -31,12 +31,13 @@ import {
   qty
 } from 'src/components/_admin/ui/primitives';
 import { availableOf, variationLabel } from './shared';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 const UNIT_TONE = { IN_PRODUCTION: 'making', AVAILABLE: 'ready', RESERVED: 'gone' };
 
 export default function ProductStockDetail({ productId }) {
   const router = useRouter();
-  const { data, isLoading } = useQuery(['product-stock', productId], () => getProductStockDetail(productId), {
+  const { data, isLoading, isError, error, refetch } = useQuery(['product-stock', productId], () => getProductStockDetail(productId), {
     enabled: Boolean(productId)
   });
 
@@ -60,22 +61,41 @@ export default function ProductStockDetail({ productId }) {
   const inProduction = units.filter((unit) => unit.status === 'IN_PRODUCTION').length;
 
   if (isLoading) {
-    return <div className="h-64 animate-pulse rounded-md bg-slate-100" />;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div className="skeleton h-8 w-64" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="card-ui h-[104px] animate-pulse" />
+          ))}
+        </div>
+        <div className="card-ui h-72 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (isError && !product) {
+    return <ErrorState error={error} title="Stock for this product could not be loaded" onRetry={refetch} />;
   }
 
   if (!product) {
     return (
-      <div className="card-ui p-16 text-center">
-        <p className="text-sm font-semibold text-rose-600">This product was not found.</p>
-        <button type="button" onClick={() => router.push('/inventory')} className="btn-ghost mt-4">
-          Back to stock
-        </button>
+      <div className="card-ui">
+        <EmptyState
+          title="Product not found"
+          hint="It may have been deleted."
+          action={
+            <button type="button" onClick={() => router.push('/inventory')} className="btn-ghost">
+              Back to stock
+            </button>
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Stock"
         title={product.name}
@@ -128,7 +148,7 @@ export default function ProductStockDetail({ productId }) {
                   <td className="text-slate-600">{variationLabel(balance.variation)}</td>
                   <td className="text-right tabular-nums text-slate-700">{qty(balance.onHand)}</td>
                   <td className="text-right tabular-nums text-amber-700">{qty(balance.reserved)}</td>
-                  <td className="text-right text-[13px] font-bold tabular-nums text-emerald-700">
+                  <td className="text-right text-[13px] font-semibold tabular-nums text-emerald-700">
                     {qty(availableOf(balance.onHand, balance.reserved))}
                   </td>
                   <td className="text-right tabular-nums text-slate-600">
@@ -175,7 +195,7 @@ export default function ProductStockDetail({ productId }) {
                       <CopyButton value={unit.barcode} label="Copy barcode" />
                     </span>
                   </td>
-                  <td className="ops-code text-[11px] text-slate-500">{unit.unitSerial}</td>
+                  <td className="ops-code text-xs text-slate-500">{unit.unitSerial}</td>
                   <td className="text-slate-600">{variationLabel(unit.variation)}</td>
                   <td>
                     <StateChip
@@ -185,15 +205,15 @@ export default function ProductStockDetail({ productId }) {
                   </td>
                   <td>
                     {unit.orderItem?.orderNo ? (
-                      <Link href={`/orders/${unit.orderItem.orderNo}`} className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline">
+                      <Link href={`/orders/${unit.orderItem.orderNo}`} className="ops-code text-[12px] text-slate-900 hover:underline">
                         #{unit.orderItem.orderNo}
                       </Link>
                     ) : (
-                      <span className="text-slate-400">Free stock</span>
+                      <span className="text-slate-500">Free stock</span>
                     )}
                   </td>
                   <td className="text-slate-600">{unit.producedBy?.name || '—'}</td>
-                  <td className="text-[11px] text-slate-500">
+                  <td className="text-xs text-slate-500">
                     {unit.submittedAt ? format(new Date(unit.submittedAt), 'dd MMM yyyy') : '—'}
                   </td>
                 </tr>

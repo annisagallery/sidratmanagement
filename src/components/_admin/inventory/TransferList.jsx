@@ -18,12 +18,12 @@
  * register of six.
  */
 
+import { alertSuccess, alertWarning, promptText } from 'src/utils/swal';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
 import { FiArrowRight, FiCheck, FiCornerUpLeft, FiEye, FiPlus, FiPrinter, FiRefreshCw, FiSearch, FiSlash, FiTruck } from 'react-icons/fi';
-import Swal from 'sweetalert2';
 
 import {
   approveStockTransfer,
@@ -48,8 +48,7 @@ import {
   errorAlert,
   oid,
   qty,
-  toast
-} from 'src/components/_admin/ui/primitives';
+  toast, LoadingRows, ErrorRow } from 'src/components/_admin/ui/primitives';
 import { TRANSFER_STATUS, TransferStatusPill, variationLabel } from './shared';
 
 const ACTIONS = {
@@ -102,12 +101,10 @@ export default function TransferList() {
         queryClient.invalidateQueries('inventory-balances');
         queryClient.invalidateQueries('inventory-transactions');
         setOpen(null);
-        Swal.fire({
-          icon: variables.mode === 'void' ? 'success' : result?.shortfalls?.length ? 'warning' : 'success',
-          title: variables.mode === 'void' ? 'Transfer voided' : 'Reversal raised',
-          text: result?.message,
-          confirmButtonText: 'Done'
-        });
+        // A reversal can come back short (some stock sold since it landed), so
+        // the server's answer is shown as a dialog rather than a passing toast.
+        const shown = variables.mode !== 'void' && result?.shortfalls?.length ? alertWarning : alertSuccess;
+        shown(variables.mode === 'void' ? 'Transfer voided' : 'Reversal raised', result?.message);
       },
       onError: (error) => errorAlert('That could not be done', error)
     }
@@ -115,20 +112,19 @@ export default function TransferList() {
 
   const runCorrection = async (mode, transfer) => {
     const voiding = mode === 'void';
-    const { isConfirmed, value } = await Swal.fire({
+    const reason = await promptText({
+      tone: voiding ? 'danger' : 'warning',
       title: voiding ? `Void ${transfer.transferNo}?` : `Reverse ${transfer.transferNo}?`,
       text: voiding
         ? 'Anything already dispatched goes back into the source branch, on the lots it came from. The transfer is cancelled.'
         : `A new transfer is raised from ${transfer.destinationBranch?.name || 'the destination'} back to ${transfer.sourceBranch?.name || 'the source'}, for whatever is still on the shelf. Anything sold since it landed cannot go back.`,
-      icon: 'warning',
-      input: 'text',
-      inputLabel: 'Reason (optional)',
-      inputPlaceholder: voiding ? 'Sent to the wrong branch…' : 'Overstocked, sending it back…',
-      showCancelButton: true,
-      confirmButtonText: voiding ? 'Void it' : 'Raise reversal',
-      cancelButtonText: 'Keep it'
+      label: 'Reason (optional)',
+      placeholder: voiding ? 'e.g. sent to the wrong branch' : 'e.g. overstocked, sending it back',
+      required: false,
+      multiline: false,
+      confirmText: voiding ? 'Void transfer' : 'Raise reversal'
     });
-    if (isConfirmed) correct.mutate({ mode, id: oid(transfer), reason: value || '' });
+    if (reason !== null) correct.mutate({ mode, id: oid(transfer), reason });
   };
 
   const act = useMutation(({ action, id }) => ACTIONS[action].run(id), {
@@ -159,7 +155,7 @@ export default function TransferList() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar eyebrow="Inventory" title="Transfers" subtitle="Move quantity between branches. Pricing stays global.">
         <button type="button" onClick={() => transfersQuery.refetch()} className="btn-ghost">
           <FiRefreshCw size={14} className={transfersQuery.isFetching ? 'animate-spin' : ''} /> Refresh
@@ -210,7 +206,7 @@ export default function TransferList() {
         actions={
           <Toolbar>
             <div className="relative">
-              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
               <input
                 value={search}
                 onChange={(event) => {
@@ -254,7 +250,9 @@ export default function TransferList() {
           </thead>
           <tbody>
             {transfersQuery.isLoading ? (
-              <EmptyRow colSpan={6} title="Loading transfers…" />
+              <LoadingRows colSpan={6} />
+            ) : transfersQuery.isError ? (
+              <ErrorRow colSpan={6} error={transfersQuery.error} onRetry={transfersQuery.refetch} />
             ) : transfers.length ? (
               transfers.map((transfer) => {
                 const id = oid(transfer);
@@ -264,10 +262,10 @@ export default function TransferList() {
                   <tr key={id}>
                     <td>
                       <button type="button" onClick={() => setOpen(transfer)} className="text-left">
-                        <span className="ops-code text-[13px] font-bold text-[var(--brand-strong)] hover:underline">
+                        <span className="ops-code text-[13px] font-semibold text-slate-900 hover:underline">
                           {transfer.transferNo}
                         </span>
-                        <span className="block text-[11px] text-slate-400">
+                        <span className="block text-xs text-slate-500">
                           {transfer.createdAt ? format(new Date(transfer.createdAt), 'dd MMM yyyy') : ''}
                         </span>
                       </button>
@@ -278,10 +276,10 @@ export default function TransferList() {
                         <FiArrowRight size={13} className="text-slate-300" />
                         {transfer.destinationBranch?.name}
                       </span>
-                      {transfer.note ? <p className="mt-0.5 text-[11px] text-slate-400">{transfer.note}</p> : null}
+                      {transfer.note ? <p className="mt-0.5 text-xs text-slate-500">{transfer.note}</p> : null}
                     </td>
                     <td className="text-center tabular-nums text-slate-600">{(transfer.lines || []).length}</td>
-                    <td className="text-right text-[13px] font-bold tabular-nums text-slate-900">
+                    <td className="text-right text-[13px] font-semibold tabular-nums text-slate-900">
                       {qty(lineTotal(transfer))}
                     </td>
                     <td>
@@ -297,7 +295,7 @@ export default function TransferList() {
                         <button
                           type="button"
                           onClick={() => setOpen(transfer)}
-                          className="btn-ghost h-8 !px-2 !text-xs"
+                          className="btn-ghost btn-sm"
                           title="View lines"
                         >
                           <FiEye size={13} /> View
@@ -305,7 +303,7 @@ export default function TransferList() {
                         <button
                           type="button"
                           onClick={() => printDocket(transfer)}
-                          className="btn-ghost h-8 !px-2 !text-xs"
+                          className="btn-ghost btn-sm"
                           title="Print docket"
                           aria-label={`Print docket for ${transfer.transferNo}`}
                         >
@@ -316,7 +314,7 @@ export default function TransferList() {
                             type="button"
                             disabled={busy}
                             onClick={() => act.mutate({ action: next.action, id })}
-                            className="btn-brand h-8 !text-xs"
+                            className="btn-brand btn-sm"
                           >
                             <FiCheck size={13} /> {busy ? 'Working…' : next.label}
                           </button>
@@ -399,7 +397,7 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
               type="button"
               onClick={() => onCorrect('void')}
               disabled={busy}
-              className="btn-ghost h-10 w-full !text-rose-600"
+              className="btn-danger w-full"
             >
               <FiSlash size={14} /> Void — return everything to {transfer.sourceBranch?.name || 'the source'}
             </button>
@@ -423,13 +421,13 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">From</p>
-            <p className="truncate text-sm font-bold text-slate-800">{transfer.sourceBranch?.name}</p>
+            <p className="section-label">From</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{transfer.sourceBranch?.name}</p>
           </div>
           <FiArrowRight className="shrink-0 text-slate-300" />
           <div className="min-w-0 text-right">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">To</p>
-            <p className="truncate text-sm font-bold text-slate-800">{transfer.destinationBranch?.name}</p>
+            <p className="section-label">To</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{transfer.destinationBranch?.name}</p>
           </div>
         </div>
 
@@ -440,7 +438,7 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
         </dl>
 
         <section className="card-ui overflow-hidden">
-          <h3 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+          <h3 className="section-label border-b border-slate-200 bg-slate-50 px-3 py-2">
             Lines
           </h3>
           <ul className="divide-y divide-slate-100">
@@ -448,12 +446,12 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
               <li key={oid(line) || index} className="flex items-start justify-between gap-3 px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-slate-800">{line.product?.name || 'Unknown product'}</p>
-                  <p className="text-[11px] text-slate-400">{variationLabel(line.variation)}</p>
+                  <p className="text-xs text-slate-500">{variationLabel(line.variation)}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[13px] font-bold tabular-nums text-slate-900">{qty(line.quantity)}</p>
+                  <p className="text-[13px] font-semibold tabular-nums text-slate-900">{qty(line.quantity)}</p>
                   {line.receivedQuantity ? (
-                    <p className="text-[11px] font-semibold text-emerald-700">{qty(line.receivedQuantity)} received</p>
+                    <p className="text-xs font-semibold text-emerald-700">{qty(line.receivedQuantity)} received</p>
                   ) : null}
                 </div>
               </li>
@@ -463,12 +461,12 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
 
         {timeline.length ? (
           <section>
-            <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">History</h3>
+            <h3 className="section-label mb-2">History</h3>
             <ul className="space-y-2">
               {timeline.map((entry) => (
                 <li key={entry.label} className="flex items-baseline justify-between gap-3 text-[12px]">
                   <span className="font-semibold text-slate-700">{entry.label}</span>
-                  <span className="text-slate-400">
+                  <span className="text-slate-500">
                     {format(new Date(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
                   </span>
                 </li>

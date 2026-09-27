@@ -15,25 +15,18 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import { differenceInCalendarDays, format, isBefore, startOfDay } from 'date-fns';
-import { FiAlertTriangle, FiCheck, FiClock, FiPlus, FiRefreshCw, FiSearch } from 'react-icons/fi';
-import { LuFactory } from 'react-icons/lu';
+import { MdAdd, MdCheck, MdCheckCircleOutline } from 'react-icons/md';
 
 import { assignProductionNeedToStock, getProductionNeeds } from 'src/services';
-import GlobalTable from 'src/components/_admin/ui/GlobalTable';
-import {
-  EmptyRow,
-  PageBar,
-  Pill,
-  Section,
-  StatTile,
-  Toolbar,
-  errorAlert,
-  oid,
-  qty,
-  toast
-} from 'src/components/_admin/ui/primitives';
+import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
+import PageHeader from 'src/components/_admin/ui/PageHeader';
+import ListToolbar from 'src/components/_admin/ui/ListToolbar';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Callout from 'src/components/_admin/ui/Callout';
+import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { Pill, oid, qty } from 'src/components/_admin/ui/primitives';
 import { catalogCode, needName, variationLabel } from 'src/components/_admin/inventory/shared';
 
 /** How late, in the words someone would use out loud. */
@@ -42,11 +35,11 @@ function dueMeta(value) {
   const due = new Date(value);
   const days = differenceInCalendarDays(due, startOfDay(new Date()));
   if (isBefore(due, startOfDay(new Date()))) {
-    return { label: `${Math.abs(days)}d late`, tone: 'bad', overdue: true };
+    return { label: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} late`, tone: 'bad', overdue: true };
   }
   if (days === 0) return { label: 'Due today', tone: 'warn', overdue: false };
-  if (days <= 3) return { label: `In ${days}d`, tone: 'warn', overdue: false };
-  return { label: `In ${days}d`, tone: 'neutral', overdue: false };
+  if (days <= 3) return { label: `In ${days} day${days === 1 ? '' : 's'}`, tone: 'warn', overdue: false };
+  return { label: `In ${days} days`, tone: 'neutral', overdue: false };
 }
 
 /** Free ready stock that could fill this row now. */
@@ -63,11 +56,11 @@ export default function ProductionQueue() {
 
   const assign = useMutation(assignProductionNeedToStock, {
     onSuccess: () => {
-      toast('Satisfied from ready stock — nothing to make');
+      toastSuccess('Filled from stock', 'Nothing needs making for that item.');
       queryClient.invalidateQueries('production-needs');
       queryClient.invalidateQueries('inventory-product-stock');
     },
-    onError: (error) => errorAlert('That piece could not be taken from stock', error)
+    onError: (error) => alertError(error, { title: 'That piece could not be taken from stock' })
   });
 
   const totals = useMemo(
@@ -100,198 +93,177 @@ export default function ProductionQueue() {
     });
   }, [needs, search, only]);
 
-  const toggle = (key) => setOnly((current) => (current === key ? 'all' : key));
+  const filters = [
+    { id: 'all', label: `All ${qty(totalWaiting)}` },
+    { id: 'unplanned', label: `Not in a batch ${qty(needs.length - totals.planned)}` },
+    { id: 'overdue', label: `Overdue ${qty(totals.overdue)}` },
+    { id: 'custom', label: `Custom ${qty(totals.custom)}` },
+    { id: 'rescuable', label: `In stock ${qty(totals.rescuable)}` }
+  ];
 
   // A custom piece in stock was cut to someone else's measurements. It can
   // still be the right piece (a cancelled order of the same size), but only a
   // person comparing the two can say so.
   const fillFromStock = async (need) => {
     if (need.isCustom) {
-      const answer = await Swal.fire({
+      const confirmed = await confirmAction({
+        tone: 'warning',
         title: 'Use a custom piece from stock?',
-        html: `That piece was made to another customer's measurements.<br/>Only use it if it matches:<br/><b>${need.customizeDetails || 'no measurements recorded'}</b>`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'It matches — use it'
+        text: "That piece was made to another customer's measurements. Only use it if they match these:",
+        subject: need.customizeDetails || 'No measurements were recorded',
+        confirmText: 'They match — use it',
+        cancelText: 'Don’t use it'
       });
-      if (!answer.isConfirmed) return;
+      if (!confirmed) return;
     }
     assign.mutate(oid(need));
   };
 
-  return (
-    <div className="space-y-4">
-      <PageBar
-        eyebrow="Production"
-        title="Queue"
-        subtitle="Everything awaiting production, earliest promised delivery first."
-      >
-        <button type="button" onClick={() => needsQuery.refetch()} className="btn-ghost">
-          <FiRefreshCw size={14} className={needsQuery.isFetching ? 'animate-spin' : ''} /> Refresh
-        </button>
-        <Link href="/production/create" className="btn-brand">
-          <FiPlus size={15} /> Plan a batch
+  const columns = [
+    {
+      key: 'orderNo',
+      label: 'Order',
+      render: (need) => (
+        <Link href={`/orders/${need.orderNo}`} onClick={stopRow} className="ops-code text-[13px] font-semibold text-slate-900 hover:underline">
+          #{need.orderNo}
         </Link>
-      </PageBar>
+      )
+    },
+    {
+      key: 'product',
+      label: 'Product',
+      render: (need) => {
+        const code = catalogCode(need.product, need.variation);
+        return (
+          <div className="min-w-[180px]">
+            <p className="text-[13px] font-semibold text-slate-900">{needName(need)}</p>
+            <p className="text-xs text-slate-500">
+              {code ? <span className="ops-code mr-1.5">{code}</span> : null}
+              {variationLabel(need.variation)}
+            </p>
+            {(need.isCustom || need.productionBatch) && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {need.isCustom ? <Pill tone="info">Custom</Pill> : null}
+                {need.productionBatch ? (
+                  <Link href={`/production/batches/${need.productionBatch.batchNo}`} onClick={stopRow} className="hover:underline">
+                    <Pill tone="neutral">In {need.productionBatch.batchNo}</Pill>
+                  </Link>
+                ) : null}
+              </div>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      key: 'deliveryDate',
+      label: 'Promised',
+      render: (need) => {
+        const due = dueMeta(need.deliveryDate);
+        return (
+          <div className="whitespace-nowrap">
+            <Pill tone={due.tone}>{due.label}</Pill>
+            <p className="mt-1 text-xs text-slate-500">{need.deliveryDate ? format(new Date(need.deliveryDate), 'dd MMM yyyy') : '—'}</p>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'note',
+      label: 'Measurements',
+      hideBelow: 'lg',
+      render: (need) =>
+        need.customizeDetails ? (
+          <p className="max-w-[280px] whitespace-pre-line rounded-md bg-amber-50 px-2 py-1 text-xs leading-snug text-amber-900">
+            {need.customizeDetails}
+          </p>
+        ) : (
+          <span className="text-slate-400">—</span>
+        )
+    },
+    {
+      key: 'shortcut',
+      label: 'From stock',
+      align: 'right',
+      render: (need) => {
+        const available = stockFor(need);
+        return available > 0 ? (
+          <button
+            type="button"
+            onClick={() => fillFromStock(need)}
+            disabled={assign.isLoading}
+            title="A matching piece is already in stock — use it instead of making another"
+            className="btn-ghost btn-sm whitespace-nowrap"
+          >
+            <MdCheck size={16} className="text-emerald-600" aria-hidden /> Use 1 of {available}
+          </button>
+        ) : (
+          <span className="whitespace-nowrap text-xs text-slate-500">None — make it</span>
+        );
+      }
+    }
+  ];
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="Waiting"
-          value={qty(totalWaiting)}
-          note={totals.planned ? `${totals.planned} already in a draft batch` : 'Pieces to make'}
-          onClick={() => toggle('unplanned')}
-          active={only === 'unplanned'}
-        />
-        <StatTile
-          label="Overdue"
-          value={qty(totals.overdue)}
-          note="Past their promised date"
-          tone={totals.overdue ? 'bad' : 'muted'}
-          onClick={() => toggle('overdue')}
-          active={only === 'overdue'}
-        />
-        <StatTile
-          label="Custom pieces"
-          value={qty(totals.custom)}
-          note="Made to a customer's spec"
-          tone={totals.custom ? 'info' : 'muted'}
-          onClick={() => toggle('custom')}
-          active={only === 'custom'}
-        />
-        <StatTile
-          label="Already in stock"
-          value={qty(totals.rescuable)}
-          note="Can be filled without making anything"
-          tone={totals.rescuable ? 'good' : 'muted'}
-          onClick={() => toggle('rescuable')}
-          active={only === 'rescuable'}
-        />
-      </div>
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Queue" subtitle="Everything awaiting production, earliest promised delivery first.">
+        <Link href="/production/create" className="btn-brand">
+          <MdAdd size={18} aria-hidden /> Plan a batch
+        </Link>
+      </PageHeader>
 
-      <Section
-        title="Awaiting production"
-        icon={LuFactory}
-        hint={`${visible.length} shown`}
-        actions={
-          <Toolbar>
-            <div className="relative">
-              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search product or order…"
-                className="input-ui w-52 pl-8"
-                aria-label="Search the queue"
-              />
-            </div>
-            <select value={only} onChange={(event) => setOnly(event.target.value)} className="select-ui" aria-label="Filter the queue">
-              <option value="all">Everything</option>
-              <option value="overdue">Overdue only</option>
-              <option value="custom">Custom only</option>
-              <option value="rescuable">Fillable from stock</option>
-              <option value="unplanned">Not in a batch yet</option>
-            </select>
-          </Toolbar>
+      {totals.overdue > 0 && only !== 'overdue' && (
+        <Callout tone="warning" title={`${qty(totals.overdue)} piece${totals.overdue === 1 ? ' is' : 's are'} past the promised date`}>
+          <button type="button" onClick={() => setOnly('overdue')} className="mt-1 font-medium underline underline-offset-2">
+            Show only overdue pieces
+          </button>
+        </Callout>
+      )}
+
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search product, code or order…"
+        onRefresh={() => needsQuery.refetch()}
+        refreshing={needsQuery.isFetching}
+        onReset={
+          search || only !== 'all'
+            ? () => {
+                setSearch('');
+                setOnly('all');
+              }
+            : undefined
         }
       >
-        <GlobalTable>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Product</th>
-              <th>Promised</th>
-              <th>Note</th>
-              <th className="text-right">Shortcut</th>
-            </tr>
-          </thead>
-          <tbody>
-            {needsQuery.isLoading ? (
-              <EmptyRow colSpan={5} title="Loading the queue…" />
-            ) : visible.length ? (
-              visible.map((need) => {
-                const due = dueMeta(need.deliveryDate);
-                const available = stockFor(need);
-                const id = oid(need);
-                return (
-                  <tr key={id} className="align-top">
-                    <td>
-                      <Link
-                        href={`/orders/${need.orderNo}`}
-                        className="ops-code text-[12px] font-bold text-[var(--brand-strong)] hover:underline"
-                      >
-                        #{need.orderNo}
-                      </Link>
-                    </td>
-                    <td>
-                      <p className="text-[13px] font-semibold text-slate-800">{needName(need)}</p>
-                      <p className="text-[11px] text-slate-500">
-                        {catalogCode(need.product, need.variation) ? (
-                          <span className="ops-code mr-1.5 text-slate-400">
-                            {catalogCode(need.product, need.variation)}
-                          </span>
-                        ) : null}
-                        {variationLabel(need.variation)}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {need.isCustom ? <Pill tone="info">Custom</Pill> : null}
-                        {need.productionBatch ? (
-                          <Link href={`/production/batches/${need.productionBatch.batchNo}`}>
-                            <Pill tone="neutral">In {need.productionBatch.batchNo}</Pill>
-                          </Link>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="inline-flex items-center gap-1.5">
-                        {due.overdue ? (
-                          <FiAlertTriangle size={12} className="text-rose-600" />
-                        ) : (
-                          <FiClock size={12} className="text-slate-300" />
-                        )}
-                        <Pill tone={due.tone}>{due.label}</Pill>
-                      </span>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {need.deliveryDate ? format(new Date(need.deliveryDate), 'dd MMM yyyy') : '—'}
-                      </p>
-                    </td>
-                    <td className="max-w-[260px]">
-                      {need.customizeDetails ? (
-                        <p className="rounded border-l-2 border-amber-300 bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-900">
-                          {need.customizeDetails}
-                        </p>
-                      ) : (
-                        <span className="text-[11px] text-slate-300">—</span>
-                      )}
-                    </td>
-                    <td className="text-right">
-                      {available > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => fillFromStock(need)}
-                          disabled={assign.isLoading}
-                          title="A matching piece is already in stock — use it instead of making another"
-                          className="btn-ghost h-8 !border-emerald-200 !bg-emerald-50 !text-xs !text-emerald-700 hover:!bg-emerald-100"
-                        >
-                          <FiCheck size={12} /> Use 1 of {available} in stock
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">No stock — make it</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <EmptyRow
-                colSpan={5}
-                icon={FiCheck}
-                title="Nothing to make"
-                hint="Customer orders needing production land here automatically."
-              />
-            )}
-          </tbody>
-        </GlobalTable>
-      </Section>
+        <Segmented label="Show" options={filters} value={only} onChange={setOnly} className="max-w-full overflow-x-auto" />
+      </ListToolbar>
+
+      <DataTable
+        caption="Pieces awaiting production"
+        columns={columns}
+        data={visible}
+        rowKey={(need) => oid(need)}
+        selectable={false}
+        isLoading={needsQuery.isLoading}
+        isFetching={needsQuery.isFetching}
+        error={needsQuery.isError ? needsQuery.error : null}
+        onRetry={needsQuery.refetch}
+        empty={
+          needs.length ? (
+            <EmptyState title="Nothing matches" hint="Try another filter or clear the search." />
+          ) : (
+            <EmptyState icon={MdCheckCircleOutline} title="Nothing to make" hint="Customer orders that need production land here automatically." />
+          )
+        }
+        footer={
+          visible.length ? (
+            <p className="border-t border-slate-100 px-4 py-3 text-[13px] text-slate-500">
+              {qty(visible.length)} of {qty(totalWaiting)} shown
+              {totals.planned ? ` · ${qty(totals.planned)} already in a draft batch` : ''}
+            </p>
+          ) : null
+        }
+      />
     </div>
   );
 }

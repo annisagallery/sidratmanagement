@@ -1,9 +1,13 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import { FiImage, FiLink, FiCheck, FiAlertTriangle, FiTrash2 } from 'react-icons/fi';
 import Image from 'next/image';
+import { MdCheckCircle, MdImage } from 'react-icons/md';
 import * as api from 'src/services';
+import { toastSuccess, alertError } from 'src/utils/swal';
+import Panel from 'src/components/_admin/ui/Panel';
+import { Field } from 'src/components/_admin/ui/fields';
+import { ErrorState } from 'src/components/_admin/ui/TableStates';
 
 // Which hero row the storefront homepage draws, plus the two notice tiles the
 // "banner with notice" layout uses. This sits above the banner list because it
@@ -48,7 +52,7 @@ const SLOT_HELP = {
   2: 'Leave empty to show whether the showrooms are open today, linked to the branch page.'
 };
 
-function NoticeSlot({ slot, notice, onToast }) {
+function NoticeSlot({ slot, notice }) {
   const qc = useQueryClient();
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -74,10 +78,10 @@ function NoticeSlot({ slot, notice, onToast }) {
     setSaving(true);
     try {
       await api.saveHomeNotice(slot, { image: imageId ?? notice?.image?.id ?? null, link, alt, isActive: true });
-      onToast(`Notice ${slot} saved`);
+      toastSuccess(`Notice ${slot} saved`);
       qc.invalidateQueries('admin-home-notices');
     } catch (err) {
-      onToast(err.response?.data?.message || 'Save failed', 'error');
+      alertError(err, { title: `Notice ${slot} was not saved` });
     } finally {
       setSaving(false);
     }
@@ -95,7 +99,7 @@ function NoticeSlot({ slot, notice, onToast }) {
       const res = await api.uploadImage(fd);
       await save(res.id);
     } catch (err) {
-      onToast(err.response?.data?.message || 'Upload failed', 'error');
+      alertError(err, { title: 'The image was not uploaded' });
     } finally {
       setUploading(false);
     }
@@ -104,88 +108,84 @@ function NoticeSlot({ slot, notice, onToast }) {
   const clear = async () => {
     try {
       await api.clearHomeNotice(slot);
-      onToast(`Notice ${slot} cleared`);
+      toastSuccess(`Notice ${slot} cleared`);
       qc.invalidateQueries('admin-home-notices');
     } catch (err) {
-      onToast(err.response?.data?.message || 'Could not clear', 'error');
+      alertError(err, { title: `Notice ${slot} was not cleared` });
     }
   };
 
-  return (
-    <div className="rounded-md border border-gray-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-800">Notice {slot}</p>
-        {imagePath && (
-          <button
-            onClick={clear}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-          >
-            <FiTrash2 className="text-xs" /> Clear
-          </button>
-        )}
-      </div>
+  const busy = uploading || saving;
 
-      <div className="flex gap-4">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading || saving}
-          className="relative h-28 w-28 shrink-0 overflow-hidden rounded-md border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-[var(--brand)] disabled:opacity-70"
-        >
-          {imagePath ? (
-            <Image src={imagePath} alt={alt || `Notice ${slot}`} fill className="object-cover" />
-          ) : (
-            <span className="flex h-full flex-col items-center justify-center gap-1 text-gray-400">
-              <FiImage className="text-xl" />
-              <span className="text-[10px] font-semibold">{uploading ? 'Uploading…' : 'Upload square'}</span>
+  return (
+    <section className="rounded-lg border border-slate-200 p-4" aria-labelledby={`notice-${slot}-title`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 id={`notice-${slot}-title`} className="text-sm font-semibold text-slate-900">
+          Notice {slot}
+        </h3>
+        <div className="flex items-center gap-2">
+          {busy && (
+            <span className="text-xs text-slate-500" role="status">
+              {uploading ? 'Uploading…' : 'Saving…'}
             </span>
           )}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          {imagePath && (
+            <button type="button" onClick={clear} disabled={busy} className="btn-ghost btn-sm hover:text-rose-700">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-xs leading-relaxed text-gray-400">{SLOT_HELP[slot]}</p>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold text-gray-600">
-              <FiLink className="mr-1 inline text-[10px]" /> Link
-            </label>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="shrink-0 space-y-2">
+          <div className="relative h-28 w-28 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+            {imagePath ? (
+              <Image src={imagePath} alt={alt || `Notice ${slot}`} fill className="object-cover" />
+            ) : (
+              <span className="flex h-full flex-col items-center justify-center gap-1 text-center text-xs text-slate-500">
+                <MdImage size={22} className="text-slate-400" aria-hidden />
+                Square image
+              </span>
+            )}
+          </div>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="btn-ghost btn-sm w-28">
+            {imagePath ? 'Replace' : 'Upload'}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} tabIndex={-1} aria-hidden />
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-3">
+          <p className="text-[13px] leading-relaxed text-slate-500">{SLOT_HELP[slot]}</p>
+          <Field label="Link" optional>
             <input
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              onBlur={() => imagePath && save()}
+              onBlur={() => imagePath && link !== (notice?.link || '') && save()}
               placeholder="/products or https://…"
-              className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs placeholder-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+              className="input-ui"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold text-gray-600">Alt text</label>
+          </Field>
+          <Field label="Image description" optional help="Read aloud by screen readers.">
             <input
               value={alt}
               onChange={(e) => setAlt(e.target.value)}
-              onBlur={() => imagePath && save()}
+              onBlur={() => imagePath && alt !== (notice?.alt || '') && save()}
               placeholder="Describe the notice"
-              className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-xs placeholder-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+              className="input-ui"
             />
-          </div>
+          </Field>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function HeroLayoutPicker() {
   const qc = useQueryClient();
-  const [toast, setToast] = useState(null);
   const [savingLayout, setSavingLayout] = useState(null);
-  const toastTimer = useRef(null);
 
-  const showToast = (msg, type = 'success') => {
-    clearTimeout(toastTimer.current);
-    setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3200);
-  };
-
-  const { data: settings } = useQuery('admin-site-settings-hero', api.getSiteSettingsByAdmin);
+  const { data: settings, isLoading, isError, error, refetch } = useQuery('admin-site-settings-hero', api.getSiteSettingsByAdmin);
   const { data: notices } = useQuery('admin-home-notices', api.getHomeNoticesAdmin);
 
   const layout = settings?.data?.homeHeroLayout || 'categories';
@@ -196,67 +196,58 @@ export default function HeroLayoutPicker() {
     setSavingLayout(value);
     try {
       await api.updateSiteSettings({ homeHeroLayout: value });
-      showToast('Homepage layout updated');
+      toastSuccess('Homepage layout changed');
       qc.invalidateQueries('admin-site-settings-hero');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Could not change layout', 'error');
+      alertError(err, { title: 'The layout was not changed' });
     } finally {
       setSavingLayout(null);
     }
   };
 
   return (
-    <div className="space-y-4">
-      {toast && (
-        <div
-          className={`fixed right-5 top-5 z-[100] flex items-center gap-2.5 rounded-md border px-4 py-3 text-sm font-medium shadow-lg
-          ${
-            toast.type === 'error'
-              ? 'border-red-200 bg-red-50 text-red-700'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-          }`}
-        >
-          {toast.type === 'error' ? <FiAlertTriangle className="shrink-0" /> : <FiCheck className="shrink-0" />}
-          {toast.msg}
+    <Panel title="Hero layout" description="What sits beside the banner at the top of the storefront.">
+      {isError ? (
+        <ErrorState error={error} title="The current layout could not be loaded" onRetry={refetch} />
+      ) : (
+      <div className="space-y-5">
+        <div role="radiogroup" aria-label="Hero layout" className="grid gap-3 sm:grid-cols-3">
+          {LAYOUTS.map((option) => {
+            const active = layout === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => pick(option.value)}
+                disabled={Boolean(savingLayout) || isLoading}
+                className={`rounded-lg border p-3 text-left transition disabled:cursor-wait ${
+                  active ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="mb-3 flex h-12 gap-1 rounded-[3px] bg-slate-100 p-1" aria-hidden>
+                  {option.art}
+                </span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-900">{option.title}</span>
+                  {active && <MdCheckCircle size={17} className="shrink-0 text-slate-900" aria-hidden />}
+                  {savingLayout === option.value && <span className="text-xs text-slate-500">Saving…</span>}
+                </span>
+                <span className="mt-0.5 block text-[13px] leading-snug text-slate-500">{option.blurb}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      <div>
-        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Homepage hero</h2>
-        <p className="mt-0.5 text-xs text-gray-400">What sits beside the banner at the top of the storefront.</p>
+        {layout === 'notice' && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <NoticeSlot slot={1} notice={bySlot.get(1)} />
+            <NoticeSlot slot={2} notice={bySlot.get(2)} />
+          </div>
+        )}
       </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        {LAYOUTS.map((option) => {
-          const active = layout === option.value;
-          return (
-            <button
-              key={option.value}
-              onClick={() => pick(option.value)}
-              disabled={Boolean(savingLayout)}
-              className={`rounded-md border p-3 text-left transition disabled:opacity-60 ${
-                active
-                  ? 'border-[var(--brand)] bg-[var(--brand-soft)] ring-2 ring-[var(--brand-ring)]'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
-            >
-              <span className="mb-2.5 flex h-12 gap-1 rounded-[3px] bg-slate-100 p-1">{option.art}</span>
-              <span className="flex items-center gap-1.5">
-                <span className="text-sm font-bold text-gray-800">{option.title}</span>
-                {active && <FiCheck className="text-[var(--brand-strong)]" />}
-              </span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-gray-400">{option.blurb}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {layout === 'notice' && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <NoticeSlot slot={1} notice={bySlot.get(1)} onToast={showToast} />
-          <NoticeSlot slot={2} notice={bySlot.get(2)} onToast={showToast} />
-        </div>
       )}
-    </div>
+    </Panel>
   );
 }

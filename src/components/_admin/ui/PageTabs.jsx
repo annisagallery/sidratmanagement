@@ -41,7 +41,7 @@ export default function PageTabs() {
     .sort((a, b) => b.path.length - a.path.length)[0]?.href;
 
   return (
-    <nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label={`${item.label} pages`}>
+    <nav className="admin-sidebar-scroll flex gap-1 overflow-x-auto border-b border-slate-200" aria-label={`${item.label} pages`}>
       {tabs.map((tab) => {
         const tabPath = tab.href.split(/[?#]/)[0];
         const active = tab.href === activeHref;

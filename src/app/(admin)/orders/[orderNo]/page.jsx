@@ -16,27 +16,18 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'react-query';
-import Swal from 'sweetalert2';
-import 'sweetalert2/dist/sweetalert2.css';
-import {
-  FiAlertTriangle,
-  FiChevronRight,
-  FiCornerDownLeft,
-  FiEdit2,
-  FiPackage,
-  FiPlayCircle,
-  FiShoppingBag
-} from 'react-icons/fi';
+import { alertWarning, confirmAction } from 'src/utils/swal';
+import { FiAlertTriangle, FiClock, FiCornerDownLeft, FiEdit2, FiFileText, FiShoppingBag, FiTag, FiXCircle } from 'react-icons/fi';
 
 import * as api from 'src/services';
 import { useSiteSettings } from 'src/context/SiteSettingsContext';
 import { printInvoices, printShippingLabels } from 'src/components/_admin/dispatch/openDocuments';
-import ActionBar from 'src/components/_admin/orders/ActionBar';
 import HistoryModal from 'src/components/_admin/shared/HistoryModal';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
 
 import AdminNotes from 'src/components/_admin/orders/detail/AdminNotes';
 import ItemsCard from 'src/components/_admin/orders/detail/ItemsCard';
+import NextStep from 'src/components/_admin/orders/detail/NextStep';
 import OrderHeader from 'src/components/_admin/orders/detail/OrderHeader';
 import PackDrawer from 'src/components/_admin/orders/detail/PackDrawer';
 import PaymentsCard from 'src/components/_admin/orders/detail/PaymentsCard';
@@ -50,7 +41,8 @@ import {
   EditDetailsModal,
   ShipModal
 } from 'src/components/_admin/orders/detail/modals';
-import { Card, Notice, errorAlert, money, oid, toast } from 'src/components/_admin/orders/detail/parts';
+import { Notice, errorAlert, money, oid, toast } from 'src/components/_admin/orders/detail/parts';
+import { ErrorState } from 'src/components/_admin/ui/TableStates';
 
 /** Only a finished order can carry a customer complaint about what arrived. */
 const COMPLETED_STATUSES = ['delivered', 'completed'];
@@ -66,7 +58,7 @@ export default function OrderDetail({ params }) {
 
   const { statuses: orderStatuses } = useStatuses('order');
 
-  const { data, isLoading, refetch } = useQuery(['admin-order', orderNo], () => api.getOrderByAdmin(orderNo), {
+  const { data, isLoading, isError, error, refetch } = useQuery(['admin-order', orderNo], () => api.getOrderByAdmin(orderNo), {
     refetchOnWindowFocus: false
   });
   const order = data?.data;
@@ -146,9 +138,27 @@ export default function OrderDetail({ params }) {
    * of shipping — the order advances off the back of it.
    */
   async function handleAction(action) {
+    // Destructiveness is the server's call: if it sent `confirm` text, ask
+    // with exactly that wording before doing anything.
+    if (action.confirm) {
+      const confirmed = await confirmAction({
+        tone: action.intent === 'danger' ? 'danger' : 'warning',
+        title: `${action.label}?`,
+        text: action.confirm,
+        confirmText: action.label
+      });
+      if (!confirmed) return undefined;
+    }
     setBusyAction(action.action);
     try {
-      if (action.action === 'PACK') return await packOrderAsync();
+      if (action.action === 'PACK') {
+        // Pack is one button: with pieces still to scan it opens the packing
+        // panel (which finishes with "Mark as packed"); once everything is
+        // scanned it packs straight away.
+        const progress = order?.packingProgress;
+        if (progress?.total && (progress.verified || 0) < progress.total) return setModal('pack');
+        return await packOrderAsync();
+      }
       if (action.action === 'SHIP') return setModal('ship');
       return await updateStatusAsync(ACTION_STATUS[action.action]);
     } catch (error) {
@@ -161,30 +171,27 @@ export default function OrderDetail({ params }) {
 
   // The select stays bound to the order's real status, so declining the
   // confirmation leaves the control showing the truth with no reset to do.
-  function handleStatusChange(event) {
+  async function handleStatusChange(event) {
     const status = event.target.value;
-    Swal.fire({
-      title: 'Change status?',
-      text: `This order will move to "${status}".`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, change it'
-    }).then((result) => {
-      if (result.isConfirmed) updateStatus(status);
+    const label = orderStatuses.find((entry) => entry.value === status)?.label || status;
+    const confirmed = await confirmAction({
+      tone: 'warning',
+      title: 'Change the order status?',
+      text: `Order #${orderNo} will move to “${label}”. The customer may be notified.`,
+      confirmText: 'Change status'
     });
+    if (confirmed) updateStatus(status);
   }
 
-  function handleRemovePayment(paymentId) {
-    Swal.fire({
+  async function handleRemovePayment(paymentId) {
+    const confirmed = await confirmAction({
+      tone: 'danger',
+      glyph: 'danger',
       title: 'Remove this payment?',
-      text: 'The payment is unlinked from the order and the balance goes back up.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Remove',
-      confirmButtonColor: '#e11d48'
-    }).then((result) => {
-      if (result.isConfirmed) removePayment(paymentId);
+      text: 'The payment is unlinked from the order and the balance due goes back up.',
+      confirmText: 'Remove payment'
     });
+    if (confirmed) removePayment(paymentId);
   }
 
   async function refreshShipment(id) {
@@ -207,34 +214,38 @@ export default function OrderDetail({ params }) {
     refetch();
     refetchShipments();
     const advanceError = response?.meta?.orderAdvanceError;
-    if (advanceError) {
-      Swal.fire({
-        title: 'Parcel booked, but the order is not marked shipped',
-        text: advanceError,
-        icon: 'warning'
-      });
-    }
+    if (advanceError) alertWarning('Parcel booked, but the order is not marked shipped', advanceError);
   }
 
   /* ── render ────────────────────────────────────────────────────────────── */
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-32 animate-pulse rounded-md bg-slate-100" />
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="h-64 animate-pulse rounded-md bg-slate-100 lg:col-span-2" />
-          <div className="h-64 animate-pulse rounded-md bg-slate-100" />
+      <div className="space-y-6" aria-busy="true">
+        <div className="card-ui space-y-4 p-5">
+          <div className="skeleton h-7 w-48" />
+          <div className="skeleton h-4 w-80 max-w-full" />
+          <div className="skeleton h-12 w-full" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="card-ui h-72 animate-pulse" />
+          <div className="card-ui h-72 animate-pulse" />
         </div>
       </div>
     );
   }
 
+  // A failed request is not a missing order — say which it is.
+  if (isError && !order) {
+    return <ErrorState error={error} title={`Order #${orderNo} could not be loaded`} onRetry={refetch} />;
+  }
+
   if (!order) {
     return (
-      <div className="card-ui p-16 text-center">
-        <p className="text-sm font-semibold text-rose-600">Order #{orderNo} was not found.</p>
-        <button type="button" onClick={() => router.push('/orders')} className="btn-ghost mt-4">
+      <div className="card-ui flex flex-col items-center px-6 py-16 text-center">
+        <p className="text-sm font-semibold text-slate-900">Order #{orderNo} doesn’t exist</p>
+        <p className="mt-1 text-[13px] text-slate-500">It may have been deleted, or the number is wrong.</p>
+        <button type="button" onClick={() => router.push('/orders')} className="btn-ghost mt-5">
           Back to orders
         </button>
       </div>
@@ -273,100 +284,100 @@ export default function OrderDetail({ params }) {
     return active.filter((entry) => values.has(entry.value));
   })();
 
+  const serverActions = order.availableActions || null;
+  // The next steps go in the bar; the ways out (cancel, return) go in the menu.
+  const piecesLeft = packing.total > 0 && (packing.verified || 0) < packing.total;
+  const forwardActions = (serverActions || [])
+    .filter((action) => action.intent !== 'danger')
+    // The server holds Pack back until every piece is scanned; here Pack is
+    // how scanning starts, so it stays pressable while pieces are left.
+    .map((action) =>
+      action.action === 'PACK' && canPackHere && piecesLeft ? { ...action, enabled: true, blockedBy: undefined } : action
+    );
+  // Older API builds send no actions: still offer Pack where it applies.
+  if (!serverActions && canPackHere && packing.total > 0) {
+    forwardActions.push({ action: 'PACK', label: 'Pack', enabled: true, intent: 'primary' });
+  }
+  const exitActions = (serverActions || []).filter((action) => action.intent === 'danger');
+
+  const printItems = [
+    {
+      label: 'Invoice',
+      icon: FiFileText,
+      onClick: () => printInvoices([{ orderNo }], settings).catch((error) => errorAlert('The invoice could not be built', error))
+    },
+    {
+      label: 'Shipping label',
+      icon: FiTag,
+      onClick: () =>
+        printShippingLabels([{ orderNo }], settings).catch((error) => errorAlert('The label could not be built', error))
+    }
+  ];
+
+  const moreItems = [
+    { label: 'Edit products', icon: FiShoppingBag, onClick: () => router.push(`/orders/${orderNo}/edit`) },
+    { label: 'Edit details and address', icon: FiEdit2, onClick: () => setModal('details') },
+    canReturnItems && {
+      label: order.status === 'shipped' ? 'Partial delivery or return…' : 'Return items…',
+      icon: FiCornerDownLeft,
+      onClick: () => setModal('return-items')
+    },
+    { label: 'History', icon: FiClock, onClick: () => setModal('history') },
+    ...exitActions.map((action, index) => ({
+      label: action.enabled ? `${action.label}…` : `${action.label} — ${action.blockedBy || 'not available'}`,
+      icon: FiXCircle,
+      tone: 'danger',
+      disabled: !action.enabled || Boolean(busyAction),
+      separator: index === 0,
+      onClick: () => handleAction(action)
+    }))
+  ].filter(Boolean);
+
+  // Older API builds have no `availableActions`: fall back to a status picker.
+  const statusPicker = serverActions ? null : (
+    <label className="flex items-center gap-2">
+      <span className="text-[13px] text-slate-600">Status</span>
+      <select value={order.status} onChange={handleStatusChange} disabled={updatingStatus} className="select-ui">
+        {visibleStatuses.map((status) => (
+          <option key={status.value} value={status.value}>
+            {status.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-6 pb-12">
       <OrderHeader
         order={order}
         orderStatuses={orderStatuses}
         activeShipment={activeShipment}
         paid={paid}
         due={due}
-        packing={packing}
-        onBack={() => router.push('/orders')}
         onPrev={() => order.previousOrder && router.push(`/orders/${order.previousOrder}`)}
         onNext={() => order.nextOrder && router.push(`/orders/${order.nextOrder}`)}
-        onPrint={() =>
-          printInvoices([{ orderNo }], settings).catch((error) => errorAlert('The invoice could not be built', error))
-        }
-        onPrintLabel={() =>
-          printShippingLabels([{ orderNo }], settings).catch((error) =>
-            errorAlert('The label could not be built', error)
-          )
-        }
-        onHistory={() => setModal('history')}
+        printItems={printItems}
+        moreItems={moreItems}
       />
 
-      {/* The one exception worth a banner: money missing on a finished order.
-          Status, packing and courier progress live in the tracker above. */}
-      {due > 0 && codAwaiting === 0 && COMPLETED_STATUSES.includes(order.status) ? (
-        <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} unpaid on a delivered order`} />
-      ) : null}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-6">
+          <NextStep
+            order={order}
+            packing={packing}
+            activeShipment={activeShipment}
+            actions={forwardActions}
+            busyAction={busyAction}
+            onAction={handleAction}
+            fallback={statusPicker}
+          />
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* Reference column. First in the DOM so it leads on a phone, where the
-            next step matters more than the item list. */}
-        <aside className="space-y-5 lg:order-2">
-          <NotePanel note={order.note} />
+          {/* The one exception worth a banner: money missing on a finished order. */}
+          {due > 0 && codAwaiting === 0 && COMPLETED_STATUSES.includes(order.status) ? (
+            <Notice tone="warn" icon={FiAlertTriangle} title={`${money(due)} unpaid on a delivered order`} />
+          ) : null}
 
-          <Card title="Actions" icon={FiPlayCircle}>
-            <div className="space-y-2 border-t border-slate-100 px-5 py-4">
-              {order.availableActions ? (
-                <ActionBar actions={order.availableActions} onAction={handleAction} busyAction={busyAction} />
-              ) : (
-                <label className="block">
-                  <span className="mb-1 block text-xs font-semibold text-slate-600">Order status</span>
-                  <select
-                    value={order.status}
-                    onChange={handleStatusChange}
-                    disabled={updatingStatus}
-                    className="select-ui h-10 w-full font-semibold"
-                  >
-                    {visibleStatuses.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-            <ul className="divide-y divide-slate-100 border-t border-slate-100">
-              {[
-                canPackHere && { label: 'Scan & pack', icon: FiPackage, onClick: () => setModal('pack') },
-                {
-                  label: 'Add / remove products',
-                  icon: FiShoppingBag,
-                  onClick: () => router.push(`/orders/${orderNo}/edit`)
-                },
-                { label: 'Edit details & address', icon: FiEdit2, onClick: () => setModal('details') },
-                canReturnItems && {
-                  label: order.status === 'shipped' ? 'Partial delivery / returns' : 'Return items',
-                  icon: FiCornerDownLeft,
-                  onClick: () => setModal('return-items')
-                }
-              ]
-                .filter(Boolean)
-                .map((item) => (
-                  <li key={item.label}>
-                    <button
-                      type="button"
-                      onClick={item.onClick}
-                      className="group flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      <item.icon size={15} className="shrink-0 text-slate-400 group-hover:text-slate-600" />
-                      <span className="flex-1">{item.label}</span>
-                      <FiChevronRight size={14} className="text-slate-300 group-hover:text-slate-500" />
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          </Card>
-
-          <CustomerPanel order={order} onEditAddress={() => setModal('details')} />
-          <MetaPanel order={order} />
-        </aside>
-
-        <div className="min-w-0 space-y-5 lg:order-1">
           {order.status === 'returned' && returnPending ? (
             <ReturnReceiptCard key={order.updatedAt} order={order} orderNo={orderNo} onReceived={refetch} />
           ) : null}
@@ -374,7 +385,7 @@ export default function OrderDetail({ params }) {
           <ItemsCard
             order={order}
             packing={packing}
-            onPack={canPackHere ? () => setModal('pack') : undefined}
+            onEdit={() => router.push(`/orders/${orderNo}/edit`)}
             onComplain={setComplaintItem}
             canComplain={COMPLETED_STATUSES.includes(order.status)}
           />
@@ -396,11 +407,18 @@ export default function OrderDetail({ params }) {
             onSend={() => setModal('ship')}
             onRefresh={refreshShipment}
             refreshingId={refreshingShipment}
-            sendLabel={shipMeta.isResend ? 'Re-send parcel' : 'Send parcel'}
+            sendLabel={shipMeta.isResend ? 'Send again' : 'Send parcel'}
           />
 
           <AdminNotes orderNo={orderNo} comments={order.adminComments} onPosted={refetch} />
         </div>
+
+        {/* Reference only: who, where, on what terms. */}
+        <aside className="space-y-6" aria-label="Customer and order details">
+          <NotePanel note={order.note} />
+          <CustomerPanel order={order} onEdit={() => setModal('details')} />
+          <MetaPanel order={order} />
+        </aside>
       </div>
 
       {/* ── panels & modals ──────────────────────────────────────────────── */}

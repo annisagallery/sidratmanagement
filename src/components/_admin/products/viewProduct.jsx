@@ -1,39 +1,54 @@
 'use client';
-import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { MdArrowBack, MdEdit, MdDelete, MdOpenInNew, MdPrint } from 'react-icons/md';
+import { FiImage, FiPackage } from 'react-icons/fi';
 import { alertError, confirmDelete, toastSuccess } from 'src/utils/swal';
 import * as api from 'src/services';
-import { MdArrowBack, MdEdit, MdDelete, MdOpenInNew, MdPrint } from 'react-icons/md';
-import { FiImage, FiTag, FiList, FiBox, FiPackage, FiX } from 'react-icons/fi';
-import { displaySku } from 'src/components/_admin/inventory/shared';
-
-const card = 'bg-white rounded-md border border-gray-200 p-5';
+import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import Panel from 'src/components/_admin/ui/Panel';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Badge from 'src/components/_admin/ui/Badge';
+import { KpiGrid, StatTile } from 'src/components/_admin/ui/kpi';
+import { EmptyState, ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
+import { ModalShell, money } from 'src/components/_admin/ui/primitives';
+import { UnitStatusPill, displaySku } from 'src/components/_admin/inventory/shared';
 
 function InfoRow({ label, value, children }) {
   if (!children && !value && value !== 0) return null;
   return (
-    <div className="flex items-start gap-4 py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 flex-shrink-0 w-28">{label}</span>
-      <div className="flex-1 text-sm text-gray-800 font-medium">{children ?? value}</div>
+    <div className="grid gap-1 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-4">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="font-medium text-slate-900">{children ?? value}</dd>
     </div>
   );
 }
 
-function StatusBadge({ status }) {
-  const map = {
-    active: 'bg-green-100 text-green-700',
-    inactive: 'bg-red-100 text-red-700',
-    draft: 'bg-yellow-100 text-yellow-700'
-  };
+/** One option value, with its swatch when it is a colour. */
+function OptionChip({ name, hex }) {
   return (
-    <span
-      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium capitalize ${map[status] || 'bg-gray-100 text-gray-600'}`}
-    >
-      {status}
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+      {hex && <span className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-900/10" style={{ backgroundColor: hex }} aria-hidden />}
+      {name}
     </span>
+  );
+}
+
+const PRODUCT_STATUS = {
+  active: { label: 'Active', tone: 'success' },
+  inactive: { label: 'Inactive', tone: 'neutral' },
+  draft: { label: 'Draft', tone: 'warning' }
+};
+
+function ProductStatus({ status }) {
+  const meta = PRODUCT_STATUS[status] || { label: status || 'Unknown', tone: 'neutral' };
+  return (
+    <Badge tone={meta.tone} dot>
+      {meta.label}
+    </Badge>
   );
 }
 
@@ -46,7 +61,7 @@ export default function ViewProduct({ slug }) {
   const [attrFilters, setAttrFilters] = useState({});
   const [unitsTarget, setUnitsTarget] = useState(null);
 
-  const { data, isLoading, isError } = useQuery(['product-admin', slug], () => api.getOneProductByAdmin(slug), {
+  const { data, isLoading, isError, error, refetch } = useQuery(['product-admin', slug], () => api.getOneProductByAdmin(slug), {
     staleTime: 0,
     refetchOnMount: 'always'
   });
@@ -165,40 +180,44 @@ export default function ViewProduct({ slug }) {
   });
 
   function handleDelete() {
-    Swal.fire({
-      title: `Delete "${product?.name}"?`,
-      text: 'This will soft-delete the product and all its variations.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete'
-    }).then((r) => {
-      if (r.isConfirmed) deleteProduct();
+    confirmDelete({
+      title: 'Delete this product?',
+      subject: product?.name,
+      text: 'The product and all of its variations stop appearing on the storefront. It can be restored from the recycle bin.'
+    }).then((confirmed) => {
+      if (confirmed) deleteProduct();
     });
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-16 bg-gray-100 rounded-md animate-pulse" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,2fr)_3fr]">
-          <div className="mx-auto aspect-[2/3] w-full max-w-md bg-gray-100 rounded-md animate-pulse" />
-          <div className="space-y-4">
-            <div className="h-32 bg-gray-100 rounded-md animate-pulse" />
-            <div className="h-48 bg-gray-100 rounded-md animate-pulse" />
-          </div>
+      <div className="space-y-6" aria-busy="true">
+        <div className="skeleton h-8 w-72" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(280px,2fr)_3fr]">
+          <div className="card-ui aspect-[2/3] w-full animate-pulse" />
+          <div className="card-ui h-80 animate-pulse" />
         </div>
       </div>
     );
   }
 
-  if (isError || !product) {
+  if (isError && !product) {
+    return <ErrorState error={error} title="This product could not be loaded" onRetry={refetch} />;
+  }
+
+  if (!product) {
     return (
-      <div className="text-center py-24 text-red-500">
-        <p className="font-semibold">Product not found.</p>
-        <button onClick={() => router.push('/products')} className="mt-4 text-sm text-blue-500 underline">
-          Back to products
-        </button>
+      <div className="card-ui">
+        <EmptyState
+          icon={FiPackage}
+          title="Product not found"
+          hint="It may have been deleted, or the link is wrong."
+          action={
+            <button type="button" onClick={() => router.push('/products')} className="btn-ghost">
+              Back to products
+            </button>
+          }
+        />
       </div>
     );
   }
@@ -206,9 +225,12 @@ export default function ViewProduct({ slug }) {
   const featuredImage = product.featuredImage;
   const images = product.images || [];
   const displayImage = selectedImage ?? featuredImage?.path ?? null;
+  const gallery = [featuredImage?.path, ...images.map((img) => img?.path || img)].filter(
+    (path, i, all) => path && all.indexOf(path) === i
+  );
 
   const hasVarAttrs = (product.variations || []).some((v) => (v.attributes || []).length > 0);
-  const productType = hasVarAttrs ? 'Variable' : 'Standard';
+  const productType = hasVarAttrs ? 'With options' : 'Single item';
 
   const attributeMap = new Map();
   (product.attributes || []).forEach((entry) => {
@@ -257,296 +279,180 @@ export default function ViewProduct({ slug }) {
       ? `${String(product.code).padStart(4, '0')}-${String(variationCode).padStart(4, '0')}`
       : '—';
   };
+  const filtersOn = invBranch !== 'all' || activeAttrFilters.length > 0;
+  const legacyCodes = [product.primaryBarcode, ...(product.legacyBarcodes || [])].filter(Boolean).join(', ');
 
   return (
-    <div className="space-y-4 pb-16">
-      {/* ── HEADER ─────────────────────────────────────────────────────── */}
-      <div className={`${card} flex items-center justify-between gap-4`}>
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="space-y-6">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
           <button
+            type="button"
+            aria-label="Back to products"
+            title="Back to products"
             onClick={() => router.push('/products')}
-            className="p-2 rounded-md border text-gray-500 hover:bg-gray-50 transition flex-shrink-0"
+            className="btn-icon mt-0.5 shrink-0"
           >
-            <MdArrowBack size={18} />
+            <MdArrowBack size={20} aria-hidden />
           </button>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-gray-900 truncate">{product.name}</h1>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">/{product.slug}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900">{product.name}</h1>
+              <ProductStatus status={product.status} />
+              {product.isFeatured && <Badge tone="violet">Featured</Badge>}
+            </div>
+            <p className="ops-code mt-1 text-[13px] text-slate-500">/{product.slug}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
-            onClick={() =>
-              window.open(
-                `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/product/${product.slug}`,
-                '_blank',
-                'noopener'
-              )
-            }
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-md text-sm font-medium hover:bg-gray-50 transition"
-          >
-            <MdOpenInNew size={14} /> View on site
-          </button>
-          <button
+            type="button"
             onClick={() => window.open(`/product-labels?slug=${encodeURIComponent(slug)}`, '_blank', 'noopener')}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-md text-sm font-medium hover:bg-gray-50 transition"
-            title="Print retail price labels — 44 per A4 sheet"
+            className="btn-ghost"
+            title="Retail price labels — 44 per A4 sheet"
           >
-            <MdPrint size={14} /> Labels
+            <MdPrint size={16} aria-hidden /> Labels
           </button>
-          <button
-            onClick={() => router.push(`/products/${slug}`)}
-            className="flex items-center gap-1.5 px-3 py-2 border border-[var(--brand-ring)] bg-[var(--brand-soft)] text-[var(--brand-strong)] rounded-md text-sm font-medium hover:bg-[var(--brand-soft)] transition"
-          >
-            <MdEdit size={14} /> Edit
+          <button type="button" onClick={() => router.push(`/products/${slug}`)} className="btn-brand">
+            <MdEdit size={16} aria-hidden /> Edit product
           </button>
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition"
-          >
-            <MdDelete size={14} /> Delete
-          </button>
+          <ActionMenu
+            label="More product actions"
+            items={[
+              {
+                label: 'View on storefront',
+                icon: MdOpenInNew,
+                onClick: () =>
+                  window.open(
+                    `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/product/${product.slug}`,
+                    '_blank',
+                    'noopener'
+                  )
+              },
+              { label: 'Delete product', icon: MdDelete, tone: 'danger', onClick: handleDelete }
+            ]}
+          />
         </div>
       </div>
 
-      {/* ── MAIN GRID ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,2fr)_3fr] lg:items-start">
-        {/* Left: Image Gallery */}
-        <div className={card}>
-          <div className="relative mx-auto aspect-[2/3] w-full max-w-md overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+      {/* ── Gallery + details ────────────────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(280px,2fr)_3fr] lg:items-start">
+        <section className="card-ui p-4" aria-label="Images">
+          <div className="relative mx-auto aspect-[2/3] w-full max-w-md overflow-hidden rounded-md bg-slate-50">
             {displayImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={displayImage} alt={product.name} className="absolute inset-0 h-full w-full object-cover" />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-gray-200 gap-3">
-                <FiImage size={64} />
-                <p className="text-sm text-gray-300">No image</p>
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-400">
+                <FiImage size={40} aria-hidden />
+                <p className="text-[13px] text-slate-500">No image yet</p>
               </div>
             )}
           </div>
 
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {featuredImage?.path && (
+          {gallery.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Choose image">
+              {gallery.map((path, i) => (
                 <button
-                  onClick={() => setSelectedImage(featuredImage.path)}
-                  className={`relative aspect-[2/3] w-12 rounded-md border-2 overflow-hidden flex-shrink-0 transition ${
-                    displayImage === featuredImage.path
-                      ? 'border-[var(--brand)]'
-                      : 'border-gray-200 hover:border-gray-300'
+                  key={path}
+                  type="button"
+                  aria-label={`Show image ${i + 1}`}
+                  aria-pressed={displayImage === path}
+                  onClick={() => setSelectedImage(path)}
+                  className={`relative aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md border-2 transition ${
+                    displayImage === path ? 'border-slate-900' : 'border-transparent hover:border-slate-300'
                   }`}
                 >
-                  <img
-                    src={featuredImage.path}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
                 </button>
-              )}
-              {images.map((img) => {
-                const path = img?.path || img;
-                if (!path || path === featuredImage?.path) return null;
-                return (
-                  <button
-                    key={img.id || path}
-                    onClick={() => setSelectedImage(path)}
-                    className={`relative aspect-[2/3] w-12 rounded-md border-2 overflow-hidden flex-shrink-0 transition ${
-                      displayImage === path ? 'border-[var(--brand)]' : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <img src={path} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
-                  </button>
-                );
-              })}
+              ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Right: Info cards */}
-        <div className="space-y-4">
-          {/* Product Info */}
-          <div className={card}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-              <FiTag size={12} /> Product Info
-            </p>
-
-            <InfoRow label="Type" value={productType} />
-            <InfoRow label="Name" value={product.name} />
-            <InfoRow label="Product code" value={product.code ? String(product.code).padStart(4, '0') : '—'} />
-            <InfoRow
-              label="Legacy codes"
-              value={[product.primaryBarcode, ...(product.legacyBarcodes || [])].filter(Boolean).join(', ') || '—'}
-            />
-            <InfoRow label="Category" value={product.category?.name} />
-            <InfoRow label="Cost (Rate)" value={`৳${Number(product.rate || 0).toFixed(2)}`} />
-            <InfoRow label="Base Price" value={`৳${Number(product.price || 0).toFixed(2)}`} />
-            {product.priceSale > 0 && <InfoRow label="Sale Price" value={`৳${Number(product.priceSale).toFixed(2)}`} />}
-
-            <div className="flex items-start gap-4 py-2.5 border-b border-gray-50">
-              <span className="text-xs text-gray-400 flex-shrink-0 w-28">Status</span>
-              <StatusBadge status={product.status} />
-            </div>
-
-            {product.trackInventory && (
-              <InfoRow label="Total Stock">
-                <span
-                  className={`text-xs font-semibold px-2.5 py-0.5 rounded-md ${
-                    totalStock > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  {totalStock} units
-                </span>
+        <div className="min-w-0 space-y-6">
+          <Panel title="Details">
+            <dl className="divide-y divide-slate-100 text-[13px]">
+              <InfoRow label="Type" value={productType} />
+              <InfoRow label="Category" value={product.category?.name} />
+              <InfoRow label="Product code">
+                <span className="ops-code">{product.code ? String(product.code).padStart(4, '0') : '—'}</span>
               </InfoRow>
-            )}
+              {legacyCodes && (
+                <InfoRow label="Old barcodes">
+                  <span className="ops-code break-all">{legacyCodes}</span>
+                </InfoRow>
+              )}
+              <InfoRow label="Cost">
+                <span className="tabular-nums">{money(product.rate)}</span>
+              </InfoRow>
+              <InfoRow label="Price">
+                <span className="tabular-nums">{money(product.price)}</span>
+                {product.priceSale > 0 && (
+                  <span className="ml-2 tabular-nums text-emerald-700">Sale {money(product.priceSale)}</span>
+                )}
+              </InfoRow>
+              {product.trackInventory && (
+                <InfoRow label="In stock">
+                  <Badge tone={totalStock > 0 ? 'success' : 'neutral'}>
+                    {totalStock.toLocaleString()} unit{totalStock === 1 ? '' : 's'}
+                  </Badge>
+                </InfoRow>
+              )}
+            </dl>
+          </Panel>
 
-            {product.isFeatured && <InfoRow label="Featured" value="⭐ Yes" />}
+          {attributeGroups.length > 0 && (
+            <Panel title="Options">
+              <dl className="space-y-3">
+                {attributeGroups.map((group) => (
+                  <div key={group.name} className="grid gap-1.5 sm:grid-cols-[120px_minmax(0,1fr)]">
+                    <dt className="pt-0.5 text-[13px] text-slate-500">{group.name}</dt>
+                    <dd className="flex flex-wrap gap-1.5">
+                      {group.values.map((value) => (
+                        <OptionChip key={value.name} name={value.name} hex={value.colorHex} />
+                      ))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Panel>
+          )}
 
-            {attributeGroups.length > 0 && (
-              <div className="pt-3 mt-1 border-t border-gray-100">
-                <p className="mb-2 text-xs font-semibold text-gray-500">Attributes</p>
-                <div className="space-y-2">
-                  {attributeGroups.map((group) => (
-                    <div key={group.name} className="flex items-start gap-3">
-                      <span className="w-24 shrink-0 pt-1 text-[11px] font-semibold text-gray-400">{group.name}</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {group.values.map((value) => (
-                          <span
-                            key={value.name}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-strong)]"
-                          >
-                            {value.colorHex && (
-                              <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-md border border-white shadow-sm"
-                                style={{ backgroundColor: value.colorHex }}
-                              />
-                            )}
-                            {value.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {product.shortDescription && (
+            <Panel title="Short description">
+              <p className="text-[13px] leading-relaxed text-slate-700">{product.shortDescription}</p>
+            </Panel>
+          )}
         </div>
       </div>
 
-      {/* ── VARIATIONS TABLE ────────────────────────────────────────────── */}
-      {false && (product.variations || []).length > 0 && (
-        <div className={card}>
-          <div className="flex items-center gap-2 mb-4">
-            <FiList size={15} className="text-[var(--brand-strong)]" />
-            <h2 className="font-semibold text-gray-800">Variations ({product.variations.length})</h2>
-          </div>
-          <div className="overflow-x-auto -mx-1">
-            <GlobalTable className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Variant
-                  </th>
-                  <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Regular Price
-                  </th>
-                  <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Sale Price
-                  </th>
-                  <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Stock
-                  </th>
-                  <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Option Code
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {product.variations.map((v, i) => (
-                  <tr
-                    key={v.id || i}
-                    className={`hover:bg-gray-50/50 transition ${v.enabled === false ? 'opacity-50' : ''}`}
-                  >
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(v.attributes || []).length > 0 ? (
-                          v.attributes.map((a, j) => (
-                            <span
-                              key={j}
-                              className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md"
-                            >
-                              {a.colorHex && (
-                                <span
-                                  className="w-2.5 h-2.5 rounded-md flex-shrink-0"
-                                  style={{ backgroundColor: a.colorHex }}
-                                />
-                              )}
-                              {a.valueName}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400">Default</span>
-                        )}
-                        {v.enabled === false && <span className="text-xs text-red-400 ml-1">(disabled)</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-right font-medium text-gray-800">
-                      {v.regularPrice != null ? (
-                        `৳${Number(v.regularPrice).toFixed(2)}`
-                      ) : (
-                        <span className="text-gray-400 text-xs italic">Base price</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-right text-green-600">
-                      {v.salePrice != null ? (
-                        `৳${Number(v.salePrice).toFixed(2)}`
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <span
-                        className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
-                          (v.available || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {v.available ?? 0}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <p className="font-mono text-xs font-semibold text-gray-600">
-                        {v.productionCode ? String(v.productionCode).padStart(4, '0') : '—'}
-                      </p>
-                      <p className="mt-0.5 font-mono text-[10px] text-gray-400">
-                        {[v.primaryBarcode, ...(v.legacyBarcodes || [])].filter(Boolean).join(', ') || 'No legacy code'}
-                      </p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </GlobalTable>
-          </div>
-        </div>
-      )}
-
-      {/* ── INVENTORY ───────────────────────────────────────────────────── */}
+      {/* ── Options & stock ──────────────────────────────────────────────── */}
       {product.trackInventory && (
-        <div className={card}>
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <FiPackage size={15} className="text-[var(--brand-strong)]" />
+        <section className="card-ui overflow-hidden" aria-labelledby="stock-title">
+          <header className="space-y-4 border-b border-slate-200 px-5 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-gray-800">Variations &amp; inventory</h2>
-                <p className="text-[11px] text-gray-400">Prices, status and branch stock.</p>
+                <h2 id="stock-title" className="text-[15px] font-semibold text-slate-900">
+                  Options and stock
+                </h2>
+                <p className="mt-0.5 text-[13px] text-slate-500">Price, code and stock for every option, by warehouse.</p>
               </div>
+              <Segmented
+                label="Show"
+                size="sm"
+                options={[
+                  { id: 'stocked', label: 'In stock' },
+                  { id: 'all', label: 'All options' }
+                ]}
+                value={showOnlyAvailable ? 'stocked' : 'all'}
+                onChange={(v) => setShowOnlyAvailable(v === 'stocked')}
+              />
             </div>
-            <div className="flex flex-wrap items-center gap-2 self-start">
-              <select
-                value={invBranch}
-                onChange={(e) => setInvBranch(e.target.value)}
-                className="select-ui h-8 text-[11px]"
-                aria-label="Filter by warehouse"
-              >
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={invBranch} onChange={(e) => setInvBranch(e.target.value)} className="select-ui" aria-label="Warehouse">
                 <option value="all">All warehouses</option>
                 {invBranches.map((branch) => (
                   <option key={branch.id} value={String(branch.id)}>
@@ -554,16 +460,15 @@ export default function ViewProduct({ slug }) {
                   </option>
                 ))}
               </select>
-
               {attributeGroups.map((group) => (
                 <select
                   key={group.name}
                   value={attrFilters[group.name] || 'all'}
                   onChange={(e) => setAttrFilters((f) => ({ ...f, [group.name]: e.target.value }))}
-                  className="select-ui h-8 text-[11px]"
-                  aria-label={`Filter by ${group.name}`}
+                  className="select-ui"
+                  aria-label={group.name}
                 >
-                  <option value="all">All {group.name}</option>
+                  <option value="all">Any {group.name.toLowerCase()}</option>
                   {group.values.map((value) => (
                     <option key={value.name} value={value.name}>
                       {value.name}
@@ -571,367 +476,232 @@ export default function ViewProduct({ slug }) {
                   ))}
                 </select>
               ))}
-
-              {(invBranch !== 'all' || activeAttrFilters.length > 0) && (
+              {filtersOn && (
                 <button
                   type="button"
                   onClick={() => {
                     setInvBranch('all');
                     setAttrFilters({});
                   }}
-                  className="h-8 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] px-2.5 text-[11px] font-semibold text-[var(--brand-strong)] hover:brightness-95"
+                  className="btn-quiet btn-sm"
                 >
-                  Reset filters
+                  Clear filters
                 </button>
               )}
+            </div>
+          </header>
 
-              <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-0.5 text-[11px] font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setShowOnlyAvailable(true)}
-                  className={`rounded-md px-2.5 py-1 ${showOnlyAvailable ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                >
-                  In stock only
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowOnlyAvailable(false)}
-                  className={`rounded-md px-2.5 py-1 ${!showOnlyAvailable ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                >
-                  Show all
-                </button>
-              </div>
-            </div>
-          </div>
+          <KpiGrid columns={3} className="!rounded-none !border-x-0 !border-t-0 !shadow-none">
+            <StatTile size="sm" label="Available" value={selectedAvailable.toLocaleString()} loading={invQuery.isLoading} />
+            <StatTile size="sm" label="Options in stock" value={stockedVariationCount.toLocaleString()} loading={invQuery.isLoading} />
+            <StatTile size="sm" label="Options" value={invByVariation.length.toLocaleString()} loading={invQuery.isLoading} />
+          </KpiGrid>
 
-          <div className="mb-3 grid grid-cols-3 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-            <div className="px-2.5 py-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total stock</p>
-              <p className="text-sm font-bold text-green-700">{selectedAvailable}</p>
+          {invQuery.isError ? (
+            <div className="p-5">
+              <ErrorState error={invQuery.error} title="Stock could not be loaded" onRetry={invQuery.refetch} />
             </div>
-            <div className="border-l border-gray-200 px-2.5 py-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">In-stock variations</p>
-              <p className="text-sm font-bold text-gray-800">{stockedVariationCount}</p>
-            </div>
-            <div className="border-l border-gray-200 px-2.5 py-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total variations</p>
-              <p className="text-sm font-bold text-gray-800">{invByVariation.length}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_3fr] lg:items-start">
-          {!invQuery.isLoading && warehouseSummaries.length > 0 && (
-            <div className="overflow-x-auto -mx-1">
-              <GlobalTable className="table-fixed text-xs">
-                <colgroup>
-                  <col className="w-[60%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[18%]" />
-                </colgroup>
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Warehouse
-                    </th>
-                    <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Qty
-                    </th>
-                    <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Variants
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {warehouseSummaries.map(({ branch, quantity, variationCount }) => {
-                    const branchId = String(branch.id);
-                    const isSelected = invBranch === branchId;
-                    return (
-                      <tr key={branchId} className={isSelected ? 'bg-[var(--brand)]/25' : ''}>
-                        <td
-                          className={`truncate border-l-4 px-2 py-1.5 font-semibold ${
-                            isSelected ? 'border-[var(--brand)] text-[var(--brand-strong)]' : 'border-transparent text-gray-800'
-                          }`}
-                        >
-                          {branch.name}
-                        </td>
-                        <td className="px-2 py-1.5 text-right">
-                          <span
-                            className={`font-mono font-bold ${
-                              isSelected ? 'text-[var(--brand-strong)]' : quantity > 0 ? 'text-green-700' : 'text-gray-400'
-                            }`}
-                          >
-                            {quantity}
-                          </span>
-                        </td>
-                        <td
-                          className={`px-2 py-1.5 text-right font-mono font-semibold ${
-                            isSelected ? 'text-[var(--brand-strong)]' : 'text-gray-600'
-                          }`}
-                        >
-                          {variationCount}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </GlobalTable>
-            </div>
-          )}
-
-          {invQuery.isLoading ? (
-            <p className="py-6 text-center text-sm text-gray-400">Loading inventory…</p>
+          ) : invQuery.isLoading ? (
+            <LoadingBlock rows={5} bare />
           ) : (
-            <div className="overflow-x-auto -mx-1">
-              <GlobalTable className="table-fixed text-xs">
-                <colgroup>
-                  <col className="w-[28%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[14%]" />
-                </colgroup>
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Variation
-                    </th>
-                    <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Product–Option Code
-                    </th>
-                    <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Price
-                    </th>
-                    {showBranchStockBreakdown ? (
-                      visibleBranches.map((w) => (
-                        <th
-                          key={w.id}
-                          className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-                        >
-                          Stock
+            <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,5fr)]">
+              {warehouseSummaries.length > 0 && (
+                <div className="border-b border-slate-200 lg:border-b-0 lg:border-r">
+                  <GlobalTable>
+                    <caption className="sr-only">Stock by warehouse</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Warehouse</th>
+                        <th scope="col" className="text-right">
+                          Available
                         </th>
-                      ))
-                    ) : (
-                      <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                        Total stock
-                      </th>
-                    )}
-                    <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Units
-                    </th>
-                    <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      Presale
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {visibleVariationRows.map((row) => {
-                    const varId = String(row.variation?.id || '__base__');
-                    const varUnits = invUnitsByVariation.get(varId) || [];
-                    const attrLabel =
-                      (row.variation?.attributes || [])
-                        .map((a) => a.valueName)
-                        .filter(Boolean)
-                        .join(' / ') || 'Default';
-                    return (
-                      <tr key={varId} className="hover:bg-gray-50/50">
-                        <td className="px-2 py-1.5">
-                          <div className="flex flex-wrap gap-1">
-                            {(row.variation?.attributes || []).length > 0 ? (
-                              row.variation.attributes.map((a, j) => (
-                                <span
-                                  key={j}
-                                  className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600"
-                                >
-                                  {a.colorHex && (
-                                    <span
-                                      className="h-2.5 w-2.5 rounded-md"
-                                      style={{ backgroundColor: a.colorHex }}
-                                    />
-                                  )}
-                                  {a.valueName}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-gray-400">Default</span>
-                            )}
-                          </div>
-                          {displaySku(row.variation?.sku) && (
-                            <p className="mt-0.5 font-mono text-xs text-gray-400">{displaySku(row.variation.sku)}</p>
-                          )}
-                        </td>
-                        <td className="px-2 py-1.5 font-mono text-[10px] font-semibold text-gray-600">
-                          {getOptionCatalogCode(row.variation)}
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-[11px]">
-                          <span className="font-semibold text-gray-800">
-                            ৳{Number(row.variation?.regularPrice ?? product.price ?? 0).toLocaleString()}
-                          </span>
-                          {row.variation?.salePrice != null && (
-                            <span className="ml-1 text-green-600">
-                              ৳{Number(row.variation.salePrice).toLocaleString()}
-                            </span>
-                          )}
-                        </td>
-                        {showBranchStockBreakdown ? (
-                          visibleBranches.map((w) => {
-                            const wb = row.byBranch[String(w.id)];
-                            if (!wb)
-                              return (
-                                <td key={w.id} className="px-2 py-1.5 text-center font-mono font-bold text-gray-300">
-                                  0
-                                </td>
-                              );
-                            const avail = Math.max(0, Number(wb.onHand || 0) - Number(wb.reserved || 0));
-                            return (
-                              <td key={w.id} className="px-2 py-1.5 text-center">
-                                <span className={`font-mono font-bold ${avail > 0 ? 'text-green-700' : 'text-red-500'}`}>
-                                  {avail}
-                                </span>
-                              </td>
-                            );
-                          })
-                        ) : (
-                          <td className="px-2 py-1.5 text-center">
-                            {(() => {
-                              const avail = availableForSelectedBranch(row);
-                              return (
-                                <span className={`font-mono font-bold ${avail > 0 ? 'text-green-700' : 'text-red-500'}`}>
-                                  {avail}
-                                </span>
-                              );
-                            })()}
-                          </td>
-                        )}
-                        <td className="px-2 py-1.5 text-center">
-                          {varUnits.length > 0 ? (
-                            <button
-                              onClick={() => setUnitsTarget({ label: attrLabel, units: varUnits })}
-                              className="rounded-md bg-gray-900 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-gray-700"
-                            >
-                              {varUnits.length} unit{varUnits.length !== 1 ? 's' : ''}
-                            </button>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </td>
-                        {/* Read-only here. Presale eligibility is set on the
-                            product's Presale step, next to the options it
-                            applies to and before the materials that decide how
-                            many units it allows — editing it from a stock view
-                            divorced it from both. */}
-                        <td className="px-2 py-1.5 text-center">
-                          {row.variation?.overSale ? (
-                            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                              Presale
-                            </span>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </td>
+                        <th scope="col" className="text-right">
+                          Options
+                        </th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </GlobalTable>
-              {!visibleVariationRows.length && (
-                <p className="py-8 text-center text-sm text-gray-400">
-                  No variations have physical stock in this branch. Choose “Show all” to see every variation.
-                </p>
+                    </thead>
+                    <tbody>
+                      {warehouseSummaries.map(({ branch, quantity, variationCount }) => {
+                        const branchId = String(branch.id);
+                        const isSelected = invBranch === branchId;
+                        return (
+                          <tr key={branchId} className={isSelected ? 'bg-slate-50' : ''} aria-current={isSelected || undefined}>
+                            <td className={`font-medium ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>{branch.name}</td>
+                            <td className={`text-right tabular-nums ${quantity > 0 ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>
+                              {quantity.toLocaleString()}
+                            </td>
+                            <td className="text-right tabular-nums text-slate-600">{variationCount}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </GlobalTable>
+                </div>
               )}
+
+              <div className="min-w-0">
+                {visibleVariationRows.length ? (
+                  <GlobalTable>
+                    <caption className="sr-only">Options and their stock</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Option</th>
+                        <th scope="col" className="hidden md:table-cell">
+                          Code
+                        </th>
+                        <th scope="col" className="text-right">
+                          Price
+                        </th>
+                        {showBranchStockBreakdown ? (
+                          visibleBranches.map((w) => (
+                            <th key={w.id} scope="col" className="text-right">
+                              <span className="sr-only">{w.name} </span>Stock
+                            </th>
+                          ))
+                        ) : (
+                          <th scope="col" className="text-right">
+                            Stock
+                          </th>
+                        )}
+                        <th scope="col" className="text-right">
+                          Pieces
+                        </th>
+                        <th scope="col" className="hidden sm:table-cell">
+                          Presale
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleVariationRows.map((row) => {
+                        const varId = String(row.variation?.id || '__base__');
+                        const varUnits = invUnitsByVariation.get(varId) || [];
+                        const attrs = row.variation?.attributes || [];
+                        const attrLabel =
+                          attrs
+                            .map((a) => a.valueName)
+                            .filter(Boolean)
+                            .join(' / ') || 'Default';
+                        const stockCell = (avail, key) => (
+                          <td key={key} className={`text-right tabular-nums ${avail > 0 ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>
+                            {avail}
+                          </td>
+                        );
+                        return (
+                          <tr key={varId}>
+                            <td>
+                              <div className="flex flex-wrap gap-1">
+                                {attrs.length > 0 ? (
+                                  attrs.map((a, j) => <OptionChip key={j} name={a.valueName} hex={a.colorHex} />)
+                                ) : (
+                                  <span className="text-[13px] text-slate-500">Default</span>
+                                )}
+                              </div>
+                              {displaySku(row.variation?.sku) && (
+                                <p className="ops-code mt-0.5 text-xs text-slate-500">{displaySku(row.variation.sku)}</p>
+                              )}
+                            </td>
+                            <td className="ops-code hidden text-[13px] text-slate-700 md:table-cell">{getOptionCatalogCode(row.variation)}</td>
+                            <td className="whitespace-nowrap text-right tabular-nums">
+                              <span className="font-medium text-slate-900">
+                                ৳{Number(row.variation?.regularPrice ?? product.price ?? 0).toLocaleString()}
+                              </span>
+                              {row.variation?.salePrice != null && (
+                                <span className="block text-xs text-emerald-700">
+                                  Sale ৳{Number(row.variation.salePrice).toLocaleString()}
+                                </span>
+                              )}
+                            </td>
+                            {showBranchStockBreakdown
+                              ? visibleBranches.map((w) => {
+                                  const wb = row.byBranch[String(w.id)];
+                                  const avail = wb ? Math.max(0, Number(wb.onHand || 0) - Number(wb.reserved || 0)) : 0;
+                                  return stockCell(avail, w.id);
+                                })
+                              : stockCell(availableForSelectedBranch(row), 'total')}
+                            <td className="text-right">
+                              {varUnits.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setUnitsTarget({ label: attrLabel, units: varUnits })}
+                                  className="btn-ghost btn-sm"
+                                  aria-label={`${varUnits.length} pieces of ${attrLabel} — show barcodes`}
+                                >
+                                  {varUnits.length}
+                                </button>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            {/* Read-only here. Presale eligibility is set on the
+                                product's Presale step, next to the options it
+                                applies to and before the materials that decide how
+                                many units it allows — editing it from a stock view
+                                divorced it from both. */}
+                            <td className="hidden sm:table-cell">
+                              {row.variation?.overSale ? <Badge tone="warning">Presale</Badge> : <span className="text-slate-400">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </GlobalTable>
+                ) : (
+                  <EmptyState
+                    compact
+                    title={showOnlyAvailable ? 'No option is in stock here' : 'No options match'}
+                    hint={showOnlyAvailable ? 'Choose “All options” to see every option.' : 'Clear the filters to see every option.'}
+                  />
+                )}
+              </div>
             </div>
           )}
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* ── UNIT SERIALS MODAL ─────────────────────────────────────────── */}
+      {/* ── Piece barcodes ───────────────────────────────────────────────── */}
       {unitsTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setUnitsTarget(null)}
-        >
-          <div
-            className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-md bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <div>
-                <h3 className="font-bold text-gray-900">Unit serials</h3>
-                <p className="mt-0.5 text-sm text-gray-500">{unitsTarget.label}</p>
-              </div>
-              <button onClick={() => setUnitsTarget(null)} className="rounded-md p-2 text-gray-400 hover:bg-gray-100">
-                <FiX />
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <GlobalTable className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  <tr>
-                    <th className="px-5 py-3">Barcode</th>
-                    <th className="px-5 py-3">Serial</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Produced by</th>
-                    <th className="px-5 py-3">Order</th>
+        <ModalShell title="Pieces" subtitle={unitsTarget.label} size="lg" onClose={() => setUnitsTarget(null)}>
+          <div className="-mx-5 -my-5 sm:-mx-6">
+            <GlobalTable>
+              <caption className="sr-only">Pieces of {unitsTarget.label}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Barcode</th>
+                  <th scope="col" className="hidden sm:table-cell">
+                    Serial
+                  </th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="hidden md:table-cell">
+                    Made by
+                  </th>
+                  <th scope="col">Order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unitsTarget.units.map((unit) => (
+                  <tr key={unit.id}>
+                    <td className="ops-code text-[13px] text-slate-900">{unit.barcode}</td>
+                    <td className="ops-code hidden text-[13px] text-slate-500 sm:table-cell">{unit.unitSerial || '—'}</td>
+                    <td>
+                      <UnitStatusPill status={unit.status} />
+                    </td>
+                    <td className="hidden text-[13px] text-slate-600 md:table-cell">{unit.producedBy?.name || '—'}</td>
+                    <td>
+                      {unit.orderItem?.orderNo ? (
+                        <Link href={`/orders/${unit.orderItem.orderNo}`} className="ops-code text-[13px] text-slate-900 hover:underline">
+                          #{unit.orderItem.orderNo}
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {unitsTarget.units.map((unit) => {
-                    const statusColors = {
-                      IN_PRODUCTION: 'bg-sky-50 text-sky-700',
-                      AVAILABLE: 'bg-green-50 text-green-700',
-                      RESERVED: 'bg-amber-50 text-amber-700',
-                      SOLD: 'bg-gray-100 text-gray-500',
-                      DEFECTIVE: 'bg-red-50 text-red-600'
-                    };
-                    return (
-                      <tr key={unit.id}>
-                        <td className="px-5 py-3 font-mono text-xs text-gray-700">{unit.barcode}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-gray-500">{unit.unitSerial}</td>
-                        <td className="px-5 py-3">
-                          <span
-                            className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${statusColors[unit.status] || 'bg-gray-100 text-gray-500'}`}
-                          >
-                            {(unit.status || '').replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-gray-600">{unit.producedBy?.name || '—'}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-gray-500">{unit.orderItem?.orderNo || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </GlobalTable>
-            </div>
+                ))}
+              </tbody>
+            </GlobalTable>
           </div>
-        </div>
+        </ModalShell>
       )}
-
-      {/* ── SHORT DESCRIPTION ───────────────────────────────────────────── */}
-      {product.shortDescription && (
-        <div className={card}>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <FiBox size={12} /> Description
-          </p>
-          <p className="text-sm text-gray-700 leading-relaxed">{product.shortDescription}</p>
-        </div>
-      )}
-
-      {/* ── BOTTOM ACTIONS ──────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 pt-2">
-        <button
-          onClick={() => router.push(`/products/${slug}`)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[var(--brand)] text-white rounded-md text-sm font-semibold hover:brightness-95 transition"
-        >
-          <MdEdit size={16} /> Edit
-        </button>
-        <button
-          onClick={handleDelete}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 transition"
-        >
-          <MdDelete size={16} /> Delete
-        </button>
-      </div>
     </div>
   );
 }

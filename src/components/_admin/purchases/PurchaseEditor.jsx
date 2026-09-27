@@ -11,19 +11,20 @@
 import { useQuery } from 'react-query';
 
 import { getPurchase } from 'src/services';
-import { Notice } from 'src/components/_admin/ui/primitives';
+import { EmptyState, ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
 import PurchaseForm from './PurchaseForm';
 
 export default function PurchaseEditor({ id }) {
-  const { data, isLoading } = useQuery(['purchase', id], () => getPurchase(id));
+  const { data, isLoading, isError, error, refetch } = useQuery(['purchase', id], () => getPurchase(id));
   const purchase = data?.data;
 
-  if (isLoading) return <p className="p-8 text-sm text-slate-400">Loading purchase…</p>;
+  if (isLoading) return <LoadingBlock rows={6} />;
+  if (isError && !purchase) return <ErrorState error={error} title="This purchase could not be loaded" onRetry={refetch} />;
   if (!purchase) {
     return (
-      <Notice tone="bad" title="Purchase not found">
-        It may have been removed.
-      </Notice>
+      <div className="card-ui">
+        <EmptyState title="Purchase not found" hint="It may have been removed." />
+      </div>
     );
   }
 

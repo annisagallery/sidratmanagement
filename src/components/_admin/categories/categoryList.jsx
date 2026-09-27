@@ -8,10 +8,12 @@ import * as api from 'src/services';
 import { alertError, confirmAction, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import Badge from 'src/components/_admin/ui/Badge';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
+import { RecordStatus } from 'src/components/_admin/ui/Badge';
 
 const STATUS_OPTS = [
   { label: 'All Status', value: '' },
@@ -19,16 +21,7 @@ const STATUS_OPTS = [
   { label: 'Inactive', value: 'inactive' }
 ];
 
-function StatusBadge({ status }) {
-  const map = { active: 'bg-emerald-100 text-emerald-700', inactive: 'bg-red-100 text-red-700' };
-  return (
-    <span
-      className={`inline-block rounded-md px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] || 'bg-slate-100 text-slate-600'}`}
-    >
-      {status}
-    </span>
-  );
-}
+const StatusBadge = ({ status }) => <RecordStatus status={status} />;
 
 export default function CategoryList() {
   const router = useRouter();
@@ -57,7 +50,7 @@ export default function CategoryList() {
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(
     ['admin-categories', params],
     () => api.getCategoriesByAdmin(params),
     {
@@ -146,17 +139,17 @@ export default function CategoryList() {
             {c.image?.path ? (
               <Image src={c.image.path} alt={c.name} fill className="object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-lg font-bold text-slate-300">
+              <div className="flex h-full w-full items-center justify-center text-lg font-semibold text-slate-400">
                 {c.name?.[0]}
               </div>
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-slate-800">{c.name}</p>
+            <p className="text-[13px] font-semibold text-slate-900">{c.name}</p>
             {c.isSystem && (
-              <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                <MdLock size={11} aria-hidden="true" /> Permanent POS category
-              </span>
+              <Badge className="mt-1">
+                <MdLock size={12} aria-hidden="true" /> Permanent POS category
+              </Badge>
             )}
           </div>
         </div>
@@ -166,12 +159,14 @@ export default function CategoryList() {
       key: 'slug',
       label: 'Slug',
       sortable: true,
-      render: (c) => <span className="font-mono text-xs text-slate-400">{c.slug}</span>
+      hideBelow: 'lg',
+      render: (c) => <span className="font-mono text-xs text-slate-500">{c.slug}</span>
     },
     {
       key: 'createdAt',
       label: 'Created',
       sortable: true,
+      hideBelow: 'xl',
       render: (c) => (
         <span className="text-xs text-slate-500">
           {c.createdAt ? fDate(c.createdAt) : '—'}
@@ -182,49 +177,42 @@ export default function CategoryList() {
       key: 'status',
       label: 'Status',
       sortable: true,
-      align: 'center',
       render: (c) => <StatusBadge status={c.status} />
     },
     {
       key: 'isVisibleInEcom',
-      label: 'Ecommerce',
+      label: 'On the storefront',
       sortable: true,
-      align: 'center',
-      render: (c) => (
-        <span
-          className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
-            c.isVisibleInEcom !== false
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-slate-100 text-slate-500'
-          }`}
-        >
-          {c.isVisibleInEcom !== false ? <MdVisibility size={14} /> : <MdVisibilityOff size={14} />}
-          {c.isVisibleInEcom !== false ? 'Visible' : 'Hidden'}
-        </span>
-      )
+      hideBelow: 'md',
+      render: (c) =>
+        c.isVisibleInEcom !== false ? (
+          <Badge tone="success">
+            <MdVisibility size={14} aria-hidden /> Visible
+          </Badge>
+        ) : (
+          <Badge>
+            <MdVisibilityOff size={14} aria-hidden /> Hidden
+          </Badge>
+        )
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (c) => (
-        <button
-          onClick={() => router.push(`/categories/${c.slug}`)}
-          className="rounded-md p-2 transition hover:bg-slate-100"
-          style={{ color: 'var(--brand-strong)' }}
-          title="Edit"
-        >
-          <MdEdit size={17} />
+        <button type="button" onClick={(event) => { stopRow(event); router.push(`/categories/${c.slug}`); }} className="btn-ghost btn-sm">
+          Edit
         </button>
       )
     }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Categories" subtitle={`${total} categor${total !== 1 ? 'ies' : 'y'} total`}>
-        <button onClick={() => router.push('/categories/add')} className="btn-brand">
-          <MdAdd size={18} /> Add Category
+        <button type="button" onClick={() => router.push('/categories/add')} className="btn-brand">
+          <MdAdd size={18} /> Add category
         </button>
       </PageHeader>
 
@@ -247,6 +235,7 @@ export default function CategoryList() {
             setPage(1);
           }}
           className="select-ui min-w-[140px]"
+          aria-label="Status"
         >
           {STATUS_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -257,15 +246,33 @@ export default function CategoryList() {
       </ListToolbar>
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={categories}
         sort={sort}
         rowKey={(category) => category.slug}
+        caption="Categories"
+        onRowClick={(c) => router.push(`/categories/${c.slug}`)}
+        rowLabel={(c) => `Edit ${c.name}`}
         selectionLabel="categories"
         exportFileName="categories-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
-        empty={<EmptyState title="No categories found" icon={MdInbox} />}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        empty={
+          <EmptyState
+            title={search || status ? 'No categories match these filters' : 'No categories yet'}
+            icon={MdInbox}
+            action={
+              search || status ? null : (
+                <button type="button" onClick={() => router.push('/categories/add')} className="btn-brand">
+                  <MdAdd size={18} aria-hidden /> Add category
+                </button>
+              )
+            }
+          />
+        }
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="categories" />}
       />
     </div>

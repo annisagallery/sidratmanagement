@@ -28,7 +28,7 @@ import { FiArrowRight, FiList, FiRefreshCw } from 'react-icons/fi';
 
 import { adminGetBranches, getInventoryTransactions } from 'src/services';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
-import { EmptyRow, PageBar, Pill, Section, Toolbar, oid, qty } from 'src/components/_admin/ui/primitives';
+import { EmptyRow, PageBar, Pill, Section, Toolbar, oid, qty, LoadingRows, ErrorRow } from 'src/components/_admin/ui/primitives';
 import { variationLabel } from './shared';
 
 /**
@@ -99,7 +99,7 @@ export default function StockMovements() {
   const rows = movementsQuery.data?.data || [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Inventory"
         title="Stock movements"
@@ -179,7 +179,9 @@ export default function StockMovements() {
           </thead>
           <tbody>
             {movementsQuery.isLoading ? (
-              <EmptyRow colSpan={8} title="Loading movements…" />
+              <LoadingRows colSpan={8} />
+            ) : movementsQuery.isError ? (
+              <ErrorRow colSpan={8} error={movementsQuery.error} onRetry={movementsQuery.refetch} />
             ) : rows.length ? (
               rows.map((row) => {
                 const meta = MOVEMENT[row.type] || { label: row.type, tone: 'neutral', dir: 'either' };
@@ -189,7 +191,7 @@ export default function StockMovements() {
                 const href = row.reference ? REFERENCE_HREF[row.reference.kind]?.(row.reference.id) : null;
                 return (
                   <tr key={oid(row)}>
-                    <td className="whitespace-nowrap text-[11px] text-slate-500">
+                    <td className="whitespace-nowrap text-xs text-slate-500">
                       {row.createdAt ? format(new Date(row.createdAt), 'dd MMM, hh:mm a') : '—'}
                     </td>
                     <td>
@@ -198,32 +200,32 @@ export default function StockMovements() {
                     <td>
                       <p className="font-medium text-slate-800">{row.product?.name || 'Unknown product'}</p>
                       {row.variation ? (
-                        <p className="text-[11px] text-slate-400">{variationLabel(row.variation)}</p>
+                        <p className="text-xs text-slate-500">{variationLabel(row.variation)}</p>
                       ) : null}
                     </td>
                     <td>
                       {origin ? (
                         <Pill tone={origin.tone}>{origin.label}</Pill>
                       ) : (
-                        <span className="text-[11px] text-slate-300">—</span>
+                        <span className="text-xs text-slate-400">—</span>
                       )}
                     </td>
                     <td>
                       {row.reference ? (
                         <>
                           {href ? (
-                            <Link href={href} className="ops-code text-[12px] font-bold text-[var(--brand-strong)] hover:underline">
+                            <Link href={href} className="ops-code text-[12px] font-semibold text-slate-900 hover:underline">
                               {row.reference.label}
                             </Link>
                           ) : (
-                            <span className="ops-code text-[12px] font-bold text-slate-700">{row.reference.label}</span>
+                            <span className="ops-code text-[12px] font-semibold text-slate-700">{row.reference.label}</span>
                           )}
                           {row.reference.detail ? (
-                            <p className="truncate text-[11px] text-slate-400">{row.reference.detail}</p>
+                            <p className="truncate text-xs text-slate-500">{row.reference.detail}</p>
                           ) : null}
                         </>
                       ) : (
-                        <span className="text-[11px] text-slate-300">—</span>
+                        <span className="text-xs text-slate-400">—</span>
                       )}
                     </td>
                     <td className="text-slate-600">
@@ -238,8 +240,8 @@ export default function StockMovements() {
                       </span>
                     </td>
                     <td
-                      className={`text-right text-[13px] font-bold tabular-nums ${
-                        meta.dir === 'hold' ? 'text-slate-500' : outward ? 'text-rose-600' : 'text-emerald-700'
+                      className={`text-right text-[13px] font-semibold tabular-nums ${
+                        meta.dir === 'hold' ? 'text-slate-500' : outward ? 'text-rose-700' : 'text-emerald-700'
                       }`}
                     >
                       {meta.dir === 'hold' ? '' : outward ? '−' : '+'}

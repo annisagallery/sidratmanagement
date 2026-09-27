@@ -8,6 +8,8 @@
 // closed day and had nowhere to put hours. The server keeps the old columns in
 // sync from whatever is saved here, so nothing that still reads them breaks.
 
+import { Switch } from 'src/components/_admin/ui/fields';
+
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Mirrors the server's fallback (utils/branchHours): a branch saved before this
@@ -52,69 +54,50 @@ export default function WeeklyHoursEditor({ value, legacy, onChange }) {
   const openCount = week.filter((d) => d.isOpen).length;
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-        <div>
-          <p className="text-sm font-semibold text-slate-700">Weekly schedule</p>
-          <p className="text-[11px] text-slate-400">
-            The default week. The branch calendar marks exceptions to it.
-          </p>
-        </div>
-        <span className="text-[11px] font-medium text-slate-400">
+    <div className="overflow-hidden rounded-lg border border-slate-200">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+        <p className="text-[13px] text-slate-600">The default week. The branch calendar marks exceptions to it.</p>
+        <span className="shrink-0 text-xs font-medium text-slate-600">
           {openCount === 7 ? 'Open every day' : `${7 - openCount} day${openCount === 6 ? '' : 's'} closed`}
         </span>
       </div>
 
-      <div className="divide-y divide-slate-50">
+      <ul className="divide-y divide-slate-100">
         {week.map((day, i) => (
-          <div key={WEEKDAYS[i]} className="flex flex-wrap items-center gap-3 px-4 py-2">
-            <span className="w-[84px] shrink-0 text-xs font-medium text-slate-600">{WEEKDAYS[i]}</span>
-
-            <button
-              type="button"
-              onClick={() => update(i, { isOpen: !day.isOpen })}
-              className={`w-[70px] shrink-0 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wider transition ${
-                day.isOpen
-                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200'
-                  : 'bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-200'
-              }`}
-            >
-              {day.isOpen ? 'Open' : 'Closed'}
-            </button>
+          <li key={WEEKDAYS[i]} className="flex min-h-[52px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2">
+            <span className="w-24 shrink-0 text-[13px] font-medium text-slate-900">{WEEKDAYS[i]}</span>
+            <Switch checked={day.isOpen} onChange={(on) => update(i, { isOpen: on })} label={`${WEEKDAYS[i]}: open`} />
+            <span className={`w-14 shrink-0 text-[13px] ${day.isOpen ? 'text-slate-700' : 'text-slate-500'}`}>{day.isOpen ? 'Open' : 'Closed'}</span>
 
             {day.isOpen ? (
-              <>
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="time"
                   aria-label={`${WEEKDAYS[i]} opening time`}
                   value={day.openTime}
                   onChange={(e) => update(i, { openTime: e.target.value })}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+                  className="input-ui w-32"
                 />
-                <span className="text-xs text-slate-300">–</span>
+                <span className="text-slate-400" aria-hidden>
+                  –
+                </span>
                 <input
                   type="time"
                   aria-label={`${WEEKDAYS[i]} closing time`}
                   value={day.closeTime}
                   onChange={(e) => update(i, { closeTime: e.target.value })}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+                  className="input-ui w-32"
                 />
                 {(day.openTime || day.closeTime) && (
-                  <button
-                    type="button"
-                    onClick={() => copyToAllOpen(i)}
-                    className="text-[11px] font-medium text-slate-400 underline-offset-2 transition hover:text-[var(--brand-strong)] hover:underline"
-                  >
+                  <button type="button" onClick={() => copyToAllOpen(i)} className="btn-ghost btn-sm">
                     Copy to all open days
                   </button>
                 )}
-              </>
-            ) : (
-              <span className="text-xs text-slate-300">No hours</span>
-            )}
-          </div>
+              </div>
+            ) : null}
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

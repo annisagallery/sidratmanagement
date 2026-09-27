@@ -20,7 +20,9 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
-import Swal from 'sweetalert2';
+import { alertError, confirmDelete, promptText, toastSuccess } from 'src/utils/swal';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import {
   FiCreditCard,
   FiEdit2,
@@ -54,12 +56,10 @@ import {
   Section,
   SectionBody,
   StatTile,
-  errorAlert,
   fieldClass,
   money,
   oid,
-  qty,
-  toast
+  qty
 } from 'src/components/_admin/ui/primitives';
 import { variationLabel } from 'src/components/_admin/inventory/shared';
 import { PaymentStatusPill, PurchaseStatusPill, dueOf, outstandingUnits } from './shared';
@@ -106,32 +106,32 @@ export default function PurchaseDetail({ id }) {
       }),
     {
       onSuccess: (response) => {
-        toast(response?.message || 'Stock received');
+        toastSuccess(response?.message || 'Stock received');
         setReceiveDraft({});
         queryClient.invalidateQueries(['purchase', id]);
         queryClient.invalidateQueries('purchases');
         queryClient.invalidateQueries('inventory-transactions');
       },
-      onError: (error) => errorAlert('The stock could not be received', error)
+      onError: (error) => alertError(error, { title: 'The stock could not be received' })
     }
   );
 
   const pay = useMutation(() => addPurchasePayment({ id, ...payment, amount: num(payment.amount) }), {
     onSuccess: () => {
-      toast('Payment recorded');
+      toastSuccess('Payment recorded');
       setPayment({ amount: '', method: 'cash', reference: '', note: '' });
       queryClient.invalidateQueries(['purchase', id]);
       queryClient.invalidateQueries('purchases');
     },
-    onError: (error) => errorAlert('The payment could not be recorded', error)
+    onError: (error) => alertError(error, { title: 'The payment could not be recorded' })
   });
 
   const removePayment = useMutation((paymentId) => deletePurchasePayment({ id, paymentId }), {
     onSuccess: () => {
-      toast('Payment removed');
+      toastSuccess('Payment removed');
       queryClient.invalidateQueries(['purchase', id]);
     },
-    onError: (error) => errorAlert('The payment could not be removed', error)
+    onError: (error) => alertError(error, { title: 'The payment could not be removed' })
   });
 
   /**
@@ -152,47 +152,78 @@ export default function PurchaseDetail({ id }) {
       queryClient.invalidateQueries('purchases');
       queryClient.invalidateQueries('inventory-transactions');
       queryClient.invalidateQueries('inventory-product-stock');
-      Swal.fire({ icon: 'success', title: 'Purchase voided', text: result?.message, confirmButtonText: 'Done' });
+      toastSuccess('Purchase voided', result?.message);
     },
-    onError: (error) => errorAlert('The purchase could not be voided', error)
+    onError: (error) => alertError(error, { title: 'The purchase could not be voided' })
   });
 
   const confirmVoid = async () => {
     const received = (purchase.items || []).reduce((sum, item) => sum + Number(item.receivedQuantity || 0), 0);
-    const { isConfirmed, value } = await Swal.fire({
+    const reason = await promptText({
+      tone: 'danger',
       title: `Void ${purchase.purchaseNo}?`,
       text: received
         ? `${received} unit${received === 1 ? '' : 's'} already received will be taken back off ${purchase.branch?.name || 'the warehouse'}. Anything sold since cannot be, and the void will be refused if so.`
         : 'Nothing has been received against it, so the order is simply withdrawn.',
-      icon: 'warning',
-      input: 'text',
-      inputLabel: 'Reason (optional)',
-      inputPlaceholder: 'Ordered in error…',
-      showCancelButton: true,
-      confirmButtonText: 'Void it',
-      cancelButtonText: 'Keep it'
+      label: 'Reason (optional)',
+      placeholder: 'e.g. ordered in error',
+      required: false,
+      multiline: false,
+      confirmText: 'Void purchase'
     });
-    if (isConfirmed) voidIt.mutate(value || '');
+    if (reason !== null) voidIt.mutate(reason);
   };
 
   const printOrder = () =>
     printPurchaseOrder(purchase, settings).catch((error) =>
-      errorAlert('The purchase order could not be printed', error)
+      alertError(error, { title: 'The purchase order could not be printed' })
     );
 
   if (purchaseQuery.isLoading) {
-    return <p className="p-8 text-sm text-slate-400">Loading purchase…</p>;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div className="skeleton h-8 w-56" />
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="card-ui h-[104px] animate-pulse" />
+          ))}
+        </div>
+        <div className="card-ui h-72 animate-pulse" />
+      </div>
+    );
+  }
+  if (purchaseQuery.isError && !purchase) {
+    return <ErrorState error={purchaseQuery.error} title="This purchase could not be loaded" onRetry={purchaseQuery.refetch} />;
   }
   if (!purchase) {
     return (
-      <Notice tone="bad" title="Purchase not found">
-        It may have been removed.
-      </Notice>
+      <div className="card-ui">
+        <EmptyState
+          title="Purchase not found"
+          hint="It may have been removed."
+          action={
+            <button type="button" onClick={() => router.push('/purchases')} className="btn-ghost">
+              Back to purchases
+            </button>
+          }
+        />
+      </div>
     );
   }
 
+  const confirmRemovePayment = async (row) => {
+    const confirmed = await confirmDelete({
+      title: 'Remove this payment?',
+      subject: `${money(row.amount)} by ${row.method}${row.reference ? ` · ${row.reference}` : ''}`,
+      text: 'The amount goes back onto what is owed for this purchase.',
+      confirmText: 'Remove payment',
+      recoverable: false
+    });
+    if (confirmed) removePayment.mutate(oid(row));
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Purchases"
         title={purchase.purchaseNo}
@@ -202,19 +233,28 @@ export default function PurchaseDetail({ id }) {
         <PurchaseStatusPill status={purchase.status} />
         <PaymentStatusPill status={purchase.paymentStatus} />
         <button type="button" onClick={printOrder} className="btn-ghost">
-          <FiPrinter size={14} /> Print
+          <FiPrinter size={14} aria-hidden /> Print
         </button>
         {untouched && purchase.status !== 'CANCELLED' ? (
           <button type="button" onClick={() => router.push(`/purchases/${id}/edit`)} className="btn-ghost">
-            <FiEdit2 size={14} /> Edit
+            <FiEdit2 size={14} aria-hidden /> Edit
           </button>
         ) : null}
         {/* Void stays available after receiving — that is the case it exists
             for. Only an already-cancelled purchase has nothing to withdraw. */}
         {purchase.status !== 'CANCELLED' ? (
-          <button type="button" onClick={confirmVoid} disabled={voidIt.isLoading} className="btn-ghost !text-rose-600">
-            <FiSlash size={14} /> {voidIt.isLoading ? 'Voiding…' : 'Void'}
-          </button>
+          <ActionMenu
+            label={`More actions for ${purchase.purchaseNo}`}
+            items={[
+              {
+                label: voidIt.isLoading ? 'Voiding…' : 'Void purchase…',
+                icon: FiSlash,
+                tone: 'danger',
+                onClick: confirmVoid,
+                disabled: voidIt.isLoading
+              }
+            ]}
+          />
         ) : null}
       </PageBar>
 
@@ -258,17 +298,17 @@ export default function PurchaseDetail({ id }) {
                     <p className="font-medium text-slate-800">
                       {item.product?.name || 'Unknown product'}
                       {item.product?.code ? (
-                        <span className="ops-code ml-2 text-[11px] text-slate-400">#{item.product.code}</span>
+                        <span className="ops-code ml-2 text-xs text-slate-500">#{item.product.code}</span>
                       ) : null}
                     </p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {item.variation ? variationLabel(item.variation) : 'Base product'}
                       {item.salePrice ? ` · shelf ${money(item.salePrice)}` : ' · unpriced'}
                     </p>
                   </td>
                   <td className="text-right tabular-nums text-slate-600">{money(item.unitCost)}</td>
                   <td className="text-right font-semibold tabular-nums text-slate-800">{qty(item.quantity)}</td>
-                  <td className={`text-right font-semibold tabular-nums ${left > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                  <td className={`text-right font-semibold tabular-nums ${left > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
                     {qty(item.receivedQuantity)}
                   </td>
                   <td className="text-right font-semibold tabular-nums text-slate-800">{money(item.subTotal)}</td>
@@ -284,7 +324,7 @@ export default function PurchaseDetail({ id }) {
                           }
                         />
                       ) : (
-                        <span className="text-[11px] font-semibold text-emerald-700">Complete</span>
+                        <span className="text-xs font-medium text-emerald-700">All received</span>
                       )}
                     </td>
                   ) : null}
@@ -318,9 +358,9 @@ export default function PurchaseDetail({ id }) {
                 type="button"
                 onClick={() => receive.mutate()}
                 disabled={receive.isLoading}
-                className="btn-brand mt-3 h-11 w-full"
+                className="btn-brand mt-3 w-full"
               >
-                <FiInbox size={15} /> {receive.isLoading ? 'Receiving…' : 'Receive into stock'}
+                <FiInbox size={15} aria-hidden /> {receive.isLoading ? 'Receiving…' : 'Receive into stock'}
               </button>
             ) : null}
           </div>
@@ -336,14 +376,16 @@ export default function PurchaseDetail({ id }) {
               <th>Reference</th>
               <th>Recorded by</th>
               <th className="text-right">Amount</th>
-              <th className="w-10" />
+              <th className="w-10">
+                <span className="sr-only">Remove</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {purchase.payments?.length ? (
               purchase.payments.map((row) => (
                 <tr key={oid(row)}>
-                  <td className="whitespace-nowrap text-[12px] text-slate-500">
+                  <td className="whitespace-nowrap text-slate-600">
                     {row.paidAt ? format(new Date(row.paidAt), 'dd MMM yyyy') : '—'}
                   </td>
                   <td className="capitalize text-slate-700">{row.method}</td>
@@ -353,11 +395,13 @@ export default function PurchaseDetail({ id }) {
                   <td className="text-right">
                     <button
                       type="button"
-                      onClick={() => removePayment.mutate(oid(row))}
-                      className="rounded-md p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                      aria-label="Remove this payment"
+                      onClick={() => confirmRemovePayment(row)}
+                      disabled={removePayment.isLoading}
+                      className="btn-icon btn-icon-sm btn-icon-danger"
+                      aria-label={`Remove the ${money(row.amount)} payment`}
+                      title="Remove payment"
                     >
-                      <FiTrash2 size={14} />
+                      <FiTrash2 size={14} aria-hidden />
                     </button>
                   </td>
                 </tr>
@@ -372,7 +416,7 @@ export default function PurchaseDetail({ id }) {
           <SectionBody className="border-t border-slate-200 p-4">
             <div className="grid gap-3 md:grid-cols-[140px_140px_1fr_auto]">
               <label className="block">
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">Amount</span>
+                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Amount</span>
                 <input
                   type="number"
                   step="0.01"
@@ -385,7 +429,7 @@ export default function PurchaseDetail({ id }) {
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">Method</span>
+                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Method</span>
                 <select
                   value={payment.method}
                   onChange={(event) => setPayment((current) => ({ ...current, method: event.target.value }))}
@@ -399,7 +443,7 @@ export default function PurchaseDetail({ id }) {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">Reference</span>
+                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Reference</span>
                 <input
                   value={payment.reference}
                   onChange={(event) => setPayment((current) => ({ ...current, reference: event.target.value }))}
@@ -412,7 +456,7 @@ export default function PurchaseDetail({ id }) {
                   type="button"
                   onClick={() => pay.mutate()}
                   disabled={pay.isLoading || num(payment.amount) <= 0}
-                  className="btn-brand h-[38px] w-full md:w-auto"
+                  className="btn-brand w-full md:w-auto"
                 >
                   {pay.isLoading ? 'Saving…' : 'Record payment'}
                 </button>

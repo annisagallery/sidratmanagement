@@ -15,8 +15,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
-import Swal from 'sweetalert2';
+import { promptText, confirmAction, toastSuccess, alertError } from 'src/utils/swal';
 import { FiCheckSquare, FiEdit2, FiPlay, FiPrinter, FiTag, FiXCircle } from 'react-icons/fi';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import { LuFactory } from 'react-icons/lu';
 
 import {
@@ -37,10 +39,10 @@ import {
   Section,
   SectionBody,
   StatTile,
-  errorAlert,
   oid,
   qty,
-  toast
+  LoadingRows,
+  ErrorRow
 } from 'src/components/_admin/ui/primitives';
 import {
   BatchStatusPill,
@@ -94,7 +96,7 @@ export default function BatchDetail({ batchNo }) {
         title: `${batch?.batchNo || 'Batch'} stickers`
       });
     } catch (error) {
-      errorAlert('The sticker sheet could not be built', error);
+      alertError(error, { title: 'The sticker sheet could not be built' });
     } finally {
       setBuilding(false);
     }
@@ -109,43 +111,66 @@ export default function BatchDetail({ batchNo }) {
 
   const start = useMutation(startProductionBatch, {
     onSuccess: () => {
-      toast('Batch started — barcodes are now generated');
+      toastSuccess('Batch started', 'Barcodes are now generated.');
       refresh();
     },
-    onError: (error) => errorAlert('The batch could not be started', error)
+    onError: (error) => alertError(error, { title: 'The batch could not be started' })
   });
 
   const cancel = useMutation(cancelProductionBatch, {
     onSuccess: () => {
-      toast('Batch cancelled');
+      toastSuccess('Batch cancelled');
       refresh();
     },
-    onError: (error) => errorAlert('The batch could not be cancelled', error)
+    onError: (error) => alertError(error, { title: 'The batch could not be cancelled' })
   });
 
   const close = useMutation(closeProductionBatch, {
     onSuccess: (response) => {
       const { voidedUnits = 0, requeuedItems = 0 } = response?.data || {};
-      toast(
-        `Batch closed — ${voidedUnits} unmade piece${voidedUnits === 1 ? '' : 's'} voided${
+      toastSuccess(
+        'Batch closed',
+        `${voidedUnits} unmade piece${voidedUnits === 1 ? '' : 's'} voided${
           requeuedItems ? `, ${requeuedItems} order${requeuedItems === 1 ? '' : 's'} back in the queue` : ''
         }`
       );
       refresh();
       unitsQuery.refetch();
     },
-    onError: (error) => errorAlert('The batch could not be closed', error)
+    onError: (error) => alertError(error, { title: 'The batch could not be closed' })
   });
 
-  if (batchQuery.isLoading) return <div className="h-64 animate-pulse rounded-md bg-slate-100" />;
+  if (batchQuery.isLoading) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div className="skeleton h-8 w-56" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="card-ui h-[104px] animate-pulse" />
+          ))}
+        </div>
+        <div className="card-ui h-72 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (batchQuery.isError) {
+    return <ErrorState error={batchQuery.error} title="This batch could not be loaded" onRetry={batchQuery.refetch} />;
+  }
 
   if (!batch) {
     return (
-      <div className="card-ui p-16 text-center">
-        <p className="text-sm font-semibold text-rose-600">Batch {batchNo} was not found.</p>
-        <button type="button" onClick={() => router.push('/production')} className="btn-ghost mt-4">
-          Back to batches
-        </button>
+      <div className="card-ui">
+        <EmptyState
+          icon={LuFactory}
+          title={`Batch ${batchNo} was not found`}
+          hint="It may have been renumbered, or the link is wrong."
+          action={
+            <button type="button" onClick={() => router.push('/production')} className="btn-ghost">
+              Back to batches
+            </button>
+          }
+        />
       </div>
     );
   }
@@ -179,35 +204,33 @@ export default function BatchDetail({ batchNo }) {
   // short instead, and the reason is kept on the batch.
   const confirmClose = async () => {
     const left = totalPlanned - totalMade;
-    const result = await Swal.fire({
+    const reason = await promptText({
+      tone: 'danger',
       title: `Close ${batch.batchNo} early?`,
-      html: `${totalMade} of ${totalPlanned} pieces were received. The ${left} not made will be voided, and any customer waiting on one goes back to the production queue.`,
-      input: 'text',
-      inputLabel: 'Why is it closing early?',
-      inputPlaceholder: 'e.g. fabric ran out',
-      inputValidator: (value) => (!String(value || '').trim() ? 'A reason is required.' : undefined),
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Close batch',
-      confirmButtonColor: '#e11d48'
+      text: `${totalMade} of ${totalPlanned} pieces were received. The ${left} not made will be voided, and any customer waiting on one goes back to the production queue.`.replace(/<[^>]*>/g, ''),
+      label: 'Why is it closing early?',
+      placeholder: 'e.g. fabric ran out',
+      requiredMessage: 'A reason is required.',
+      multiline: false,
+      confirmText: 'Close batch'
     });
-    if (result.isConfirmed) close.mutate({ id: batchId, note: result.value });
+    if (reason) close.mutate({ id: batchId, note: reason });
   };
 
   const confirmCancel = async () => {
-    const result = await Swal.fire({
+    const confirmed = await confirmAction({
+      tone: 'danger',
+      glyph: 'danger',
       title: `Cancel ${batch.batchNo}?`,
       text: 'Every line is withdrawn and any piece still on the floor is voided. Order items go back to the queue.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Cancel batch',
-      confirmButtonColor: '#e11d48'
+      confirmText: 'Cancel batch',
+      cancelText: 'Keep batch'
     });
-    if (result.isConfirmed) cancel.mutate({ id: batchId });
+    if (confirmed) cancel.mutate({ id: batchId });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Production batch"
         title={batch.batchNo}
@@ -215,11 +238,11 @@ export default function BatchDetail({ batchNo }) {
         back={() => router.push('/production')}
       >
         <button type="button" onClick={() => setEditing(true)} className="btn-ghost">
-          <FiEdit2 size={14} /> Edit
+          <FiEdit2 size={14} aria-hidden /> Edit
         </button>
         {batch.status === 'DRAFT' ? (
           <button type="button" onClick={() => start.mutate(batchId)} disabled={start.isLoading} className="btn-brand">
-            <FiPlay size={14} /> {start.isLoading ? 'Starting…' : 'Start production'}
+            <FiPlay size={14} aria-hidden /> {start.isLoading ? 'Starting…' : 'Start production'}
           </button>
         ) : (
           <button
@@ -229,26 +252,18 @@ export default function BatchDetail({ batchNo }) {
             title="Opens a print-ready PDF with one barcode label per piece"
             className="btn-ghost"
           >
-            <FiPrinter size={14} /> {building ? 'Building PDF…' : 'Stickers'}
+            <FiPrinter size={14} aria-hidden /> {building ? 'Building PDF…' : 'Stickers'}
           </button>
         )}
-        {batch.status === 'IN_PRODUCTION' && totalMade > 0 ? (
-          <button
-            type="button"
-            onClick={confirmClose}
-            disabled={close.isLoading}
-            className="btn-ghost !border-amber-200 !text-amber-700 hover:!bg-amber-50"
-          >
-            <FiCheckSquare size={14} /> Close early
-          </button>
-        ) : ['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
-          <button
-            type="button"
-            onClick={confirmCancel}
-            className="btn-ghost !border-rose-200 !text-rose-600 hover:!bg-rose-50"
-          >
-            <FiXCircle size={14} /> Cancel
-          </button>
+        {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
+          <ActionMenu
+            label={`More actions for ${batch.batchNo}`}
+            items={[
+              batch.status === 'IN_PRODUCTION' && totalMade > 0
+                ? { label: 'Close early…', icon: FiCheckSquare, onClick: confirmClose, disabled: close.isLoading }
+                : { label: 'Cancel batch…', icon: FiXCircle, tone: 'danger', onClick: confirmCancel }
+            ]}
+          />
         ) : null}
       </PageBar>
 
@@ -271,15 +286,15 @@ export default function BatchDetail({ batchNo }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <Section title="Lines" icon={LuFactory} hint={`${items.length} products`}>
+          <Section title="Lines" icon={LuFactory} hint={`${items.length} product${items.length === 1 ? '' : 's'}`}>
             <GlobalTable>
               <thead>
                 <tr>
                   <th>Product</th>
                   <th>For</th>
                   <th>Production codes</th>
-                  <th className="text-center">Planned</th>
-                  <th className="text-center">Received</th>
+                  <th className="text-right">Planned</th>
+                  <th className="text-right">Received</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,19 +308,19 @@ export default function BatchDetail({ batchNo }) {
                         <td>
                           <p className="text-[13px] font-semibold text-slate-800">
                             {item.product?.name}
-                            <span className="ops-code ml-2 text-[11px] font-normal text-slate-400">
+                            <span className="ops-code ml-2 text-xs font-normal text-slate-500">
                               {catalogCode(item.product, item.variation) || '—'}
                             </span>
                           </p>
-                          <p className="text-[11px] text-slate-500">{variationLabel(item.variation)}</p>
-                          {item.note ? <p className="mt-1 text-[11px] text-amber-700">{item.note}</p> : null}
+                          <p className="text-xs text-slate-500">{variationLabel(item.variation)}</p>
+                          {item.note ? <p className="mt-1 text-xs text-amber-700">{item.note}</p> : null}
                         </td>
                         <td>
                           {item.orderItem?.orderNo ? (
                             <div className="space-y-1">
                               <Link
                                 href={`/orders/${item.orderItem.orderNo}`}
-                                className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline"
+                                className="ops-code text-[12px] font-semibold text-slate-900 hover:underline"
                               >
                                 #{item.orderItem.orderNo}
                               </Link>
@@ -321,7 +336,7 @@ export default function BatchDetail({ batchNo }) {
                         </td>
                         <td>
                           {unitsQuery.isLoading ? (
-                            <span className="text-[11px] text-slate-400">Loading…</span>
+                            <span className="text-xs text-slate-500">Loading…</span>
                           ) : codes.length ? (
                             <div className="flex max-w-xs flex-wrap items-center gap-1">
                               {codes.slice(0, 6).map((code) => (
@@ -330,20 +345,20 @@ export default function BatchDetail({ batchNo }) {
                                 </span>
                               ))}
                               {codes.length > 6 ? (
-                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">
                                   +{codes.length - 6}
                                 </span>
                               ) : null}
                               <CopyButton value={codes.join('\n')} label="Copy every unit code on this line" />
                             </div>
                           ) : (
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-xs text-slate-500">
                               {batch.status === 'DRAFT' ? 'Issued when started' : 'None'}
                             </span>
                           )}
                         </td>
-                        <td className="text-center tabular-nums font-semibold text-slate-700">{item.quantity}</td>
-                        <td className="text-center tabular-nums font-bold text-emerald-700">
+                        <td className="text-right tabular-nums font-semibold text-slate-700">{item.quantity}</td>
+                        <td className="text-right tabular-nums font-semibold text-emerald-700">
                           {item.completedQuantity || 0}
                         </td>
                       </tr>
@@ -370,8 +385,10 @@ export default function BatchDetail({ batchNo }) {
                 </thead>
                 <tbody>
                   {unitsQuery.isLoading ? (
-                    <EmptyRow colSpan={5} title="Loading pieces…" />
-                  ) : (unitsQuery.data?.data || []).length ? (
+              <LoadingRows colSpan={5} />
+            ) : unitsQuery.isError ? (
+              <ErrorRow colSpan={5} error={unitsQuery.error} onRetry={unitsQuery.refetch} />
+            ) : (unitsQuery.data?.data || []).length ? (
                     (unitsQuery.data?.data || []).map((unit) => (
                       <tr key={oid(unit)}>
                         <td>
@@ -379,18 +396,18 @@ export default function BatchDetail({ batchNo }) {
                         </td>
                         <td className="text-[12px] text-slate-700">
                           {unit.product?.name}
-                          <span className="block text-[11px] text-slate-400">{variationLabel(unit.variation)}</span>
+                          <span className="block text-xs text-slate-500">{variationLabel(unit.variation)}</span>
                         </td>
                         <td>
                           <UnitStatusPill status={unit.status} />
                           {unit.reversalNote ? (
-                            <span className="mt-0.5 block text-[10px] text-slate-400">{unit.reversalNote}</span>
+                            <span className="mt-0.5 block text-xs text-slate-500">{unit.reversalNote}</span>
                           ) : null}
                         </td>
                         <td className="text-[12px] text-slate-600">
                           {unit.producedBy?.name || '—'}
                           {unit.submittedAt ? (
-                            <span className="block text-[11px] text-slate-400">
+                            <span className="block text-xs text-slate-500">
                               {format(new Date(unit.submittedAt), 'dd MMM, hh:mm a')}
                             </span>
                           ) : null}
@@ -399,7 +416,7 @@ export default function BatchDetail({ batchNo }) {
                           {unit.orderItem?.orderNo ? (
                             <Link
                               href={`/orders/${unit.orderItem.orderNo}`}
-                              className="ops-code text-[12px] text-[var(--brand-strong)] hover:underline"
+                              className="ops-code text-[12px] font-semibold text-slate-900 hover:underline"
                             >
                               #{unit.orderItem.orderNo}
                             </Link>
@@ -445,16 +462,16 @@ export default function BatchDetail({ batchNo }) {
               <ol className="relative space-y-4">
                 {timeline.map((entry, index) => (
                   <li key={`${entry.label}-${entry.at}-${index}`} className="flex gap-3">
-                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--brand)]" />
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-slate-400" aria-hidden />
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800">{entry.label}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-xs text-slate-500">
                         {format(new Date(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
                       </p>
                     </div>
                   </li>
                 ))}
-                {!timeline.length ? <li className="text-sm text-slate-400">Nothing has happened yet.</li> : null}
+                {!timeline.length ? <li className="text-sm text-slate-500">Nothing has happened yet.</li> : null}
               </ol>
             </SectionBody>
           </Section>

@@ -9,7 +9,7 @@ export default function AddProduct() {
   const router = useRouter();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         title="Create product"
         subtitle="Build the product listing, media, options, and variations."

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
 import Link from 'next/link';
 import * as api from 'src/services';
 import { FiExternalLink, FiAlertTriangle, FiCheck, FiX } from 'react-icons/fi';
@@ -12,6 +12,8 @@ import DataTable from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDateTime } from 'src/utils/formatTime';
+import { OverlayPanel } from 'src/components/_admin/ui/Drawer';
+import { LoadingBlock } from 'src/components/_admin/ui/TableStates';
 
 const fmt = (n) => '৳' + Number(n || 0).toLocaleString();
 const dtStr = (d) => (d ? fDateTime(d) : '—');
@@ -37,7 +39,7 @@ const STATUS_STYLES = {
   awaiting_sms: 'border-sky-200 bg-sky-50 text-sky-700',
   awaiting_payment: 'border-slate-200 bg-slate-50 text-slate-600',
   rejected: 'border-rose-200 bg-rose-50 text-rose-700',
-  expired: 'border-slate-200 bg-slate-50 text-slate-400'
+  expired: 'border-slate-200 bg-slate-50 text-slate-500'
 };
 
 const STATUS_LABELS = {
@@ -131,7 +133,7 @@ function ApprovalChecklist({ reasons = [], actual }) {
 }
 
 function ReasonList({ reasons = [] }) {
-  if (!reasons.length) return <span className="text-xs text-slate-400">—</span>;
+  if (!reasons.length) return <span className="text-xs text-slate-500">—</span>;
   return (
     <ul className="space-y-0.5">
       {reasons.map((r) => (
@@ -155,10 +157,10 @@ function CompareRow({ label, claimed, actual, mono }) {
     <tr className={differs ? 'bg-rose-50' : ''}>
       <td className="px-3 py-2 text-xs font-medium text-slate-500">{label}</td>
       <td className={`${cell} ${differs ? 'font-semibold text-rose-700' : 'text-slate-700'}`}>
-        {claimed ?? <span className="text-slate-300">not provided</span>}
+        {claimed ?? <span className="text-slate-400">not provided</span>}
       </td>
       <td className={`${cell} ${differs ? 'font-semibold text-rose-700' : 'text-slate-700'}`}>
-        {actual ?? <span className="text-slate-300">no SMS</span>}
+        {actual ?? <span className="text-slate-400">no SMS</span>}
       </td>
     </tr>
   );
@@ -192,34 +194,31 @@ function ReviewModal({ intentId, onClose, onDone }) {
       onSuccess: (res, action) => {
         onDone();
         onClose();
-        Swal.fire(
-          action === 'approve' ? 'Approved' : 'Rejected',
+        toastSuccess(
           action === 'approve'
-            ? `Payment linked to order #${res?.orderNo || intent?.orderNo}.`
-            : 'The payment claim was rejected.',
-          action === 'approve' ? 'success' : 'info'
+            ? `Payment approved and linked to order #${res?.orderNo || intent?.orderNo}`
+            : 'Payment claim rejected'
         );
       },
-      onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+      onError: (e) => alertError(e, { title: 'Error' })
     }
   );
 
   const confirmReject = () => {
-    Swal.fire({
+    confirmAction({
+      tone: 'danger',
       title: 'Reject this payment claim?',
       text: 'The order stays unpaid and the transaction ID stays unused.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Reject'
-    }).then((r) => r.isConfirmed && mutate('reject'));
+      confirmText: 'Reject claim'
+    }).then((confirmed) => confirmed && mutate('reject'));
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="my-8 w-full max-w-3xl space-y-4 rounded-md bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-[80] !m-0 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4">
+      <OverlayPanel onClose={onClose} className="my-8 w-full max-w-3xl space-y-4 rounded-lg bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-slate-800">Verify payment</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Verify payment</h3>
             {intent && (
               <p className="mt-0.5 text-sm text-slate-500">
                 Order{' '}
@@ -234,12 +233,12 @@ function ReviewModal({ intentId, onClose, onDone }) {
               </p>
             )}
           </div>
-          <button onClick={onClose} className="btn-ghost" aria-label="Close">
+          <button type="button" onClick={onClose} className="btn-ghost" aria-label="Close">
             <FiX />
           </button>
         </div>
 
-        {isLoading && <p className="py-8 text-center text-sm text-slate-400">Loading…</p>}
+        {isLoading && <LoadingBlock bare />}
 
         {intent && (
           <>
@@ -250,11 +249,13 @@ function ReviewModal({ intentId, onClose, onDone }) {
                 Compare the customer&apos;s claim with the SMS
               </summary>
               <div className="border-t border-slate-100 p-3">
-                <div className="overflow-x-auto rounded-md border">
+                <div className="overflow-x-auto rounded-md border border-slate-200">
                   <table className="w-full min-w-[520px]">
                     <thead>
-                      <tr className="border-b bg-slate-50">
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500" />
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">
+                          <span className="sr-only">Field</span>
+                        </th>
                         <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
                           Customer claimed
                         </th>
@@ -263,7 +264,7 @@ function ReviewModal({ intentId, onClose, onDone }) {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y divide-slate-100">
                       <CompareRow label="Transaction ID" claimed={claimed?.trxId} actual={actual?.trxId} mono />
                       <CompareRow
                         label="Amount"
@@ -354,10 +355,11 @@ function ReviewModal({ intentId, onClose, onDone }) {
             )}
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Note <span className="text-slate-400">(recorded in the order history)</span>
+              <label htmlFor="verification-note" className="mb-1.5 block text-[13px] font-medium text-slate-800">
+                Note <span className="font-normal text-slate-500">Recorded in the order history</span>
               </label>
               <input
+                id="verification-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="e.g. confirmed with customer by phone"
@@ -365,18 +367,18 @@ function ReviewModal({ intentId, onClose, onDone }) {
               />
             </div>
 
-            <div className="flex justify-end gap-2 border-t pt-3">
-              <button onClick={onClose} className="btn-ghost">
+            <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+              <button type="button" onClick={onClose} className="btn-ghost">
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={confirmReject}
                 disabled={saving}
-                className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                className="btn-danger btn-sm"
               >
                 Reject
               </button>
-              <button
+              <button type="button"
                 onClick={() => mutate('approve')}
                 disabled={saving || (!actual && !chosenSms)}
                 className="btn-brand flex items-center gap-1 disabled:opacity-40"
@@ -387,7 +389,7 @@ function ReviewModal({ intentId, onClose, onDone }) {
             </div>
           </>
         )}
-      </div>
+      </OverlayPanel>
     </div>
   );
 }
@@ -399,7 +401,7 @@ export default function VerificationList() {
   const limit = 20;
   const qc = useQueryClient();
 
-  const { data, isLoading, isFetching, refetch } = useQuery(
+  const { data, isLoading, isFetching, refetch, isError, error: loadError } = useQuery(
     ['payment-intents', status, page],
     () => api.getPaymentIntents({ status: status || undefined, page, limit }),
     { staleTime: 15_000 }
@@ -427,14 +429,14 @@ export default function VerificationList() {
             <FiExternalLink size={11} />
           </Link>
         ) : (
-          <span className="text-xs text-slate-400">—</span>
+          <span className="text-xs text-slate-500">—</span>
         )
     },
     {
       key: 'amount',
       label: 'Amount',
       align: 'right',
-      render: (i) => <span className="whitespace-nowrap font-bold text-slate-800">{fmt(i.amount)}</span>
+      render: (i) => <span className="whitespace-nowrap font-semibold text-slate-800">{fmt(i.amount)}</span>
     },
     {
       key: 'type',
@@ -455,7 +457,7 @@ export default function VerificationList() {
     {
       key: 'createdAt',
       label: 'Created',
-      render: (i) => <span className="whitespace-nowrap text-xs text-slate-400">{dtStr(i.createdAt)}</span>
+      render: (i) => <span className="whitespace-nowrap text-xs text-slate-500">{dtStr(i.createdAt)}</span>
     },
     {
       key: 'actions',
@@ -463,7 +465,7 @@ export default function VerificationList() {
       align: 'right',
       render: (i) =>
         ['needs_review', 'awaiting_sms'].includes(i.status) && (
-          <button
+          <button type="button"
             onClick={() => setReviewId(i.id)}
             className={
               i.status === 'needs_review'
@@ -479,7 +481,7 @@ export default function VerificationList() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         title="Payment Verification"
         subtitle={
@@ -512,7 +514,7 @@ export default function VerificationList() {
                 {tab.label}
                 {tab.value === 'needs_review' && data?.pendingReview > 0 && (
                   <span
-                    className={`rounded-full px-1.5 text-[10px] font-bold ${
+                    className={`rounded-full px-1.5 text-xs font-semibold ${
                       active ? 'bg-white text-slate-900' : 'bg-amber-500 text-white'
                     }`}
                   >
@@ -536,11 +538,14 @@ export default function VerificationList() {
       )}
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={rows}
         selectionLabel="invoices"
         exportFileName="payment-verification.csv"
-        isLoading={isLoading || isFetching}
+        isLoading={isLoading}
+        isFetching={isFetching}
         empty={
           <EmptyState
             title="Nothing to verify"

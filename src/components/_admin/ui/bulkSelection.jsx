@@ -38,7 +38,7 @@ const TONE_CLASS = {
 };
 
 const barButton = (tone) =>
-  `inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md border bg-white px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+  `inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border bg-white px-3 text-[13px] font-medium shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
     TONE_CLASS[tone] || TONE_CLASS.neutral
   }`;
 
@@ -54,7 +54,7 @@ export function SelectionCheckbox({ checked, indeterminate = false, label, onCha
       checked={checked}
       onChange={onChange}
       aria-label={label}
-      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-ring)] focus:ring-offset-1"
+      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-slate-900"
     />
   );
 }
@@ -182,7 +182,7 @@ export function BulkActionBar({
 
   return (
     <div
-      className="flex min-h-12 flex-wrap items-center gap-2 border-b border-[var(--brand)]/40 bg-[var(--brand-soft)] px-3 py-2"
+      className="flex min-h-12 flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2"
       role="region"
       aria-label="Bulk actions"
     >
@@ -200,7 +200,7 @@ export function BulkActionBar({
         <MdContentCopy size={16} /> Copy IDs
       </button>
 
-      {bulkActions.length > 0 && <span className="mx-1 h-6 w-px bg-[var(--brand)]/30" aria-hidden="true" />}
+      {bulkActions.length > 0 && <span className="mx-1 h-6 w-px bg-slate-200" aria-hidden="true" />}
 
       {bulkActions.map((action) => {
         const Icon = action.icon;
@@ -225,7 +225,7 @@ export function BulkActionBar({
         type="button"
         onClick={clearSelection}
         disabled={busy}
-        className="ml-auto inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs font-semibold text-slate-600 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] disabled:opacity-50"
+        className="btn-quiet btn-sm ml-auto"
         aria-label="Clear selection"
       >
         <MdClose size={17} /> Clear

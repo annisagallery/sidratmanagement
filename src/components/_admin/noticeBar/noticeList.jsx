@@ -1,12 +1,15 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import { MdDragIndicator } from 'react-icons/md';
-import {
-  FiEdit2, FiTrash2, FiPlus, FiLink, FiEyeOff, FiCheck, FiAlertTriangle, FiSpeaker, FiX
-} from 'react-icons/fi';
+import { MdAdd, MdArrowDownward, MdArrowUpward, MdCampaign, MdDelete, MdDragIndicator, MdLink } from 'react-icons/md';
 import * as api from 'src/services';
+import { toastSuccess, alertError, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import Panel from 'src/components/_admin/ui/Panel';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { Field, LengthCounter, Switch, Toggle } from 'src/components/_admin/ui/fields';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 // The storefront's announcement marquee — the strip of moving text between the
 // header and the category bar.
@@ -22,17 +25,95 @@ const MAX_LENGTH = 200;
 
 const EMPTY_FORM = { text: '', link: '', isActive: true };
 
-function Toast({ toast }) {
-  if (!toast) return null;
-  const isErr = toast.type === 'error';
+/** Add or edit one notice. */
+function NoticeDrawer({ mode, notice, onClose, onSaved }) {
+  const [form, setForm] = useState(() =>
+    notice ? { text: notice.text || '', link: notice.link || '', isActive: notice.isActive !== false } : EMPTY_FORM
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.text.trim()) {
+      setError('Write the notice.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { text: form.text.trim(), link: form.link.trim(), isActive: form.isActive };
+      if (mode === 'add') {
+        await api.createNotice(payload);
+        toastSuccess('Notice added');
+      } else {
+        await api.updateNotice(notice.id, payload);
+        toastSuccess('Notice saved');
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      alertError(err, { title: mode === 'add' ? 'The notice was not added' : 'The notice was not saved' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div
-      className={`fixed top-5 right-5 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-md shadow-lg text-sm font-medium border
-      ${isErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
+    <Drawer
+      title={mode === 'add' ? 'Add notice' : 'Edit notice'}
+      eyebrow="Notice bar"
+      onClose={onClose}
+      onSubmit={handleSave}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-brand">
+            {saving ? 'Saving…' : mode === 'add' ? 'Add notice' : 'Save changes'}
+          </button>
+        </>
+      }
     >
-      {isErr ? <FiAlertTriangle className="text-base shrink-0" /> : <FiCheck className="text-base shrink-0" />}
-      {toast.msg}
-    </div>
+      <div className="space-y-5">
+        <Field
+          label="Notice"
+          required
+          error={error}
+          help="One short line reads best on a moving strip."
+          counter={<LengthCounter value={form.text} max={MAX_LENGTH} />}
+        >
+          <textarea
+            rows={2}
+            maxLength={MAX_LENGTH}
+            value={form.text}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, text: e.target.value }));
+              setError('');
+            }}
+            placeholder="Eid delivery closes 20 June — order now"
+            className="input-ui min-h-[64px] resize-y py-2"
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Link" optional help="Leave empty and the notice is plain text, not a link.">
+          <input
+            value={form.link}
+            onChange={(e) => setForm((f) => ({ ...f, link: e.target.value }))}
+            placeholder="/campaigns/eid"
+            className="input-ui"
+          />
+        </Field>
+
+        <Toggle
+          label="Show on the storefront"
+          help="Hidden notices stay here, ready to switch back on."
+          checked={form.isActive}
+          onChange={(on) => setForm((f) => ({ ...f, isActive: on }))}
+        />
+      </div>
+    </Drawer>
   );
 }
 
@@ -43,80 +124,56 @@ export default function NoticeBarList() {
   const [dragIdx, setDragIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const [modal, setModal] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
 
-  const showToast = (msg, type = 'success') => {
-    clearTimeout(toastTimer.current);
-    setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3200);
-  };
-
-  const { isLoading } = useQuery('admin-notice-bar', api.getNoticeBarAdmin, {
-    onSuccess: (d) => setNotices(d?.data || []),
-    onError: () => showToast('Failed to load notices', 'error')
+  const { isLoading, isError, error, refetch } = useQuery('admin-notice-bar', api.getNoticeBarAdmin, {
+    onSuccess: (d) => setNotices(d?.data || [])
   });
 
-  const openAdd = () => {
-    setForm(EMPTY_FORM);
-    setModal({ mode: 'add' });
-  };
-  const openEdit = (notice) => {
-    setForm({ text: notice.text || '', link: notice.link || '', isActive: notice.isActive !== false });
-    setModal({ mode: 'edit', notice });
-  };
-  const closeModal = () => {
-    setModal(null);
-    setForm(EMPTY_FORM);
-  };
-
-  const handleSave = async () => {
-    if (!form.text.trim()) return showToast('Please write the notice text', 'error');
-    setSaving(true);
-    try {
-      const payload = { text: form.text.trim(), link: form.link.trim(), isActive: form.isActive };
-      if (modal.mode === 'add') {
-        await api.createNotice(payload);
-        showToast('Notice added');
-      } else {
-        await api.updateNotice(modal.notice.id, payload);
-        showToast('Notice updated');
-      }
-      closeModal();
-      qc.invalidateQueries('admin-notice-bar');
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Save failed', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const refresh = () => qc.invalidateQueries('admin-notice-bar');
 
   const handleToggleActive = async (notice) => {
     const next = !notice.isActive;
     setNotices((prev) => prev.map((n) => (n.id === notice.id ? { ...n, isActive: next } : n)));
     try {
       await api.updateNotice(notice.id, { isActive: next });
-    } catch {
-      setNotices((prev) => prev.map((n) => (n.id === notice.id ? { ...n, isActive: notice.isActive } : n)));
-      showToast('Failed to update status', 'error');
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await api.deleteNotice(id);
-      setDeleteConfirm(null);
-      showToast('Notice removed');
-      qc.invalidateQueries('admin-notice-bar');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Delete failed', 'error');
+      setNotices((prev) => prev.map((n) => (n.id === notice.id ? { ...n, isActive: notice.isActive } : n)));
+      alertError(err, { title: next ? 'The notice was not shown' : 'The notice was not hidden' });
     }
   };
 
-  // ── Drag & drop ────────────────────────────────────────────────────────────
+  const handleDelete = async (notice) => {
+    const confirmed = await confirmDelete({
+      title: 'Remove this notice?',
+      subject: notice.text,
+      text: 'It stops running on the storefront.',
+      confirmText: 'Remove notice'
+    });
+    if (!confirmed) return;
+    try {
+      await api.deleteNotice(notice.id);
+      toastSuccess('Notice removed');
+      refresh();
+    } catch (err) {
+      alertError(err, { title: 'The notice was not removed' });
+    }
+  };
+
+  // ── Reorder (drag, or Move up / Move down from the row menu) ──────────────
+
+  const move = async (fromIdx, toIdx) => {
+    if (fromIdx === null || fromIdx === toIdx || toIdx < 0 || toIdx > notices.length) return;
+    const reordered = [...notices];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setNotices(reordered);
+    try {
+      await api.reorderNotices(reordered.map((n) => n.id));
+    } catch (err) {
+      alertError(err, { title: 'The new order was not saved' });
+      refresh();
+    }
+  };
 
   const handleDragStart = (e, idx) => {
     setDragIdx(idx);
@@ -127,24 +184,12 @@ export default function NoticeBarList() {
     e.dataTransfer.dropEffect = 'move';
     if (idx !== dragOverIdx) setDragOverIdx(idx);
   };
-  const handleDrop = async (e, toIdx) => {
+  const handleDrop = (e, toIdx) => {
     e.preventDefault();
     const fromIdx = dragIdx;
     setDragIdx(null);
     setDragOverIdx(null);
-    if (fromIdx === null || fromIdx === toIdx) return;
-
-    const reordered = [...notices];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    setNotices(reordered);
-
-    try {
-      await api.reorderNotices(reordered.map((n) => n.id));
-    } catch {
-      showToast('Failed to save new order', 'error');
-      qc.invalidateQueries('admin-notice-bar');
-    }
+    move(fromIdx, toIdx);
   };
   const handleDragEnd = () => {
     setDragIdx(null);
@@ -152,254 +197,150 @@ export default function NoticeBarList() {
   };
 
   const activeNotices = notices.filter((n) => n.isActive);
+  const addButton = (
+    <button type="button" onClick={() => setModal({ mode: 'add' })} className="btn-brand">
+      <MdAdd size={18} aria-hidden /> Add notice
+    </button>
+  );
 
+  let body;
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-7 w-44 animate-pulse rounded-md bg-gray-200" />
-            <div className="h-4 w-60 animate-pulse rounded-md bg-gray-100" />
-          </div>
-          <div className="h-10 w-32 animate-pulse rounded-md bg-gray-200" />
-        </div>
+    body = (
+      <ul className="divide-y divide-slate-100" aria-busy="true">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4 rounded-md border border-gray-200 bg-white p-4">
-            <div className="h-8 w-5 animate-pulse rounded-md bg-gray-100" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-72 animate-pulse rounded-md bg-gray-100" />
-              <div className="h-3 w-40 animate-pulse rounded-md bg-gray-100" />
-            </div>
-          </div>
+          <li key={i} className="space-y-2 px-5 py-4">
+            <div className="skeleton h-4 w-72 max-w-full" />
+            <div className="skeleton h-3 w-40" />
+          </li>
         ))}
+      </ul>
+    );
+  } else if (isError) {
+    body = (
+      <div className="p-5">
+        <ErrorState error={error} title="The notices could not be loaded" onRetry={refetch} />
       </div>
     );
-  }
-
-  return (
-    <div className="space-y-6">
-      <Toast toast={toast} />
-
-      <PageHeader
-        title="Notice Bar"
-        icon={FiSpeaker}
-        subtitle={
-          notices.length === 0
-            ? 'Nothing running — the storefront shows no notice strip'
-            : (
-              <>
-                {notices.length} notice{notices.length !== 1 ? 's' : ''}
-                {' · '}
-                <span className="font-medium text-emerald-600">{activeNotices.length} live</span>
-                {notices.length > 1 && <> · drag ⠿ to reorder</>}
-              </>
-            )
-        }
-      >
-        <button onClick={openAdd} className="btn-brand active:scale-95">
-          <FiPlus className="text-base" /> Add Notice
-        </button>
-      </PageHeader>
-
-      {/* What the customer will actually see. A marquee is one line of moving
-          text, so the preview is one line — anything that does not fit here
-          will not fit on the storefront either. */}
-      {activeNotices.length > 0 && (
-        <div className="overflow-hidden rounded-md border border-slate-200">
-          <p className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Storefront preview
-          </p>
-          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap bg-slate-900 px-4 py-2.5 text-sm text-white">
-            {activeNotices.map((n) => (
-              <span key={n.id} className="flex shrink-0 items-center gap-2">
-                <span className="h-1.5 w-1.5 rotate-45 bg-amber-400" />
-                {n.text}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {notices.length === 0 && (
-        <div className="rounded-md border-2 border-dashed border-gray-200 bg-gray-50/50 py-20 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-md bg-gray-100">
-            <FiSpeaker className="text-3xl text-gray-300" />
-          </div>
-          <p className="font-semibold text-gray-600">No notices</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-gray-400">
-            Add one and a scrolling strip appears on the storefront between the header and the category bar. Remove
-            them all and the strip disappears again — it is never shown empty.
-          </p>
-          <button onClick={openAdd} className="btn-brand mt-5">
-            <FiPlus /> Add Notice
-          </button>
-        </div>
-      )}
-
-      {notices.length > 0 && (
-        <div className="space-y-2">
-          {notices.map((notice, i) => (
-            <div
+  } else if (!notices.length) {
+    body = (
+      <EmptyState
+        icon={MdCampaign}
+        title="No notices running"
+        hint="Add one and a scrolling strip appears on the storefront between the header and the category bar. Remove them all and the strip disappears — it is never shown empty."
+        action={addButton}
+      />
+    );
+  } else {
+    body = (
+      <ol className="divide-y divide-slate-100">
+        {notices.map((notice, i) => {
+          const isDropTarget = dragOverIdx === i && dragIdx !== null && dragIdx !== i;
+          return (
+            <li
               key={notice.id}
               draggable
               onDragStart={(e) => handleDragStart(e, i)}
               onDragOver={(e) => handleDragOver(e, i)}
               onDrop={(e) => handleDrop(e, i)}
               onDragEnd={handleDragEnd}
-              className={`group flex select-none items-center gap-4 rounded-md border bg-white px-4 py-3 transition-all
-                ${dragOverIdx === i && dragIdx !== i ? 'border-[var(--brand)] shadow-md' : 'border-gray-200'}
-                ${dragIdx === i ? 'opacity-40' : ''}
-                ${notice.isActive ? '' : 'bg-gray-50'}`}
+              className={`relative flex items-center gap-3 px-3 py-3 transition sm:gap-4 sm:px-5 ${
+                dragIdx === i ? 'opacity-40' : 'hover:bg-slate-50'
+              }`}
             >
-              <MdDragIndicator className="shrink-0 cursor-grab text-xl text-gray-300 group-hover:text-gray-400" />
+              {isDropTarget && <span className="absolute inset-x-5 -top-px h-0.5 rounded-full bg-slate-900" aria-hidden />}
 
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold
-                  ${notice.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}
-              >
-                {i + 1}
+              <span className="hidden cursor-grab text-slate-400 active:cursor-grabbing sm:block" title="Drag to reorder" aria-hidden>
+                <MdDragIndicator size={20} />
               </span>
+              <span className="w-5 shrink-0 text-center text-[13px] font-medium tabular-nums text-slate-500">{i + 1}</span>
 
               <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm font-medium ${notice.isActive ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {notice.text}
-                </p>
+                <p className={`truncate text-sm font-medium ${notice.isActive ? 'text-slate-900' : 'text-slate-500'}`}>{notice.text}</p>
                 {notice.link && (
-                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-400">
-                    <FiLink className="shrink-0" /> {notice.link}
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-500">
+                    <MdLink size={14} className="shrink-0" aria-hidden />
+                    <span className="truncate">{notice.link}</span>
                   </p>
                 )}
               </div>
 
-              <button
-                onClick={() => handleToggleActive(notice)}
-                title={notice.isActive ? 'Hide from storefront' : 'Show on storefront'}
-                className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors
-                  ${notice.isActive
-                    ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-              >
-                {notice.isActive ? <FiCheck /> : <FiEyeOff />}
-                {notice.isActive ? 'Live' : 'Hidden'}
-              </button>
-
-              <button
-                onClick={() => openEdit(notice)}
-                title="Edit"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              >
-                <FiEdit2 />
-              </button>
-              <button
-                onClick={() => setDeleteConfirm(notice)}
-                title="Remove"
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-              >
-                <FiTrash2 />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Add / edit modal ──────────────────────────────────────────────── */}
-      {modal && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-md bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <h2 className="text-base font-bold text-slate-900">
-                {modal.mode === 'add' ? 'Add Notice' : 'Edit Notice'}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
-              >
-                <FiX />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-5 py-5">
-              <div>
-                <label htmlFor="notice-text" className="mb-1.5 block text-xs font-semibold text-slate-700">
-                  Notice text
-                </label>
-                <textarea
-                  id="notice-text"
-                  rows={2}
-                  maxLength={MAX_LENGTH}
-                  value={form.text}
-                  onChange={(e) => setForm((f) => ({ ...f, text: e.target.value }))}
-                  placeholder="Eid delivery closes 20 June — order now"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-slate-400">
-                  {form.text.length}/{MAX_LENGTH} · one short line reads best on a moving strip
-                </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className={`hidden text-[13px] md:inline ${notice.isActive ? 'text-slate-700' : 'text-slate-500'}`}>
+                  {notice.isActive ? 'Live' : 'Hidden'}
+                </span>
+                <Switch checked={notice.isActive} onChange={() => handleToggleActive(notice)} label={`Show “${notice.text}” on the storefront`} />
               </div>
 
-              <div>
-                <label htmlFor="notice-link" className="mb-1.5 block text-xs font-semibold text-slate-700">
-                  Link <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <input
-                  id="notice-link"
-                  value={form.link}
-                  onChange={(e) => setForm((f) => ({ ...f, link: e.target.value }))}
-                  placeholder="/campaigns/eid"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              <div className="flex shrink-0 items-center gap-1">
+                <button type="button" onClick={() => setModal({ mode: 'edit', notice })} className="btn-ghost btn-sm">
+                  Edit
+                </button>
+                <ActionMenu
+                  label="More actions for this notice"
+                  items={[
+                    { label: 'Move up', icon: MdArrowUpward, onClick: () => move(i, i - 1), disabled: i === 0 },
+                    { label: 'Move down', icon: MdArrowDownward, onClick: () => move(i, i + 1), disabled: i === notices.length - 1 },
+                    { label: 'Remove', icon: MdDelete, tone: 'danger', onClick: () => handleDelete(notice) }
+                  ]}
                 />
-                <p className="mt-1 text-xs text-slate-400">Leave empty and the notice is plain text, not a link.</p>
               </div>
+            </li>
+          );
+        })}
 
-              <label className="flex cursor-pointer items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                  className="h-4 w-4 rounded-md"
-                />
-                <span className="text-sm text-slate-700">Show on the storefront</span>
-              </label>
-            </div>
+        {dragIdx !== null && (
+          <li
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOverIdx(notices.length);
+            }}
+            onDrop={(e) => handleDrop(e, notices.length)}
+            className={`m-3 flex h-12 items-center justify-center rounded-md border-2 border-dashed text-[13px] font-medium transition ${
+              dragOverIdx === notices.length ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            Drop here to move to the end
+          </li>
+        )}
+      </ol>
+    );
+  }
 
-            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
-              <button
-                onClick={closeModal}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button onClick={handleSave} disabled={saving} className="btn-brand px-5 disabled:opacity-50">
-                {saving ? 'Saving…' : 'Save Notice'}
-              </button>
-            </div>
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Notice bar">{addButton}</PageHeader>
+
+      {/* What the customer will actually see. A marquee is one line of moving
+          text, so the preview is one line — anything that does not fit here
+          will not fit on the storefront either. */}
+      {activeNotices.length > 0 && (
+        <Panel title="Storefront preview" description="What shoppers see, one line, scrolling." bodyClassName="!pt-4">
+          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap rounded-md bg-slate-900 px-4 py-2.5 text-sm text-white">
+            {activeNotices.map((n) => (
+              <span key={n.id} className="flex shrink-0 items-center gap-2">
+                <span className="h-1.5 w-1.5 rotate-45 bg-amber-400" aria-hidden />
+                {n.text}
+              </span>
+            ))}
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* ── Delete confirm ───────────────────────────────────────────────── */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-md bg-white p-5 shadow-xl">
-            <h2 className="text-base font-bold text-slate-900">Remove this notice?</h2>
-            <p className="mt-2 truncate text-sm text-slate-500">{deleteConfirm.text}</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm.id)}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Panel
+        title="Notices"
+        description={
+          notices.length
+            ? `${activeNotices.length} live${notices.length - activeNotices.length ? ` · ${notices.length - activeNotices.length} hidden` : ''}${
+                notices.length > 1 ? ' · drag or use the menu to reorder' : ''
+              }`
+            : 'Nothing is running — the storefront shows no notice strip.'
+        }
+        bodyClassName="!p-0"
+      >
+        <div className="mt-4 border-t border-slate-100">{body}</div>
+      </Panel>
+
+      {modal && <NoticeDrawer mode={modal.mode} notice={modal.notice} onClose={() => setModal(null)} onSaved={refresh} />}
     </div>
   );
 }

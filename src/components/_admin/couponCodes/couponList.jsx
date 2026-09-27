@@ -1,76 +1,64 @@
 'use client';
-import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import { useRouter } from 'next-nprogress-bar';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Link from 'next/link';
 import * as api from 'src/services';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
 import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
-import { EmptyState } from 'src/components/_admin/ui/TableStates';
-import {
-  MdAdd,
-  MdEdit,
-  MdDelete,
-  MdInbox,
-  MdBarChart,
-  MdClose,
-  MdPeople,
-  MdDiscount,
-  MdShoppingCart,
-  MdLink,
-  MdBlock,
-  MdCheckCircle
-} from 'react-icons/md';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import Badge, { RecordStatus } from 'src/components/_admin/ui/Badge';
+import { KpiGrid, StatTile } from 'src/components/_admin/ui/kpi';
+import { EmptyState, ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
+import { MdAdd, MdDelete, MdInbox, MdBarChart, MdBlock, MdCheckCircle, MdEdit } from 'react-icons/md';
 import { fDate } from 'src/utils/formatTime';
 
 const BDT = '৳';
+const money = (n) => `${BDT}${Number(n || 0).toLocaleString()}`;
 
 const STATUS_OPTS = [
-  { label: 'All Status', value: '' },
+  { label: 'Any status', value: '' },
   { label: 'Active', value: 'active' },
   { label: 'Inactive', value: 'inactive' }
 ];
 const TYPE_OPTS = [
-  { label: 'All Types', value: '' },
-  { label: 'Percent', value: 'percent' },
-  { label: 'Fixed', value: 'fixed' }
+  { label: 'Any discount type', value: '' },
+  { label: 'Percentage', value: 'percent' },
+  { label: 'Fixed amount', value: 'fixed' }
 ];
+
+const ORDER_TONE = {
+  pending: 'warning',
+  confirmed: 'info',
+  processing: 'violet',
+  shipped: 'info',
+  delivered: 'success',
+  cancelled: 'danger',
+  returned: 'warning'
+};
 
 function fmtDate(d) {
   if (!d) return '—';
   return fDate(d);
 }
 
-function StatusBadge({ status }) {
-  const map = { active: 'bg-green-100 text-green-700', inactive: 'bg-gray-100 text-gray-500' };
-  return (
-    <span
-      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium capitalize ${map[status] || 'bg-gray-100 text-gray-600'}`}
-    >
-      {status}
-    </span>
-  );
-}
+const label = (value) => (value ? String(value).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : '—');
 
 function ApplyBadge({ applyTo }) {
-  const map = { shipping: 'bg-blue-100 text-blue-700', product: 'bg-purple-100 text-purple-700' };
-  return (
-    <span
-      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-medium capitalize ${map[applyTo] || 'bg-gray-100 text-gray-600'}`}
-    >
-      {applyTo || '—'}
-    </span>
-  );
+  if (!applyTo) return <span className="text-slate-400">—</span>;
+  return <Badge tone={applyTo === 'shipping' ? 'info' : 'violet'}>{applyTo === 'shipping' ? 'Shipping' : 'Products'}</Badge>;
 }
 
-// ── Usage Stats Drawer ────────────────────────────────────────────────────────
+// ── Usage statistics drawer ───────────────────────────────────────────────────
 function UsageDrawer({ coupon, onClose }) {
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     ['coupon-usage', coupon.id, page],
     () => api.getCouponUsageByAdmin(coupon.id, page),
     { keepPreviousData: true }
@@ -81,240 +69,126 @@ function UsageDrawer({ coupon, onClose }) {
   const total = data?.total || 0;
   const stats = data?.stats || {};
 
-  const statCards = [
-    { icon: MdShoppingCart, label: 'Total Uses', value: stats.totalUses || 0, cls: 'text-blue-600', bg: 'bg-blue-50' },
-    {
-      icon: MdPeople,
-      label: 'Unique Users',
-      value: stats.uniqueUsers || 0,
-      cls: 'text-purple-600',
-      bg: 'bg-purple-50'
-    },
-    {
-      icon: MdDiscount,
-      label: 'Total Discount',
-      value: `${BDT}${(stats.totalDiscount || 0).toLocaleString()}`,
-      cls: 'text-green-600',
-      bg: 'bg-green-50'
-    },
-    {
-      icon: MdShoppingCart,
-      label: 'Order Volume',
-      value: `${BDT}${(stats.totalOrderValue || 0).toLocaleString()}`,
-      cls: 'text-gray-700',
-      bg: 'bg-gray-100'
-    },
-    ...(coupon.isAffiliate
-      ? [
-          {
-            icon: MdLink,
-            label: 'Commission Earned',
-            value: `${BDT}${(stats.totalCommission || 0).toLocaleString()}`,
-            cls: 'text-amber-600',
-            bg: 'bg-amber-50'
-          },
-          {
-            icon: MdLink,
-            label: 'Commission Unpaid',
-            value: `${BDT}${(stats.unpaidCommission || 0).toLocaleString()}`,
-            cls: 'text-red-500',
-            bg: 'bg-red-50'
-          }
-        ]
-      : [])
-  ];
-
-  const ORDER_STATUS_CLS = {
-    pending: 'bg-amber-50 text-amber-700',
-    confirmed: 'bg-blue-50 text-blue-700',
-    processing: 'bg-purple-50 text-purple-700',
-    shipped: 'bg-cyan-50 text-cyan-700',
-    delivered: 'bg-green-50 text-green-700',
-    cancelled: 'bg-red-50 text-red-500',
-    returned: 'bg-orange-50 text-orange-600'
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      {/* Backdrop */}
-      <div className="flex-1 bg-black/30" onClick={onClose} />
+    <Drawer
+      title={
+        <span className="flex items-center gap-2">
+          <span className="code-chip">{coupon.code}</span>
+          {coupon.isAffiliate && <Badge tone="violet">Affiliate</Badge>}
+        </span>
+      }
+      subtitle={`${coupon.name} · ${total} use${total !== 1 ? 's' : ''}`}
+      eyebrow="Coupon usage"
+      size="lg"
+      onClose={onClose}
+    >
+      <div className="space-y-6">
+        <KpiGrid columns={coupon.isAffiliate ? 3 : 2}>
+          <StatTile size="sm" label="Uses" value={(stats.totalUses || 0).toLocaleString()} loading={isLoading} />
+          <StatTile size="sm" label="Customers" value={(stats.uniqueUsers || 0).toLocaleString()} loading={isLoading} />
+          <StatTile size="sm" label="Discount given" value={money(stats.totalDiscount)} loading={isLoading} />
+          <StatTile size="sm" label="Order value" value={money(stats.totalOrderValue)} loading={isLoading} />
+          {coupon.isAffiliate && (
+            <>
+              <StatTile size="sm" label="Commission earned" value={money(stats.totalCommission)} loading={isLoading} />
+              <StatTile size="sm" label="Commission unpaid" value={money(stats.unpaidCommission)} loading={isLoading} />
+            </>
+          )}
+        </KpiGrid>
 
-      {/* Drawer */}
-      <div className="w-full max-w-2xl bg-white h-full flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-black tracking-widest text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md text-sm">
-                {coupon.code}
-              </span>
-              {coupon.isAffiliate && (
-                <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-md font-semibold">
-                  Affiliate
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {coupon.name} · {total} use{total !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
-          >
-            <MdClose size={20} />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1">
-          {/* Stat cards */}
+        <section aria-labelledby="usage-history-title" className="space-y-3">
+          <h3 id="usage-history-title" className="text-sm font-semibold text-slate-900">
+            Usage history
+          </h3>
           {isLoading ? (
-            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-20 bg-gray-100 rounded-md animate-pulse" />
-              ))}
+            <LoadingBlock rows={5} />
+          ) : isError ? (
+            <ErrorState error={error} title="Usage could not be loaded" onRetry={refetch} />
+          ) : usages.length === 0 ? (
+            <div className="card-ui">
+              <EmptyState compact icon={MdBarChart} title="Not used yet" hint="Orders that use this code appear here." />
             </div>
           ) : (
-            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {statCards.map((s) => {
-                const Icon = s.icon;
-                return (
-                  <div key={s.label} className={`${s.bg} rounded-md p-4`}>
-                    <Icon size={18} className={`${s.cls} mb-1.5`} />
-                    <p className={`text-lg font-bold leading-none ${s.cls}`}>{s.value}</p>
-                    <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-                  </div>
-                );
-              })}
+            <div className="card-ui overflow-hidden">
+              <GlobalTable>
+                <caption className="sr-only">Orders that used {coupon.code}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Order</th>
+                    <th scope="col" className="hidden text-right sm:table-cell">
+                      Order total
+                    </th>
+                    <th scope="col" className="text-right">
+                      Discount
+                    </th>
+                    {coupon.isAffiliate && (
+                      <th scope="col" className="text-right">
+                        Commission
+                      </th>
+                    )}
+                    <th scope="col" className="hidden md:table-cell">
+                      Date
+                    </th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usages.map((u) => (
+                    <tr key={u.id}>
+                      <td>
+                        {u.user?.phone ? (
+                          <Link href={`/users/${encodeURIComponent(u.user.phone)}`} className="group block">
+                            <span className="block text-[13px] font-medium text-slate-900 group-hover:underline">{u.user.name || '—'}</span>
+                            <span className="block text-xs text-slate-500">{u.user.phone}</span>
+                          </Link>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {u.order?.orderNo ? (
+                          <Link href={`/orders/${u.order.orderNo}`} className="ops-code text-[13px] text-slate-900 hover:underline">
+                            #{u.order.orderNo}
+                          </Link>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="hidden text-right tabular-nums text-slate-700 sm:table-cell">{money(u.orderTotal)}</td>
+                      <td className="text-right font-semibold tabular-nums text-emerald-700">−{money(u.discountAmount)}</td>
+                      {coupon.isAffiliate && (
+                        <td className="text-right">
+                          <span className="tabular-nums text-slate-900">{money(u.commissionAmount)}</span>
+                          <span className="block text-xs text-slate-500">{u.commissionPaid ? 'Paid' : 'Unpaid'}</span>
+                        </td>
+                      )}
+                      <td className="hidden whitespace-nowrap text-slate-600 md:table-cell">{fmtDate(u.createdAt)}</td>
+                      <td>
+                        {u.order?.status ? (
+                          <Badge tone={ORDER_TONE[u.order.status] || 'neutral'} dot>
+                            {label(u.order.status)}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </GlobalTable>
+              <Pagination page={page} totalPages={totalPages} total={total} unit="uses" onPage={setPage} />
             </div>
           )}
-
-          {/* Usage table */}
-          <div className="px-5 pb-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Usage History</p>
-
-            {isLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-12 bg-gray-100 rounded-md animate-pulse" />
-                ))}
-              </div>
-            ) : usages.length === 0 ? (
-              <div className="text-center py-14 text-gray-400 border rounded-md">
-                <MdBarChart size={36} className="mx-auto mb-2 opacity-20" />
-                <p className="text-sm">No uses yet</p>
-              </div>
-            ) : (
-              <>
-                <div className="border rounded-md overflow-hidden">
-                  <DataTable className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">User</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Order</th>
-                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Order Total</th>
-                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Discount</th>
-                        {coupon.isAffiliate && (
-                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Commission</th>
-                        )}
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Date</th>
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {usages.map((u) => (
-                        <tr key={u.id} className="hover:bg-gray-50/60 transition">
-                          <td className="px-4 py-2.5">
-                            {u.user?.phone ? (
-                              <a href={`/users/${encodeURIComponent(u.user.phone)}`} className="group">
-                                <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 transition">
-                                  {u.user.name || '—'}
-                                </p>
-                                <p className="text-xs text-gray-400 group-hover:text-blue-400 transition">
-                                  {u.user.phone}
-                                </p>
-                              </a>
-                            ) : (
-                              <p className="text-xs text-gray-400">—</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <span className="font-mono text-xs text-gray-700">{u.order?.orderNo || '—'}</span>
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-xs text-gray-700">
-                            {BDT}
-                            {(u.orderTotal || 0).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-xs font-semibold text-green-700">
-                            -{BDT}
-                            {(u.discountAmount || 0).toLocaleString()}
-                          </td>
-                          {coupon.isAffiliate && (
-                            <td className="px-4 py-2.5 text-right">
-                              <span className="text-xs font-semibold text-amber-700">
-                                {BDT}
-                                {(u.commissionAmount || 0).toLocaleString()}
-                              </span>
-                              {u.commissionPaid ? (
-                                <span className="ml-1 text-xs text-green-600">✓</span>
-                              ) : (
-                                <span className="ml-1 text-xs text-gray-400">○</span>
-                              )}
-                            </td>
-                          )}
-                          <td className="px-4 py-2.5 text-center text-xs text-gray-500">{fmtDate(u.createdAt)}</td>
-                          <td className="px-4 py-2.5 text-center">
-                            {u.order?.status ? (
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded-md capitalize font-medium ${ORDER_STATUS_CLS[u.order.status] || 'bg-gray-50 text-gray-600'}`}
-                              >
-                                {u.order.status}
-                              </span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </DataTable>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-                    <span>
-                      Page {page} of {totalPages} · {total} records
-                    </span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setPage((p) => p - 1)}
-                        disabled={page === 1}
-                        className="px-3 py-1.5 border rounded-md disabled:opacity-40 hover:bg-gray-50 transition"
-                      >
-                        ← Prev
-                      </button>
-                      <button
-                        onClick={() => setPage((p) => p + 1)}
-                        disabled={page >= totalPages}
-                        className="px-3 py-1.5 border rounded-md disabled:opacity-40 hover:bg-gray-50 transition"
-                      >
-                        Next →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </Drawer>
   );
 }
 
 // ── Main list ─────────────────────────────────────────────────────────────────
 export default function CouponList() {
+  const router = useRouter();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -333,7 +207,7 @@ export default function CouponList() {
     setPage(1);
   };
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(
     ['admin-coupons', page, search, status, type, sortBy, sortOrder],
     () => api.getCouponCodesByAdmin(page, search, status, type, sortBy, sortOrder),
     { keepPreviousData: true }
@@ -428,38 +302,37 @@ export default function CouponList() {
       sortable: true,
       render: (c) => (
         <>
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[13px] font-bold tracking-widest text-slate-900">
-            {c.code}
-          </span>
+          <span className="code-chip">{c.code}</span>
           {c.isAffiliate && (
-            <span className="ml-1.5 text-xs font-medium" style={{ color: 'var(--brand-strong)' }}>
-              affiliate
-            </span>
+            <Badge tone="violet" className="ml-1.5">
+              Affiliate
+            </Badge>
           )}
         </>
       )
     },
-    { key: 'name', label: 'Name', sortable: true, render: (c) => <span className="text-slate-700">{c.name}</span> },
+    { key: 'name', label: 'Name', sortable: true, hideBelow: 'md', render: (c) => <span className="text-slate-700">{c.name}</span> },
     {
       key: 'discount',
       label: 'Discount',
       sortable: true,
       render: (c) => (
         <>
-          <span className="font-semibold text-slate-800">
-            {c.type === 'percent' ? `${c.discount}%` : `${BDT}${c.discount}`}
+          <span className="font-semibold tabular-nums text-slate-900">
+            {c.type === 'percent' ? `${c.discount}%` : money(c.discount)}
           </span>
-          <span className="ml-1 text-xs capitalize text-slate-400">({c.type})</span>
+          <span className="ml-1 text-xs text-slate-500">off</span>
         </>
       )
     },
-    { key: 'applyTo', label: 'Applies To', render: (c) => <ApplyBadge applyTo={c.applyTo} /> },
+    { key: 'applyTo', label: 'Applies to', hideBelow: 'lg', render: (c) => <ApplyBadge applyTo={c.applyTo} /> },
     {
       key: 'minPurchase',
-      label: 'Min Purchase',
+      label: 'Minimum order',
       sortable: true,
       align: 'right',
-      render: (c) => <span className="text-slate-600">{c.minPurchase > 0 ? `${BDT}${c.minPurchase}` : '—'}</span>
+      hideBelow: 'xl',
+      render: (c) => <span className="tabular-nums text-slate-600">{c.minPurchase > 0 ? money(c.minPurchase) : '—'}</span>
     },
     {
       key: 'uses',
@@ -467,14 +340,18 @@ export default function CouponList() {
       align: 'right',
       render: (c) => (
         <button
-          onClick={() => setStatsFor(c)}
-          className="inline-flex items-center gap-1 text-[13px] font-semibold transition hover:underline"
-          style={{ color: 'var(--brand-strong)' }}
-          title="View usage statistics"
+          type="button"
+          onClick={(e) => {
+            stopRow(e);
+            setStatsFor(c);
+          }}
+          className="inline-flex items-center gap-1 text-[13px] font-semibold tabular-nums text-slate-900 underline-offset-2 hover:underline"
+          title="Usage statistics"
+          aria-label={`${c.usedBy?.length || 0} uses of ${c.code} — open usage statistics`}
         >
           {c.usedBy?.length || 0}
-          {c.maxUses > 0 && <span className="font-normal text-slate-400"> / {c.maxUses}</span>}
-          <MdBarChart size={14} className="opacity-60" />
+          {c.maxUses > 0 && <span className="font-normal text-slate-500"> / {c.maxUses}</span>}
+          <MdBarChart size={15} className="text-slate-400" aria-hidden />
         </button>
       )
     },
@@ -482,64 +359,48 @@ export default function CouponList() {
       key: 'expire',
       label: 'Expires',
       sortable: true,
-      render: (c) => <span className="text-slate-600">{fmtDate(c.expire)}</span>
+      hideBelow: 'md',
+      render: (c) => <span className="whitespace-nowrap text-slate-600">{c.expire ? fmtDate(c.expire) : 'Never'}</span>
     },
     {
       key: 'status',
       label: 'Status',
       sortable: true,
       align: 'center',
-      render: (c) => <StatusBadge status={c.status} />
+      render: (c) => <RecordStatus status={c.status} />
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (c) => (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => setStatsFor(c)}
-            className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            title="Usage statistics"
-          >
-            <MdBarChart size={17} />
-          </button>
-          <Link
-            href={`/coupon-codes/${c.id}`}
-            className="rounded-md p-2 transition hover:bg-slate-100"
-            style={{ color: 'var(--brand-strong)' }}
-            title="Edit"
-          >
-            <MdEdit size={17} />
+        <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+          <Link href={`/coupon-codes/${c.id}`} className="btn-ghost btn-sm">
+            Edit
           </Link>
-          {c.isAffiliate ? (
-            <span
-              className="cursor-not-allowed p-2 text-slate-300"
-              title="Affiliate coupons are managed from the Affiliates section in the Admin (HRM) panel"
-            >
-              <MdDelete size={17} />
-            </span>
-          ) : (
-            <button
-              onClick={() => handleDelete(c)}
-              className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
-              title="Delete"
-            >
-              <MdDelete size={17} />
-            </button>
-          )}
+          <ActionMenu
+            label={`More actions for ${c.code}`}
+            items={[
+              { label: 'Edit', icon: MdEdit, onClick: () => router.push(`/coupon-codes/${c.id}`) },
+              { label: 'Usage statistics', icon: MdBarChart, onClick: () => setStatsFor(c) },
+              c.isAffiliate
+                ? { label: 'Delete — managed in Affiliates (HRM)', icon: MdDelete, disabled: true }
+                : { label: 'Delete', icon: MdDelete, tone: 'danger', onClick: () => handleDelete(c) }
+            ]}
+          />
         </div>
       )
     }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {statsFor && <UsageDrawer coupon={statsFor} onClose={() => setStatsFor(null)} />}
 
-      <PageHeader title="Coupon Codes" subtitle={`${total} coupon${total !== 1 ? 's' : ''} total`}>
+      <PageHeader title="Coupons" subtitle={`${total} coupon${total !== 1 ? 's' : ''}`}>
         <Link href="/coupon-codes/add" className="btn-brand">
-          <MdAdd size={18} /> Add Coupon
+          <MdAdd size={18} aria-hidden /> New coupon
         </Link>
       </PageHeader>
 
@@ -548,13 +409,17 @@ export default function CouponList() {
         onSearchChange={setSearch}
         onSubmit={() => setPage(1)}
         searchPlaceholder="Search by code or name…"
-        onReset={() => {
-          setSearch('');
-          setStatus('');
-          setType('');
-          setSortBy('');
-          setPage(1);
-        }}
+        onReset={
+          search || status || type || sortBy
+            ? () => {
+                setSearch('');
+                setStatus('');
+                setType('');
+                setSortBy('');
+                setPage(1);
+              }
+            : undefined
+        }
       >
         <select
           value={status}
@@ -563,6 +428,7 @@ export default function CouponList() {
             setPage(1);
           }}
           className="select-ui min-w-[130px]"
+          aria-label="Status"
         >
           {STATUS_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -577,6 +443,7 @@ export default function CouponList() {
             setPage(1);
           }}
           className="select-ui min-w-[120px]"
+          aria-label="Discount type"
         >
           {TYPE_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -587,14 +454,35 @@ export default function CouponList() {
       </ListToolbar>
 
       <DataTable
+        caption="Coupons"
+        onRowClick={(c) => router.push(`/coupon-codes/${c.id}`)}
+        rowLabel={(c) => `Edit coupon ${c.code}`}
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={coupons}
         sort={sort}
         selectionLabel="coupons"
         exportFileName="coupons-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
-        empty={<EmptyState title="No coupons found" icon={MdInbox} />}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        empty={
+          search || status || type ? (
+            <EmptyState title="No coupons match" hint="Try another filter or clear the search." icon={MdInbox} />
+          ) : (
+            <EmptyState
+              title="No coupons yet"
+              hint="Create a code customers can enter at checkout."
+              icon={MdInbox}
+              action={
+                <Link href="/coupon-codes/add" className="btn-brand">
+                  <MdAdd size={18} aria-hidden /> New coupon
+                </Link>
+              }
+            />
+          )
+        }
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="coupons" />}
       />
     </div>

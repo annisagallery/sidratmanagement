@@ -12,12 +12,13 @@
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
+import { alertError, toastSuccess } from 'src/utils/swal';
 import { FiArrowLeft, FiCheck, FiPackage } from 'react-icons/fi';
 import * as api from 'src/services';
 import ScanStation from 'src/components/_admin/scan/ScanStation';
 import { Code, StateChip, Empty, readState } from 'src/components/_admin/ops/primitives';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 const READY = ['ready', 'reserved', 'awaiting-supply'];
 
@@ -36,7 +37,7 @@ export default function PackingStation() {
   const queryClient = useQueryClient();
   const [manualItem, setManualItem] = useState('');
 
-  const { data, refetch, isLoading } = useQuery(
+  const { data, refetch, isLoading, isError, error } = useQuery(
     ['order', orderNo],
     () => api.getOrderByAdmin(orderNo),
     { enabled: Boolean(orderNo) },
@@ -54,12 +55,12 @@ export default function PackingStation() {
 
   const { mutateAsync: pack, isLoading: packing } = useMutation(() => api.packOrderByAdmin(orderNo), {
     onSuccess: () => {
-      toast.success('Order packed.');
+      toastSuccess('Order packed.');
       queryClient.invalidateQueries(['order', orderNo]);
       refetch();
     },
     onError: (error) =>
-      Swal.fire('Cannot pack order', error?.response?.data?.message || 'Not every piece is ready.', 'error'),
+      alertError(error, { title: 'Cannot pack order' }),
   });
 
   // The station returns an outcome; ScanStation owns sound, colour, and focus.
@@ -89,8 +90,31 @@ export default function PackingStation() {
     }
   };
 
-  if (isLoading) return <p className="p-8 text-sm text-slate-500">Loading order…</p>;
-  if (!order) return <p className="p-8 text-sm text-rose-600">Order {orderNo} was not found.</p>;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 p-4" aria-busy="true">
+        <div className="skeleton h-8 w-48" />
+        <div className="card-ui h-40 animate-pulse" />
+        <div className="card-ui h-64 animate-pulse" />
+      </div>
+    );
+  }
+  if (isError && !order) {
+    return (
+      <div className="mx-auto max-w-3xl p-4">
+        <ErrorState error={error} title={`Order ${orderNo} could not be loaded`} onRetry={refetch} />
+      </div>
+    );
+  }
+  if (!order) {
+    return (
+      <div className="mx-auto max-w-3xl p-4">
+        <div className="card-ui">
+          <EmptyState title={`Order ${orderNo} was not found`} hint="Check the order number and try again." />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4">
@@ -117,7 +141,7 @@ export default function PackingStation() {
 
       {alreadyPacked ? (
         <div className="card-ui flex items-center gap-3 border-emerald-200 bg-emerald-50 p-4">
-          <FiCheck className="shrink-0 text-xl text-emerald-600" />
+          <FiCheck className="shrink-0 text-xl text-emerald-700" />
           <div>
             <p className="text-sm font-semibold text-emerald-900">This order is packed.</p>
             <p className="text-xs text-emerald-800">Hand it to dispatch to create the consignment.</p>
@@ -136,7 +160,7 @@ export default function PackingStation() {
       )}
 
       <section className="card-ui overflow-hidden">
-        <h2 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <h2 className="section-label border-b border-slate-200 bg-slate-50 px-3 py-2">
           Pieces in this parcel
         </h2>
         <table className="w-full">
@@ -148,7 +172,7 @@ export default function PackingStation() {
                 <tr key={item.id || item._id} className="transition-colors hover:bg-slate-50/80">
                   <td className="w-10 px-3 py-2">
                     {done ? (
-                      <FiCheck className="text-emerald-600" />
+                      <FiCheck className="text-emerald-700" />
                     ) : (
                       <span className="block h-4 w-4 rounded-full border border-slate-300" />
                     )}
@@ -178,7 +202,7 @@ export default function PackingStation() {
 
       {!alreadyPacked && remaining.length ? (
         <details className="card-ui p-4">
-          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <summary className="section-label cursor-pointer">
             Assign an unmatched barcode manually
           </summary>
           <p className="mt-2 text-xs text-slate-500">

@@ -13,19 +13,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import {
-  FiAlertTriangle,
-  FiArrowRight,
-  FiCheck,
-  FiCheckCircle,
-  FiDollarSign,
-  FiInbox,
-  FiPlus,
-  FiRefreshCw,
-  FiRotateCcw,
-  FiTrash2,
-  FiUser
-} from 'react-icons/fi';
+import { FiAlertTriangle, FiCheck, FiCheckCircle, FiDollarSign, FiInbox, FiPlus, FiRotateCcw, FiSearch, FiTrash2, FiUser, FiX } from 'react-icons/fi';
 import { MdQrCodeScanner } from 'react-icons/md';
 
 import { searchProductionProducers, submitProductionSubmission } from 'src/services';
@@ -37,21 +25,21 @@ const MODES = [
   {
     key: 'UNIT_RECEIPT',
     label: 'Receive',
-    shortLabel: 'Into stock',
+    help: 'Finished pieces into stock',
     icon: FiInbox,
     scanLabel: 'Scan a finished piece'
   },
   {
     key: 'UNIT_REVERSAL',
     label: 'Remove',
-    shortLabel: 'Back to production',
+    help: 'Send a posted piece back',
     icon: FiRotateCcw,
-    scanLabel: 'Scan a posted item to remove'
+    scanLabel: 'Scan a posted piece to remove'
   },
   {
     key: 'EXTRA_PAY',
     label: 'Extra work',
-    shortLabel: 'No barcode',
+    help: 'Pay without a barcode',
     icon: FiDollarSign,
     scanLabel: null
   }
@@ -59,38 +47,115 @@ const MODES = [
 
 const MODE_LABEL = { UNIT_RECEIPT: 'Received', UNIT_REVERSAL: 'Removed', EXTRA_PAY: 'Extra work' };
 const MODE_TONE = { UNIT_RECEIPT: 'good', UNIT_REVERSAL: 'bad', EXTRA_PAY: 'warn' };
+const MODE_ICON_TONE = { UNIT_RECEIPT: 'text-emerald-600', UNIT_REVERSAL: 'text-rose-600', EXTRA_PAY: 'text-amber-600' };
 
-const SIGNAL_CLASS = {
-  UNIT_RECEIPT: 'from-emerald-400 via-emerald-500 to-cyan-400',
-  UNIT_REVERSAL: 'from-rose-400 via-rose-500 to-orange-400',
-  EXTRA_PAY: 'from-amber-300 via-amber-400 to-yellow-300'
-};
+/** Who made these pieces: one search, one list, one choice. */
+function OperatorPicker({ producer, onPick }) {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, isFetching, isError, refetch } = useQuery(
+    ['production-producers', search],
+    () => searchProductionProducers(search),
+    { keepPreviousData: true, enabled: !producer }
+  );
+  const producers = data?.data || [];
 
-const ACTIVE_MODE_CLASS = {
-  UNIT_RECEIPT: 'border-emerald-400 bg-emerald-500 text-white shadow-lg shadow-emerald-950/30',
-  UNIT_REVERSAL: 'border-rose-400 bg-rose-500 text-white shadow-lg shadow-rose-950/30',
-  EXTRA_PAY: 'border-amber-300 bg-amber-400 text-slate-950 shadow-lg shadow-amber-950/30'
-};
+  if (producer) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+          <FiCheck size={19} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-500">Every scan is credited to</p>
+          <p className="truncate text-base font-semibold text-slate-900">
+            {producer.name} <span className="ops-code text-sm font-normal text-slate-500">{producer.employeeCode}</span>
+          </p>
+        </div>
+        <button type="button" onClick={() => onPick(null)} className="btn-ghost">
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          <FiUser size={18} aria-hidden />
+        </span>
+        <div>
+          <p className="text-base font-semibold text-slate-900">Who made these pieces?</p>
+          <p className="text-[13px] text-slate-500">Choose the employee before scanning — every scan must belong to someone.</p>
+        </div>
+      </div>
+      <div className="relative">
+        <FiSearch size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by name or employee code"
+          aria-label="Search employees"
+          className="input-ui h-11 pl-10 !text-base sm:!text-sm"
+          autoFocus
+        />
+      </div>
+      {isError ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800" role="alert">
+          Employees could not be loaded.
+          <button type="button" onClick={() => refetch()} className="btn-ghost btn-sm">
+            Try again
+          </button>
+        </div>
+      ) : isLoading ? (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-14" />
+          ))}
+        </div>
+      ) : producers.length ? (
+        <ul className={`grid gap-2 sm:grid-cols-2 xl:grid-cols-3 ${isFetching ? 'opacity-60' : ''}`} aria-label="Employees">
+          {producers.slice(0, 9).map((entry) => (
+            <li key={entry.userId}>
+              <button
+                type="button"
+                onClick={() => onPick(entry)}
+                className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left transition hover:border-slate-900 hover:bg-slate-50"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700" aria-hidden>
+                  {String(entry.name || '?').charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-slate-900">{entry.name}</span>
+                  <span className="ops-code block text-xs text-slate-500">{entry.employeeCode}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-4 text-center text-[13px] text-slate-500">
+          {search ? `No employee matches “${search}”.` : 'No employees found.'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function ProductionScanPage() {
   const queryClient = useQueryClient();
 
-  const [producerId, setProducerId] = useState('');
-  const [producerSearch, setProducerSearch] = useState('');
+  const [producer, setProducer] = useState(null);
   const [mode, setMode] = useState('UNIT_RECEIPT');
   const [lines, setLines] = useState([]);
   const [note, setNote] = useState('');
   const [extra, setExtra] = useState({ amount: '', note: '' });
+  const [extraErrors, setExtraErrors] = useState({});
   const [qcConfirmed, setQcConfirmed] = useState(false);
   const [outcome, setOutcome] = useState(null);
 
-  const { data: producerData } = useQuery(
-    ['production-producers', producerSearch],
-    () => searchProductionProducers(producerSearch),
-    { keepPreviousData: true }
-  );
-  const producers = producerData?.data || [];
-  const producer = producers.find((entry) => String(entry.userId) === producerId);
+  const producerId = producer ? String(producer.userId) : '';
   const activeMode = MODES.find((entry) => entry.key === mode) || MODES[0];
 
   const summary = useMemo(
@@ -138,13 +203,18 @@ export default function ProductionScanPage() {
     return { ok: true, message: kind === 'UNIT_RECEIPT' ? `${barcode} received.` : `${barcode} queued for removal.` };
   };
 
-  const addExtra = () => {
+  const addExtra = (event) => {
+    event?.preventDefault();
     const amount = Number(extra.amount);
     const reason = extra.note.trim();
-    if (!(amount > 0) || !reason) return toast('Extra work needs an amount and a reason');
+    const errors = {};
+    if (!(amount > 0)) errors.amount = 'Enter an amount above zero.';
+    if (!reason) errors.note = 'Say what the work was.';
+    setExtraErrors(errors);
+    if (Object.keys(errors).length) return;
     setLines((current) => [{ kind: 'EXTRA_PAY', barcode: '0000', amount, note: reason }, ...current]);
     setExtra({ amount: '', note: '' });
-    return setMode('UNIT_RECEIPT');
+    setMode('UNIT_RECEIPT');
   };
 
   const blocked = !producerId
@@ -152,13 +222,14 @@ export default function ProductionScanPage() {
     : !lines.length
       ? 'Scan at least one piece.'
       : summary.receipts > 0 && !qcConfirmed
-        ? 'Confirm QC before posting.'
+        ? 'Confirm quality control before posting.'
         : null;
 
   const reset = () => {
     setLines([]);
     setNote('');
     setExtra({ amount: '', note: '' });
+    setExtraErrors({});
     setQcConfirmed(false);
     setMode('UNIT_RECEIPT');
     setOutcome(null);
@@ -194,270 +265,238 @@ export default function ProductionScanPage() {
         </Notice>
       ) : null}
 
-      <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid items-center gap-3 border-b border-slate-200 bg-white p-3 md:grid-cols-[180px_minmax(220px,0.8fr)_minmax(260px,1fr)_auto]">
-          <div className="flex items-center gap-3 self-center">
-            <span
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
-                producer ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400'
-              }`}
-            >
-              {producer ? <FiCheck size={19} /> : <FiUser size={18} />}
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Operator</p>
-              <p className="truncate text-sm font-bold text-slate-900">{producer?.name || 'Not selected'}</p>
-            </div>
-          </div>
-
-          <label className="block">
-            <span className="sr-only">Find employee</span>
-            <input
-              value={producerSearch}
-              onChange={(event) => setProducerSearch(event.target.value)}
-              placeholder="Search name or employee code"
-              className="input-ui h-11 !text-base sm:!text-sm"
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]">
+        {/* ── Who and what ──────────────────────────────────────────────── */}
+        <div className="flex min-h-0 flex-col gap-3 lg:overflow-y-auto">
+          <section className="card-ui p-4 sm:p-5" aria-label="Employee">
+            <OperatorPicker
+              producer={producer}
+              onPick={(next) => {
+                setProducer(next);
+                setOutcome(null);
+              }}
             />
-          </label>
+          </section>
 
-          <label className="block">
-            <span className="sr-only">Selected employee</span>
-            <select
-              value={producerId}
-              onChange={(event) => setProducerId(event.target.value)}
-              className="select-ui h-11 w-full !text-base font-semibold sm:!text-sm"
-            >
-              <option value="">Choose employee…</option>
-              {producers.map((entry) => (
-                <option key={entry.userId} value={entry.userId}>
-                  {entry.name} — {entry.employeeCode}
-                </option>
-              ))}
-            </select>
-          </label>
+          <section className="card-ui flex-1 space-y-5 p-4 sm:p-5" aria-label="Scanning">
+            <div role="radiogroup" aria-label="What are you scanning?" className="grid grid-cols-3 gap-2">
+              {MODES.map((entry) => {
+                const active = mode === entry.key;
+                const Icon = entry.icon;
+                return (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setMode(entry.key)}
+                    className={`min-h-[72px] rounded-lg border px-3 py-3 text-left transition ${
+                      active ? 'border-slate-900 bg-white ring-1 ring-slate-900' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Icon size={18} className={`shrink-0 ${active ? MODE_ICON_TONE[entry.key] : 'text-slate-400'}`} aria-hidden />
+                      <span className="text-sm font-semibold text-slate-900">{entry.label}</span>
+                    </span>
+                    <span className="mt-1 hidden text-xs text-slate-500 sm:block">{entry.help}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          <button type="button" onClick={reset} className="btn-ghost h-11 whitespace-nowrap">
-            <FiRefreshCw size={15} /> Clear desk
-          </button>
-        </div>
-
-        <div className="grid min-h-0 flex-1 items-stretch lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_460px]">
-          <div className="relative overflow-hidden bg-slate-950 p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto">
-            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${SIGNAL_CLASS[mode]}`} />
-            <div className="relative z-10">
-              <div className="mb-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Scan mode</p>
+            {mode === 'UNIT_REVERSAL' ? (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-900" role="note">
+                <FiAlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden />
+                For pieces already posted: removes the employee&apos;s credit, releases the stock, and returns the piece to production as not ready.
               </div>
+            ) : null}
 
-              <div className="grid grid-cols-3 gap-2" role="group" aria-label="Submission type">
-                {MODES.map((entry) => {
-                  const active = mode === entry.key;
-                  const Icon = entry.icon;
-                  return (
-                    <button
-                      key={entry.key}
-                      type="button"
-                      onClick={() => setMode(entry.key)}
-                      aria-pressed={active}
-                      className={`min-h-[72px] rounded-xl border px-2 py-3 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-white/70 sm:px-4 ${
-                        active
-                          ? ACTIVE_MODE_CLASS[entry.key]
-                          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Icon size={18} className="shrink-0" />
-                        <span className="text-sm font-extrabold">{entry.label}</span>
-                      </span>
-                      <span className={`mt-1 block pl-6 text-[11px] font-medium ${active ? 'opacity-80' : 'text-slate-500'}`}>
-                        {entry.shortLabel}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {mode === 'EXTRA_PAY' ? (
-                <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:p-5">
-                  <div className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
-                    <label>
-                      <span className="mb-1.5 block text-xs font-semibold text-slate-300">Amount</span>
-                      <input
-                        value={extra.amount}
-                        onChange={(event) => setExtra({ ...extra, amount: event.target.value })}
-                        inputMode="decimal"
-                        placeholder="৳0"
-                        className="input-ui ops-code h-12 text-base"
-                      />
-                    </label>
-                    <label>
-                      <span className="mb-1.5 block text-xs font-semibold text-slate-300">Reason</span>
-                      <input
-                        value={extra.note}
-                        onChange={(event) => setExtra({ ...extra, note: event.target.value })}
-                        placeholder="Repair, alteration, overtime…"
-                        className="input-ui h-12"
-                      />
-                    </label>
-                  </div>
-                  <button type="button" onClick={addExtra} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-bold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200">
-                    <FiPlus size={16} /> Add extra work
+            {mode === 'EXTRA_PAY' ? (
+              <form onSubmit={addExtra} noValidate className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Amount (৳)</span>
+                    <input
+                      value={extra.amount}
+                      onChange={(event) => {
+                        setExtra({ ...extra, amount: event.target.value });
+                        setExtraErrors((e) => ({ ...e, amount: undefined }));
+                      }}
+                      inputMode="decimal"
+                      placeholder="0"
+                      aria-invalid={Boolean(extraErrors.amount)}
+                      className="input-ui ops-code h-12 text-base"
+                      autoFocus
+                    />
+                    {extraErrors.amount && <span className="mt-1.5 block text-[13px] font-medium text-rose-700">{extraErrors.amount}</span>}
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium text-slate-800">What was the work?</span>
+                    <input
+                      value={extra.note}
+                      onChange={(event) => {
+                        setExtra({ ...extra, note: event.target.value });
+                        setExtraErrors((e) => ({ ...e, note: undefined }));
+                      }}
+                      placeholder="Repair, alteration, overtime…"
+                      aria-invalid={Boolean(extraErrors.note)}
+                      className="input-ui h-12"
+                    />
+                    {extraErrors.note && <span className="mt-1.5 block text-[13px] font-medium text-rose-700">{extraErrors.note}</span>}
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setMode('UNIT_RECEIPT')} className="btn-ghost h-12">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={!producerId} className="btn-brand h-12 flex-1">
+                    <FiPlus size={16} aria-hidden /> Add extra work
                   </button>
                 </div>
-              ) : (
-                <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/70 p-4 shadow-inner sm:p-5">
-                  <ScanStation
-                    onScan={handleScan}
-                    label={activeMode.scanLabel}
-                    placeholder="Scan a unit barcode, then press Enter"
-                    disabled={!producerId}
-                    disabledReason="Choose the employee first — every scan must belong to someone."
-                    historyLimit={4}
-                    appearance="desk"
-                  />
-                </div>
-              )}
+                {!producerId && <p className="text-[13px] font-medium text-amber-800">Choose the employee first.</p>}
+              </form>
+            ) : (
+              <ScanStation
+                onScan={handleScan}
+                label={activeMode.scanLabel}
+                placeholder="Scan a piece's barcode, then press Enter"
+                hint="Scan 0000 to switch to extra work."
+                disabled={!producerId}
+                disabledReason="Choose the employee first — every scan must belong to someone."
+                historyLimit={5}
+                appearance="desk"
+              />
+            )}
+          </section>
+        </div>
 
-              {mode === 'UNIT_REVERSAL' ? (
-                <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs font-semibold text-rose-100">
-                  <FiAlertTriangle size={15} className="mt-px shrink-0" />
-                  For already-posted items: removes employee credit, releases stock, and returns the piece to production as not ready.
-                </div>
+        {/* ── The submission ────────────────────────────────────────────── */}
+        <aside className="card-ui flex min-h-[520px] flex-col overflow-hidden lg:min-h-0" aria-labelledby="submission-title">
+          <header className="border-b border-slate-200 px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="submission-title" className="text-[15px] font-semibold text-slate-900">
+                Submission
+                <span className="ml-2 font-normal tabular-nums text-slate-500">
+                  {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+                </span>
+              </h2>
+              {lines.length || outcome ? (
+                <button type="button" onClick={reset} className="btn-ghost btn-sm">
+                  Start over
+                </button>
               ) : null}
-
             </div>
-          </div>
-
-          <aside className="flex min-h-[520px] flex-col border-t border-slate-200 bg-white lg:min-h-0 lg:overflow-hidden lg:border-l lg:border-t-0">
-            <header className="border-b border-slate-200 px-4 py-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-black tracking-tight text-slate-900">Submission</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  {lines.length ? (
-                    <button
-                      type="button"
-                      onClick={() => setLines([])}
-                      className="inline-flex h-11 items-center rounded-lg px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200"
-                    >
-                      Clear lines
-                    </button>
-                  ) : null}
-                  <Pill tone={lines.length ? 'brand' : 'neutral'} className="!px-2.5 !py-1">
-                    {lines.length} {lines.length === 1 ? 'line' : 'lines'}
-                  </Pill>
-                </div>
+            <dl className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+              <div className="bg-white px-3 py-2.5">
+                <dt className="text-xs text-slate-500">Received</dt>
+                <dd className="text-lg font-semibold tabular-nums text-slate-900">{qty(summary.receipts)}</dd>
               </div>
-
-              <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                <div className="px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Received</p>
-                  <p className="mt-0.5 text-lg font-black tabular-nums text-emerald-700">{qty(summary.receipts)}</p>
-                </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Removed</p>
-                  <p className="mt-0.5 text-lg font-black tabular-nums text-rose-600">{qty(summary.removed)}</p>
-                </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Extra</p>
-                  <p className="mt-0.5 truncate text-base font-black tabular-nums text-amber-700">{money(summary.extra)}</p>
-                </div>
+              <div className="bg-white px-3 py-2.5">
+                <dt className="text-xs text-slate-500">Removed</dt>
+                <dd className="text-lg font-semibold tabular-nums text-slate-900">{qty(summary.removed)}</dd>
               </div>
-            </header>
+              <div className="bg-white px-3 py-2.5">
+                <dt className="text-xs text-slate-500">Extra pay</dt>
+                <dd className="truncate text-lg font-semibold tabular-nums text-slate-900">{money(summary.extra)}</dd>
+              </div>
+            </dl>
+          </header>
 
-            <div className="min-h-[220px] flex-1 overflow-y-auto">
-              {lines.length ? (
-                <ul className="divide-y divide-slate-100">
-                  {lines.map((line, index) => (
-                    <li key={`${line.barcode}-${index}`} className="group flex min-h-[58px] items-center gap-3 px-4 py-2.5 sm:px-5">
-                      <span className={`h-8 w-1 shrink-0 rounded-full ${line.kind === 'UNIT_RECEIPT' ? 'bg-emerald-400' : line.kind === 'UNIT_REVERSAL' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+          <div className="min-h-[200px] flex-1 overflow-y-auto">
+            {lines.length ? (
+              <ul className="divide-y divide-slate-100">
+                {lines.map((line, index) => {
+                  const what = line.kind === 'EXTRA_PAY' ? line.note : line.barcode;
+                  return (
+                    <li key={`${line.barcode}-${index}`} className="flex min-h-[56px] items-center gap-3 px-4 py-2.5 sm:px-5">
+                      <Pill tone={MODE_TONE[line.kind]} className="shrink-0">
+                        {MODE_LABEL[line.kind]}
+                      </Pill>
                       <span className="min-w-0 flex-1">
-                        <Pill tone={MODE_TONE[line.kind]} className="mb-1">{MODE_LABEL[line.kind]}</Pill>
                         {line.kind === 'EXTRA_PAY' ? (
-                          <span className="block truncate text-[13px] font-medium text-slate-700">{line.note}</span>
+                          <span className="block truncate text-[13px] font-medium text-slate-900">{line.note}</span>
                         ) : (
-                          <Code className="block text-slate-700">{line.barcode}</Code>
+                          <Code className="block text-slate-900">{line.barcode}</Code>
                         )}
                       </span>
-                      {line.kind === 'EXTRA_PAY' ? (
-                        <span className="ops-code text-[13px] font-bold text-slate-800">{money(line.amount)}</span>
-                      ) : null}
+                      {line.kind === 'EXTRA_PAY' ? <span className="text-[13px] font-semibold tabular-nums text-slate-900">{money(line.amount)}</span> : null}
                       <button
                         type="button"
-                        aria-label={`Delete pending line ${line.kind === 'EXTRA_PAY' ? line.note : line.barcode}`}
+                        aria-label={`Remove ${what} from this submission`}
+                        title="Remove line"
                         onClick={() => setLines((current) => current.filter((_, position) => position !== index))}
-                        className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                        className="btn-icon btn-icon-sm btn-icon-danger shrink-0"
                       >
-                        <FiTrash2 size={14} /> Delete
+                        <FiTrash2 size={15} aria-hidden />
                       </button>
                     </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex h-full min-h-[250px] flex-col items-center justify-center px-8 py-10 text-center">
-                  <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-slate-300">
-                    <MdQrCodeScanner size={27} />
-                  </span>
-                  <p className="text-sm font-bold text-slate-600">No scans yet</p>
-                </div>
-              )}
-            </div>
-
-            <footer className="mt-auto space-y-3 border-t border-slate-200 bg-slate-50/80 p-4 sm:p-5">
-              {summary.receipts > 0 ? (
-                <label className={`flex min-h-[56px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition ${qcConfirmed ? 'border-emerald-300 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                  <input
-                    type="checkbox"
-                    checked={qcConfirmed}
-                    onChange={(event) => setQcConfirmed(event.target.checked)}
-                    className="h-5 w-5 shrink-0 rounded border-slate-300 accent-emerald-600"
-                  />
-                  <span className="min-w-0">
-                    <span className={`block text-[13px] font-bold ${qcConfirmed ? 'text-emerald-800' : 'text-amber-900'}`}>
-                      QC passed on {summary.receipts} piece{summary.receipts === 1 ? '' : 's'}
-                    </span>
-                  </span>
-                </label>
-              ) : null}
-
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-semibold text-slate-600">Submission note <span className="font-normal text-slate-400">(optional)</span></span>
-                <input
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Add a note for the production record"
-                  className="input-ui h-11 !text-base sm:!text-sm"
-                />
-              </label>
-
-              <div
-                aria-live="polite"
-                className={`flex items-center gap-2 text-xs font-semibold ${blocked ? 'text-slate-500' : 'text-emerald-700'}`}
-              >
-                {blocked ? <FiArrowRight size={14} /> : <FiCheckCircle size={15} />}
-                <span>{blocked ? blocked : 'Everything is ready to post.'}</span>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="flex h-full min-h-[220px] flex-col items-center justify-center px-8 py-10 text-center">
+                <MdQrCodeScanner size={30} className="mb-2 text-slate-300" aria-hidden />
+                <p className="text-sm font-medium text-slate-900">Nothing scanned yet</p>
+                <p className="mt-1 text-[13px] text-slate-500">Scans collect here and are only saved when you post them.</p>
               </div>
+            )}
+          </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  post.mutate({
-                    producedBy: producerId,
-                    note,
-                    qcConfirmed: summary.receipts > 0 ? qcConfirmed : false,
-                    lines
-                  })
-                }
-                disabled={Boolean(blocked) || post.isLoading}
-                className="btn-brand h-12 w-full rounded-xl text-sm shadow-sm"
+          <footer className="space-y-3 border-t border-slate-200 bg-slate-50 p-4 sm:p-5">
+            {summary.receipts > 0 ? (
+              <label
+                className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition ${
+                  qcConfirmed ? 'border-emerald-300 bg-emerald-50' : 'border-amber-200 bg-amber-50'
+                }`}
               >
-                <FiCheck size={17} /> {post.isLoading ? 'Posting…' : `Post ${lines.length || ''} ${lines.length === 1 ? 'line' : 'lines'}`.trim()}
-              </button>
-            </footer>
-          </aside>
-        </div>
-      </section>
+                <input
+                  type="checkbox"
+                  checked={qcConfirmed}
+                  onChange={(event) => setQcConfirmed(event.target.checked)}
+                  className="h-5 w-5 shrink-0 rounded border-slate-300 accent-emerald-600"
+                />
+                <span className={`text-[13px] font-semibold ${qcConfirmed ? 'text-emerald-900' : 'text-amber-900'}`}>
+                  Quality checked — {summary.receipts} piece{summary.receipts === 1 ? '' : 's'} passed
+                </span>
+              </label>
+            ) : null}
+
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] font-medium text-slate-800">
+                Note <span className="font-normal text-slate-500">Optional</span>
+              </span>
+              <input
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Anything for the production record"
+                className="input-ui h-11 !text-base sm:!text-sm"
+              />
+            </label>
+
+            <p aria-live="polite" className={`flex items-center gap-2 text-[13px] font-medium ${blocked ? 'text-slate-600' : 'text-emerald-700'}`}>
+              {blocked ? <FiX size={14} className="shrink-0" aria-hidden /> : <FiCheckCircle size={15} className="shrink-0" aria-hidden />}
+              {blocked || 'Ready to post.'}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                post.mutate({
+                  producedBy: producerId,
+                  note,
+                  qcConfirmed: summary.receipts > 0 ? qcConfirmed : false,
+                  lines
+                })
+              }
+              disabled={Boolean(blocked) || post.isLoading}
+              className="btn-brand h-12 w-full"
+            >
+              <FiCheck size={17} aria-hidden />{' '}
+              {post.isLoading ? 'Posting…' : `Post ${lines.length || ''} ${lines.length === 1 ? 'line' : 'lines'}`.replace(/\s+/g, ' ').trim()}
+            </button>
+          </footer>
+        </aside>
+      </div>
     </div>
   );
 }

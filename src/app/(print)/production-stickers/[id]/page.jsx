@@ -62,13 +62,13 @@ export default function ProductionStickerSheet() {
       <style dangerouslySetInnerHTML={{ __html: LABEL_SHEET_CSS }} />
 
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <button onClick={() => window.history.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+        <button type="button" onClick={() => window.history.back()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <FiArrowLeft /> Back
         </button>
         <div style={{ fontWeight: 700, fontSize: 14 }}>
           {labels.length} sticker{labels.length === 1 ? '' : 's'}
         </div>
-        <button
+        <button type="button"
           onClick={print}
           disabled={!labels.length || building}
           title="Opens a print-ready PDF in a new tab"

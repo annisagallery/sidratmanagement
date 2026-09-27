@@ -20,7 +20,7 @@ export default function SupplyBadge({ item, showDue = true }) {
       <StateChip state={key} label={label} />
       {item?.packVerifiedAt ? <span className="text-xs font-medium text-emerald-700">scanned</span> : null}
       {due ? (
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-500">
           due {due.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
         </span>
       ) : null}

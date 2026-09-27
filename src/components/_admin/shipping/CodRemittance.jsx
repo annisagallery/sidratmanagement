@@ -11,23 +11,17 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery } from 'react-query';
 import { format } from 'date-fns';
-import { FiDollarSign } from 'react-icons/fi';
+import { MdPayments } from 'react-icons/md';
 
 import * as api from 'src/services';
-import {
-  EmptyRow,
-  Field,
-  PageBar,
-  Pill,
-  StatTile,
-  Toolbar,
-  errorAlert,
-  fieldClass,
-  money,
-  toast
-} from 'src/components/_admin/ui/primitives';
+import { alertError, toastSuccess } from 'src/utils/swal';
+import PageHeader from 'src/components/_admin/ui/PageHeader';
+import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import { KpiGrid, StatTile } from 'src/components/_admin/ui/kpi';
+import { EmptyRow, ErrorRow, Field, LoadingRows, Pill, fieldClass, money } from 'src/components/_admin/ui/primitives';
 
 const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee' };
 
@@ -38,7 +32,7 @@ export default function CodRemittance() {
   const [via, setVia] = useState('other');
   const [label, setLabel] = useState('');
 
-  const { data, isLoading, refetch } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     ['cod-outstanding', provider],
     () => api.getCodOutstanding(provider ? { provider } : {}),
     { refetchOnWindowFocus: false }
@@ -71,12 +65,12 @@ export default function CodRemittance() {
     {
       onSuccess: (response) => {
         const short = (response?.data?.lines || []).filter((line) => line.status === 'short').length;
-        toast(short ? `Payout recorded — ${short} consignment${short === 1 ? '' : 's'} still short` : 'Payout recorded');
+        toastSuccess('Payout recorded', short ? `${short} consignment${short === 1 ? ' is' : 's are'} still short and stay on this list.` : undefined);
         setSelected({});
         setReference('');
         refetch();
       },
-      onError: (error) => errorAlert('Could not record the payout', error)
+      onError: (err) => alertError(err, { title: 'The payout was not recorded' })
     }
   );
 
@@ -93,146 +87,155 @@ export default function CodRemittance() {
     setSelected(allChosen ? {} : Object.fromEntries(rows.map((row) => [row.id, String(row.outstanding)])));
   }
 
+  const shortBy = expecting - receiving;
+
   return (
-    <div className="space-y-4 pb-12">
-      <PageBar
-        eyebrow="Shipping"
-        title="COD payouts"
-        subtitle="Cash couriers collected on delivery and have not paid us yet."
-      />
+    <div className="space-y-6 pb-12">
+      <PageHeader title="COD payouts" subtitle="Cash couriers collected on delivery and have not paid us yet." />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Still owed" value={money(totals.outstanding)} tone={totals.outstanding > 0 ? 'warn' : 'good'} />
-        <StatTile label="Collected" value={money(totals.collected)} note="Cash taken at the door" />
-        <StatTile label="Courier fees" value={money(totals.fees)} note="Deducted from payouts" />
-        <StatTile label="Consignments" value={rows.length} note="Awaiting or short" />
-      </div>
+      <KpiGrid>
+        <StatTile label="Still owed" value={money(totals.outstanding)} hint="By couriers, after fees" loading={isLoading} />
+        <StatTile label="Collected" value={money(totals.collected)} hint="Cash taken at the door" loading={isLoading} />
+        <StatTile label="Courier fees" value={money(totals.fees)} hint="Deducted from payouts" loading={isLoading} />
+        <StatTile label="Consignments" value={rows.length.toLocaleString()} hint="Awaiting payout or short" loading={isLoading} />
+      </KpiGrid>
 
-      <Toolbar>
-        <select value={provider} onChange={(event) => setProvider(event.target.value)} className="select-ui h-9 w-44">
-          <option value="">All couriers</option>
-          {Object.entries(PROVIDER_LABEL).map(([value, text]) => (
-            <option key={value} value={value}>
-              {text}
-              {byProvider[value] ? ` — ${money(byProvider[value])}` : ''}
-            </option>
-          ))}
-        </select>
-      </Toolbar>
+      <section className="card-ui overflow-hidden" aria-labelledby="cod-title">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
+          <div>
+            <h2 id="cod-title" className="text-[15px] font-semibold text-slate-900">
+              Awaiting payout
+            </h2>
+            <p className="text-[13px] text-slate-500">Tick what a courier payout covers, and correct any amount that arrived short.</p>
+          </div>
+          <select value={provider} onChange={(event) => setProvider(event.target.value)} className="select-ui" aria-label="Courier">
+            <option value="">All couriers</option>
+            {Object.entries(PROVIDER_LABEL).map(([value, text]) => (
+              <option key={value} value={value}>
+                {text}
+                {byProvider[value] ? ` — ${money(byProvider[value])}` : ''}
+              </option>
+            ))}
+          </select>
+        </header>
 
-      <div className="card-ui overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        <GlobalTable>
+          <caption className="sr-only">Consignments awaiting a courier payout</caption>
+          <thead>
             <tr>
-              <th className="w-10 px-3 py-2.5">
-                <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="Select all" />
+              <th scope="col" className="w-10">
+                <input type="checkbox" checked={allChosen} onChange={toggleAll} disabled={!rows.length} aria-label="Select every consignment" />
               </th>
-              <th className="px-3 py-2.5">Order</th>
-              <th className="px-3 py-2.5">Courier</th>
-              <th className="px-3 py-2.5 text-right">Collected</th>
-              <th className="px-3 py-2.5 text-right">Fee</th>
-              <th className="px-3 py-2.5 text-right">Owed</th>
-              <th className="px-3 py-2.5 text-right">Received now</th>
+              <th scope="col">Order</th>
+              <th scope="col">Courier</th>
+              <th scope="col" className="text-right">Collected</th>
+              <th scope="col" className="hidden text-right md:table-cell">Fee</th>
+              <th scope="col" className="text-right">Owed</th>
+              <th scope="col" className="text-right">Received now</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {isLoading ? (
-              <EmptyRow colSpan={7} title="Loading…" />
+              <LoadingRows colSpan={7} />
+            ) : isError ? (
+              <ErrorRow colSpan={7} error={error} onRetry={refetch} />
             ) : rows.length ? (
               rows.map((row) => {
                 const on = selected[row.id] !== undefined;
                 return (
-                  <tr key={row.id} className={on ? 'bg-[var(--brand-soft)]/40' : ''}>
-                    <td className="px-3 py-2.5">
-                      <input type="checkbox" checked={on} onChange={() => toggle(row)} aria-label={`Select ${row.orderNo}`} />
+                  <tr key={row.id} className={on ? 'bg-slate-50' : ''}>
+                    <td>
+                      <input type="checkbox" checked={on} onChange={() => toggle(row)} aria-label={`Select order ${row.orderNo}`} />
                     </td>
-                    <td className="px-3 py-2.5">
-                      <a href={`/orders/${row.orderNo}`} className="font-semibold text-slate-800 hover:underline">
+                    <td>
+                      <Link href={`/orders/${row.orderNo}`} className="ops-code text-[13px] font-semibold text-slate-900 hover:underline">
                         #{row.orderNo}
-                      </a>
-                      <p className="text-[11px] text-slate-400">
+                      </Link>
+                      <p className="text-xs text-slate-500">
                         {row.customer}
-                        {row.deliveredAt ? ` · ${format(new Date(row.deliveredAt), 'dd MMM')}` : ''}
+                        {row.deliveredAt ? ` · delivered ${format(new Date(row.deliveredAt), 'dd MMM')}` : ''}
                       </p>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <p className="font-medium text-slate-700">{PROVIDER_LABEL[row.provider] || row.provider}</p>
-                      <p className="ops-code text-[11px] text-slate-400">{row.consignmentId || '—'}</p>
+                    <td>
+                      <p className="text-[13px] text-slate-900">{PROVIDER_LABEL[row.provider] || row.provider}</p>
+                      <p className="ops-code text-xs text-slate-500">{row.consignmentId || '—'}</p>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{money(row.codCollected)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">
+                    <td className="text-right tabular-nums text-slate-700">{money(row.codCollected)}</td>
+                    <td className="hidden text-right tabular-nums text-slate-500 md:table-cell">
                       {row.deliveryFee == null ? '—' : money(row.deliveryFee)}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
-                      {money(row.outstanding)}
+                    <td className="text-right">
+                      <span className="font-semibold tabular-nums text-slate-900">{money(row.outstanding)}</span>
                       {row.remittanceStatus === 'short' ? (
                         <Pill tone="warn" className="ml-1.5">
-                          short
+                          Short
                         </Pill>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className="text-right">
                       {on ? (
                         <input
                           type="number"
+                          inputMode="decimal"
                           min="0"
                           step="0.01"
                           value={selected[row.id]}
                           onChange={(event) => setSelected((current) => ({ ...current, [row.id]: event.target.value }))}
-                          className={`${fieldClass} !h-8 w-28 text-right tabular-nums`}
-                          aria-label={`Received for ${row.orderNo}`}
+                          className={`${fieldClass} ml-auto w-28 text-right tabular-nums`}
+                          aria-label={`Amount received for order ${row.orderNo}`}
                         />
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                   </tr>
                 );
               })
             ) : (
-              <EmptyRow
-                colSpan={7}
-                icon={FiDollarSign}
-                title="Nothing owed"
-                hint="Consignments appear here once a courier delivers a COD parcel."
-              />
+              <EmptyRow colSpan={7} icon={MdPayments} title="Nothing owed" hint="Consignments appear here once a courier delivers a cash-on-delivery parcel." />
             )}
           </tbody>
-        </table>
-      </div>
+        </GlobalTable>
+      </section>
 
       {chosen.length ? (
-        <div className="card-ui sticky bottom-3 grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-          <Field label="Payout reference" hint="The courier's payment or invoice number">
-            <input value={reference} onChange={(event) => setReference(event.target.value)} className={fieldClass} />
-          </Field>
-          <Field label="Arrived as">
-            <select value={via} onChange={(event) => setVia(event.target.value)} className={fieldClass}>
-              <option value="other">Bank / mobile transfer</option>
-              <option value="cash">Cash to HQ</option>
-            </select>
-          </Field>
-          {via === 'other' ? (
-            <Field label="Account">
-              <input
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                placeholder="e.g. City Bank 1234"
-                className={fieldClass}
-              />
+        <section
+          className="card-ui sticky bottom-3 z-10 space-y-4 p-4 shadow-lg sm:p-5"
+          aria-label="Record the payout"
+        >
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Payout reference" hint="The courier's payment or invoice number" optional>
+              <input value={reference} onChange={(event) => setReference(event.target.value)} className={fieldClass} />
             </Field>
-          ) : (
-            <div />
-          )}
-          <div className="text-right">
-            <p className="text-xs text-slate-500">
-              {chosen.length} consignment{chosen.length === 1 ? '' : 's'} · expected {money(expecting)}
-            </p>
-            <button type="button" onClick={() => mutate()} disabled={saving} className="btn-brand mt-1 h-10">
-              {saving ? 'Recording…' : `Record ${money(receiving)} received`}
-            </button>
+            <Field label="Arrived as">
+              <select value={via} onChange={(event) => setVia(event.target.value)} className={fieldClass}>
+                <option value="other">Bank or mobile transfer</option>
+                <option value="cash">Cash to HQ</option>
+              </select>
+            </Field>
+            {via === 'other' ? (
+              <Field label="Into account" optional>
+                <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. City Bank 1234" className={fieldClass} />
+              </Field>
+            ) : null}
           </div>
-        </div>
+          <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[13px] text-slate-600">
+              {chosen.length} consignment{chosen.length === 1 ? '' : 's'} · expected <span className="font-semibold tabular-nums text-slate-900">{money(expecting)}</span>
+              {shortBy > 0.005 ? (
+                <span className="ml-1 font-medium text-amber-800">· {money(shortBy)} short — the rest stays on this list</span>
+              ) : null}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setSelected({})} disabled={saving} className="btn-ghost">
+                Clear selection
+              </button>
+              <button type="button" onClick={() => mutate()} disabled={saving} className="btn-brand">
+                {saving ? 'Recording…' : `Record ${money(receiving)} received`}
+              </button>
+            </div>
+          </div>
+        </section>
       ) : null}
     </div>
   );

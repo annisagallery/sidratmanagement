@@ -72,7 +72,7 @@ function Tags({ tags = [] }) {
       {tags.map((tag) => (
         <span
           key={tag.id || tag.slug || tag.name}
-          className="rounded border px-1 py-px text-[9px] font-semibold"
+          className="rounded border px-1 py-px text-[11px] font-semibold"
           style={{
             backgroundColor: tag.color ? `${tag.color}18` : '#f1f5f9',
             borderColor: tag.color ? `${tag.color}55` : '#cbd5e1',
@@ -96,11 +96,11 @@ function OrderCell({ order }) {
       >
         #{order.orderNo}
       </Link>
-      <p className="mt-0.5 text-[10px] text-slate-500">{dateTime(order.createdAt)}</p>
-      <p className="mt-0.5 text-[10px] text-slate-500">
+      <p className="mt-0.5 text-xs text-slate-500">{dateTime(order.createdAt)}</p>
+      <p className="mt-0.5 text-xs text-slate-500">
         {sourceLabel(order)} · {order.deliveryType || 'regular'}
       </p>
-      <p className="mt-0.5 text-[10px] text-slate-400">
+      <p className="mt-0.5 text-xs text-slate-500">
         {order.createdBy?.name || (order.source === 'online' ? 'Customer' : 'Unknown')}
         {order.branch?.name ? ` · ${order.branch.name}` : ''}
       </p>
@@ -116,13 +116,13 @@ function CustomerCell({ order }) {
     <div>
       <p className="font-semibold leading-4 text-slate-900">{address.name || order.user?.name || 'Guest customer'}</p>
       {phone ? (
-        <Link href={`/users/${encodeURIComponent(phone)}`} className="mt-0.5 block text-[11px] font-medium text-slate-600 hover:underline">
+        <Link href={`/users/${encodeURIComponent(phone)}`} className="mt-0.5 block text-xs font-medium text-slate-600 hover:underline">
           {phone}
         </Link>
       ) : (
-        <p className="mt-0.5 text-[11px] text-slate-400">No phone</p>
+        <p className="mt-0.5 text-xs text-slate-500">No phone</p>
       )}
-      <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{location || 'No delivery address'}</p>
+      <p className="mt-0.5 text-xs leading-4 text-slate-500">{location || 'No delivery address'}</p>
     </div>
   );
 }
@@ -131,7 +131,7 @@ function FulfillmentCell({ order, statuses }) {
   return (
     <div>
       <StatusBadge status={order.status} statuses={statuses} />
-      <p className="mt-1 text-[10px] font-semibold text-slate-500">Due {date(order.estimatedDelivery)}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500">Due {date(order.estimatedDelivery)}</p>
     </div>
   );
 }
@@ -142,11 +142,11 @@ function ItemCell({ item }) {
   return (
     <div>
       <p className="font-semibold leading-4 text-slate-900">{itemName(item)}</p>
-      {variant ? <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{variant}</p> : null}
+      {variant ? <p className="mt-0.5 text-xs leading-4 text-slate-500">{variant}</p> : null}
       {item.customizeDetails ? (
-        <p className="mt-0.5 text-[10px] leading-4 text-amber-800">Custom: {item.customizeDetails}</p>
+        <p className="mt-0.5 text-xs leading-4 text-amber-800">Custom: {item.customizeDetails}</p>
       ) : item.isCustom ? (
-        <p className="mt-0.5 text-[10px] font-semibold text-amber-800">Custom item</p>
+        <p className="mt-0.5 text-xs font-semibold text-amber-800">Custom item</p>
       ) : null}
     </div>
   );
@@ -157,8 +157,8 @@ function ItemStateCell({ item, itemStatuses }) {
   return (
     <div>
       <StatusBadge status={item.status} statuses={itemStatuses} />
-      {code ? <p className="mt-1 font-mono text-[10px] font-semibold text-slate-600">{code}</p> : null}
-      {item.deliveryDate ? <p className="mt-0.5 text-[10px] text-slate-500">Due {date(item.deliveryDate)}</p> : null}
+      {code ? <p className="mt-1 font-mono text-xs font-semibold text-slate-600">{code}</p> : null}
+      {item.deliveryDate ? <p className="mt-0.5 text-xs text-slate-500">Due {date(item.deliveryDate)}</p> : null}
     </div>
   );
 }
@@ -168,7 +168,7 @@ function MoneyCell({ order }) {
   const payments = Array.isArray(order.payments) ? order.payments : [];
   const totalDiscount = (Number(order.discount) || 0) + (Number(order.cashDiscount) || 0);
   return (
-    <div className="text-[10px] tabular-nums">
+    <div className="text-xs tabular-nums">
       <div className="flex justify-between gap-2 text-[12px] font-extrabold text-slate-900">
         <span>Total</span>
         <span>{money(order.total)}</span>
@@ -200,11 +200,11 @@ function MoneyCell({ order }) {
         <span className="ml-1 font-normal uppercase text-slate-500">{order.paymentMethod || ''}</span>
       </p>
       {payments.map((payment, index) => (
-        <p key={payment.id || payment._id || index} className="text-[9px] leading-4 text-slate-500">
+        <p key={payment.id || payment._id || index} className="text-[11px] leading-4 text-slate-500">
           <span className="capitalize">{payment.method}</span> {money(payment.amount)}
         </p>
       ))}
-      {order.couponCode ? <p className="text-[9px] font-semibold text-slate-500">Coupon {order.couponCode}</p> : null}
+      {order.couponCode ? <p className="text-[11px] font-semibold text-slate-500">Coupon {order.couponCode}</p> : null}
     </div>
   );
 }
@@ -213,8 +213,8 @@ function ContextCell({ order }) {
   return (
     <div>
       <Tags tags={order.tags} />
-      {order.note ? <p className="mt-1 text-[10px] leading-4 text-slate-600">{order.note}</p> : null}
-      {!order.tags?.length && !order.note ? <span className="text-[10px] text-slate-400">—</span> : null}
+      {order.note ? <p className="mt-1 text-xs leading-4 text-slate-600">{order.note}</p> : null}
+      {!order.tags?.length && !order.note ? <span className="text-xs text-slate-500">—</span> : null}
     </div>
   );
 }
@@ -225,7 +225,7 @@ function CompactHeader({ label, field, sort, align = 'left', className = '' }) {
 
   if (!field) {
     return (
-      <th scope="col" className={`px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${alignment} ${className}`}>
+      <th scope="col" className={`px-2 py-2 text-xs font-semibold text-slate-600 ${alignment} ${className}`}>
         {label}
       </th>
     );
@@ -236,7 +236,7 @@ function CompactHeader({ label, field, sort, align = 'left', className = '' }) {
       <button
         type="button"
         onClick={() => sort.onSort(field)}
-        className={`inline-flex min-h-7 items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition hover:text-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
+        className={`inline-flex min-h-7 items-center gap-1 text-xs font-semibold uppercase tracking-wider transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
           align === 'right' ? 'flex-row-reverse' : ''
         }`}
       >
@@ -244,7 +244,7 @@ function CompactHeader({ label, field, sort, align = 'left', className = '' }) {
         {active ? (
           sort.order === 'asc' ? <MdArrowUpward size={13} /> : <MdArrowDownward size={13} />
         ) : (
-          <MdUnfoldMore size={13} className="text-slate-400" />
+          <MdUnfoldMore size={13} className="text-slate-500" />
         )}
       </button>
     </th>
@@ -291,7 +291,7 @@ export default function CompactOrdersTable({
         // declares a minimum width any more, so on a normal screen it never
         // engages.
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-[11px]">
+          <table className="w-full border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 border-b border-slate-300 bg-slate-900 text-white shadow-sm">
               <tr>
                 <th scope="col" className="w-9 px-2 py-2 text-center">
@@ -333,7 +333,7 @@ export default function CompactOrdersTable({
                   >
                     {itemIndex === 0 ? (
                       <>
-                        <td rowSpan={rowSpan} className="border-l-4 border-l-[var(--brand)] px-2 py-2 text-center">
+                        <td rowSpan={rowSpan} className="border-l-4 border-l-slate-900 px-2 py-2 text-center">
                           <SelectionCheckbox
                             checked={selected}
                             onChange={() => toggleRow(key, order)}
@@ -347,22 +347,22 @@ export default function CompactOrdersTable({
                     ) : null}
 
                     <td className="px-2 py-2">
-                      {item ? <ItemCell item={item} /> : <span className="text-slate-400">No items</span>}
+                      {item ? <ItemCell item={item} /> : <span className="text-slate-500">No items</span>}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">
                       {item ? (
                         <div>
-                          <p className="whitespace-nowrap font-bold text-slate-900">
+                          <p className="whitespace-nowrap font-semibold text-slate-900">
                             {valueOrDash(item.quantity)} × {money(item.price)}
                           </p>
-                          <p className="mt-0.5 text-[10px] text-slate-500">
+                          <p className="mt-0.5 text-xs text-slate-500">
                             {money((Number(item.quantity) || 1) * (Number(item.price) || 0))}
                           </p>
                           {item.returnedQty > 0 ? (
-                            <p className="mt-0.5 text-[9px] font-semibold text-rose-700">{item.returnedQty} returned</p>
+                            <p className="mt-0.5 text-[11px] font-semibold text-rose-700">{item.returnedQty} returned</p>
                           ) : null}
                           {item.customizePrice > 0 ? (
-                            <p className="mt-0.5 text-[9px] text-amber-800">Custom {money(item.customizePrice)}</p>
+                            <p className="mt-0.5 text-[11px] text-amber-800">Custom {money(item.customizePrice)}</p>
                           ) : null}
                         </div>
                       ) : '—'}

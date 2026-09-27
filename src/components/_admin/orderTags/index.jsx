@@ -1,219 +1,240 @@
 'use client';
-import DataTable from 'src/components/_admin/ui/DataTable';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { MdAdd, MdDeleteOutline, MdLabelOutline } from 'react-icons/md';
 import * as api from 'src/services';
-import { alertError, confirmDelete } from 'src/utils/swal';
+import { confirmDelete, toastSuccess, toastError } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
+import { Field, Switch } from 'src/components/_admin/ui/fields';
+import { ColorChip } from 'src/components/_admin/shared/StatusBadge';
 
-const PRESET_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280'];
+const PRESET_COLORS = [
+  ['#EF4444', 'Red'],
+  ['#F97316', 'Orange'],
+  ['#EAB308', 'Yellow'],
+  ['#22C55E', 'Green'],
+  ['#3B82F6', 'Blue'],
+  ['#8B5CF6', 'Violet'],
+  ['#EC4899', 'Pink'],
+  ['#6B7280', 'Grey']
+];
 
-function TagForm({ initial, onSave, onCancel }) {
+function TagDrawer({ initial, saving, onSave, onClose }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [color, setColor] = useState(initial?.color ?? '#6B7280');
   const [description, setDesc] = useState(initial?.description ?? '');
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const submit = (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setError('Give the tag a name.');
+      return;
+    }
     onSave({ name: name.trim(), color, description });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 bg-gray-50 border border-gray-200 rounded-md p-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Tag Name *</label>
+    <Drawer
+      eyebrow="Order tags"
+      title={initial ? 'Edit tag' : 'New tag'}
+      onClose={onClose}
+      onSubmit={submit}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-brand" disabled={saving}>
+            {saving ? 'Saving…' : initial ? 'Save changes' : 'Create tag'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <Field label="Name" required error={error}>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError('');
+            }}
             placeholder="e.g. Urgent"
-            required
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+            className="input-ui"
+            autoFocus
           />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-          <input
-            value={description}
-            onChange={(e) => setDesc(e.target.value)}
-            placeholder="Optional note"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
-          />
+        </Field>
+        <Field label="Description" optional help="A note on when to use this tag.">
+          <input value={description} onChange={(e) => setDesc(e.target.value)} className="input-ui" />
+        </Field>
+        <fieldset>
+          <legend className="mb-2 text-[13px] font-medium text-slate-800">Colour</legend>
+          <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Tag colour">
+            {PRESET_COLORS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={color === value}
+                aria-label={label}
+                title={label}
+                onClick={() => setColor(value)}
+                className={`h-8 w-8 rounded-full ring-offset-2 transition ${color === value ? 'ring-2 ring-slate-900' : 'hover:scale-105'}`}
+                style={{ backgroundColor: value }}
+              />
+            ))}
+            <label className="ml-1 inline-flex items-center gap-2 text-[13px] text-slate-600">
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-8 w-10 cursor-pointer rounded-md border border-slate-300 p-0.5"
+              />
+              Custom <span className="font-mono text-xs text-slate-500">{color}</span>
+            </label>
+          </div>
+        </fieldset>
+        <div className="rounded-lg bg-slate-50 px-4 py-3">
+          <p className="mb-2 text-xs font-medium text-slate-500">Preview</p>
+          <ColorChip color={color}>{name || 'Tag name'}</ColorChip>
         </div>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-700 mb-2">Color</label>
-        <div className="flex flex-wrap gap-2 items-center">
-          {PRESET_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor(c)}
-              className="w-7 h-7 rounded-md border-2 transition-transform hover:scale-110"
-              style={{ backgroundColor: c, borderColor: color === c ? '#1e293b' : 'transparent' }}
-            />
-          ))}
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-8 h-8 rounded-md cursor-pointer border border-gray-300"
-            title="Custom color"
-          />
-          <span className="text-xs text-gray-500 font-mono">{color}</span>
-        </div>
-      </div>
-      <div className="flex gap-2 pt-1">
-        <button type="submit" className="btn-brand">
-          {initial ? 'Save Changes' : 'Create Tag'}
-        </button>
-        <button type="button" onClick={onCancel} className="btn-ghost">
-          Cancel
-        </button>
-      </div>
-    </form>
+    </Drawer>
   );
 }
 
 export default function OrderTagsManager() {
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [editingTag, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // null | 'new' | tag
 
-  const { data, isLoading } = useQuery(['orderTags'], () => api.getOrderTagsByAdmin(), {
+  const { data, isLoading, isError, error, refetch } = useQuery(['orderTags'], () => api.getOrderTagsByAdmin(), {
     select: (d) => d?.data ?? []
   });
 
+  const invalidate = () => qc.invalidateQueries(['orderTags']);
+  const onError = (fallback) => (e) => toastError(e, fallback);
+
   const create = useMutation(api.createOrderTagByAdmin, {
     onSuccess: () => {
-      qc.invalidateQueries(['orderTags']);
-      setShowForm(false);
+      toastSuccess('Tag created');
+      invalidate();
+      setEditing(null);
     },
-    onError: (e) => Swal.fire(e?.response?.data?.message || 'Error', '', 'error')
+    onError: onError('Could not create the tag.')
   });
 
   const update = useMutation(api.updateOrderTagByAdmin, {
-    onSuccess: () => {
-      qc.invalidateQueries(['orderTags']);
+    onSuccess: (_, vars) => {
+      toastSuccess(vars.name ? 'Tag saved' : vars.isActive ? 'Tag turned on' : 'Tag turned off');
+      invalidate();
       setEditing(null);
     },
-    onError: (e) => Swal.fire(e?.response?.data?.message || 'Error', '', 'error')
+    onError: onError('Could not save the tag.')
   });
 
   const remove = useMutation(api.deleteOrderTagByAdmin, {
-    onSuccess: () => qc.invalidateQueries(['orderTags']),
-    onError: (error) => alertError(error, { title: "Couldn't delete that tag" })
+    onSuccess: () => {
+      toastSuccess('Tag deleted');
+      invalidate();
+    },
+    onError: onError('Could not delete the tag.')
   });
-
-  const toggleActive = (tag) => update.mutate({ id: tag.id, isActive: !tag.isActive });
 
   const handleDelete = async (tag) => {
     const confirmed = await confirmDelete({
+      title: 'Delete this tag?',
       subject: tag.name,
       text: 'The tag comes off every order carrying it. Those orders are otherwise untouched.'
     });
     if (confirmed) remove.mutate(tag.id);
   };
 
-  return (
-    <div className="space-y-4">
-      <PageHeader title="Order Tags" subtitle="Tags applied to admin-created orders (e.g. Urgent, Showroom, Readymade)">
-        {!showForm && (
-          <button onClick={() => setShowForm(true)} className="btn-brand">
-            + New Tag
+  const columns = [
+    { key: 'name', label: 'Tag', render: (tag) => <ColorChip color={tag.color}>{tag.name}</ColorChip> },
+    {
+      key: 'description',
+      label: 'Description',
+      hideBelow: 'sm',
+      render: (tag) => <span className="text-slate-600">{tag.description || <span className="text-slate-400">—</span>}</span>
+    },
+    {
+      key: 'active',
+      label: 'In use',
+      render: (tag) => (
+        <span className="inline-flex items-center gap-2" onClick={stopRow}>
+          <Switch
+            checked={tag.isActive}
+            onChange={() => update.mutate({ id: tag.id, isActive: !tag.isActive })}
+            disabled={update.isLoading}
+            label={tag.isActive ? `${tag.name} is on — turn off` : `${tag.name} is off — turn on`}
+          />
+          <span className="text-[13px] text-slate-600">{tag.isActive ? 'On' : 'Off'}</span>
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      label: '',
+      srLabel: 'Actions',
+      align: 'right',
+      render: (tag) => (
+        <div className="flex justify-end gap-1" onClick={stopRow}>
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setEditing(tag)}>
+            Edit
           </button>
-        )}
+          <button
+            type="button"
+            className="btn-icon btn-icon-sm btn-icon-danger"
+            onClick={() => handleDelete(tag)}
+            aria-label={`Delete ${tag.name}`}
+            title="Delete"
+          >
+            <MdDeleteOutline size={18} />
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  const addButton = (
+    <button type="button" onClick={() => setEditing('new')} className="btn-brand">
+      <MdAdd size={18} aria-hidden /> New tag
+    </button>
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Order tags" subtitle="Labels for admin-created orders, such as Urgent, Showroom or Ready-made.">
+        {addButton}
       </PageHeader>
 
-      <div className="space-y-4">
-        {showForm && <TagForm onSave={(payload) => create.mutate(payload)} onCancel={() => setShowForm(false)} />}
+      {isError ? (
+        <ErrorState error={error} title="Tags could not be loaded" onRetry={refetch} />
+      ) : (
+        <DataTable
+          caption="Order tags"
+          columns={columns}
+          data={data || []}
+          isLoading={isLoading}
+          selectable={false}
+          rowKey={(tag) => tag.id}
+          onRowClick={setEditing}
+          rowLabel={(tag) => `Edit tag ${tag.name}`}
+          empty={<EmptyState icon={MdLabelOutline} title="No tags yet" action={addButton} />}
+        />
+      )}
 
-        {isLoading ? (
-          <div className="text-center py-10 text-sm text-gray-500">Loading…</div>
-        ) : !data?.length ? (
-          <div className="text-center py-10 text-sm text-gray-500 border border-dashed border-gray-300 rounded-md">
-            No tags yet. Create your first tag above.
-          </div>
-        ) : (
-          <div className="card-ui overflow-hidden">
-            <DataTable className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Tag
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">
-                    Description
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {data.map((tag) => (
-                  <React.Fragment key={tag.id}>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-md flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                          <span className="text-sm font-medium text-gray-800">{tag.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{tag.description || '—'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => toggleActive(tag)}
-                          className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                            tag.isActive
-                              ? 'bg-green-50 text-green-700 border border-green-200'
-                              : 'bg-gray-100 text-gray-500 border border-gray-200'
-                          }`}
-                        >
-                          {tag.isActive ? 'Active' : 'Inactive'}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setEditing(editingTag?.id === tag.id ? null : tag)}
-                            className="text-xs hover:underline"
-                            style={{ color: 'var(--brand-strong)' }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(tag)}
-                            className="text-xs text-red-500 hover:underline"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {editingTag?.id === tag.id && (
-                      <tr>
-                        <td colSpan={4} className="px-4 pb-3">
-                          <TagForm
-                            initial={tag}
-                            onSave={(payload) => update.mutate({ id: tag.id, ...payload })}
-                            onCancel={() => setEditing(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </DataTable>
-          </div>
-        )}
-      </div>
+      {editing ? (
+        <TagDrawer
+          initial={editing === 'new' ? null : editing}
+          saving={create.isLoading || update.isLoading}
+          onClose={() => setEditing(null)}
+          onSave={(payload) => (editing === 'new' ? create.mutate(payload) : update.mutate({ id: editing.id, ...payload }))}
+        />
+      ) : null}
     </div>
   );
 }

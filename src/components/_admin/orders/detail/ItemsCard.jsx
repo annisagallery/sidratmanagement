@@ -15,7 +15,7 @@
  */
 
 import Image from 'next/image';
-import { FiAlertTriangle, FiPackage, FiPlayCircle } from 'react-icons/fi';
+import { FiAlertTriangle, FiEdit2, FiPackage } from 'react-icons/fi';
 
 import SupplyBadge from 'src/components/_admin/orders/SupplyBadge';
 import { Code } from 'src/components/_admin/ops/primitives';
@@ -23,40 +23,35 @@ import { Card, Pill, money, oid } from './parts';
 
 const itemName = (item) => item.pid?.name || item.productSnapshot?.name || 'Unknown product';
 
-function PackingProgress({ packing, onPack }) {
+function PackingCount({ packing }) {
   const total = packing?.total || 0;
   if (!total) return null;
   const verified = packing.verified || 0;
-  const complete = verified >= total;
   return (
-    <div className="flex items-center gap-2">
-      <span className="hidden h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 sm:block">
-        <span
-          className={`block h-full rounded-full transition-all ${complete ? 'bg-emerald-500' : 'bg-[var(--brand)]'}`}
-          style={{ width: `${Math.round((verified / total) * 100)}%` }}
-        />
-      </span>
-      <span className={`text-xs font-semibold tabular-nums ${complete ? 'text-emerald-700' : 'text-slate-600'}`}>
-        {verified}/{total} packed
-      </span>
-      {onPack && !complete ? (
-        <button type="button" onClick={onPack} className="btn-brand h-8 !px-3 !text-xs">
-          <FiPlayCircle size={13} /> Scan pieces
-        </button>
-      ) : null}
-    </div>
+    <span className={`text-[13px] tabular-nums ${verified >= total ? 'text-emerald-700' : 'text-slate-500'}`}>
+      {verified} of {total} scanned
+    </span>
   );
 }
 
-export default function ItemsCard({ order, packing, onPack, onComplain, canComplain = false }) {
+export default function ItemsCard({ order, packing, onEdit, onComplain, canComplain = false }) {
   const items = order.items || [];
 
   return (
     <Card
       title="Items"
       icon={FiPackage}
-      badge={<Pill tone="neutral">{items.length}</Pill>}
-      actions={<PackingProgress packing={packing} onPack={onPack} />}
+      badge={<span className="text-[13px] tabular-nums text-slate-500">{items.length}</span>}
+      actions={
+        <>
+          <PackingCount packing={packing} />
+          {onEdit ? (
+            <button type="button" onClick={onEdit} className="btn-ghost btn-sm">
+              <FiEdit2 size={14} aria-hidden /> Edit
+            </button>
+          ) : null}
+        </>
+      }
     >
       {items.length ? (
         <ul className="divide-y divide-slate-100 border-t border-slate-100">
@@ -67,16 +62,19 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
 
             return (
               <li key={oid(item) || index} className="flex gap-4 px-5 py-4">
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <div className="relative h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-slate-50">
+                  <span className="absolute inset-0 overflow-hidden rounded-lg">
                   {item.pid?.featuredImage?.path ? (
                     <Image src={item.pid.featuredImage.path} alt="" fill sizes="64px" className="object-cover" />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center text-slate-300">
-                      <FiPackage size={18} />
+                    <span className="flex h-full w-full items-center justify-center text-slate-400">
+                      <FiPackage size={18} aria-hidden />
                     </span>
                   )}
+                  </span>
                   {quantity > 1 ? (
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-slate-900 px-1 text-xs font-semibold text-white ring-2 ring-white">
+                      <span className="sr-only">Quantity </span>
                       {quantity}
                     </span>
                   ) : null}
@@ -87,12 +85,14 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
                     <p className="min-w-0 text-sm font-semibold leading-snug text-slate-900">{itemName(item)}</p>
                     <div className="shrink-0 text-right">
                       <p className="text-sm font-semibold tabular-nums text-slate-900">{money(lineTotal)}</p>
-                      <p className="text-[11px] tabular-nums text-slate-500">
-                        {item.salePrice && item.regularPrice ? (
-                          <span className="mr-1 line-through">{money(item.regularPrice)}</span>
-                        ) : null}
-                        {money(item.price)} × {quantity}
-                      </p>
+                      {quantity > 1 || (item.salePrice && item.regularPrice) ? (
+                        <p className="text-xs tabular-nums text-slate-500">
+                          {item.salePrice && item.regularPrice ? (
+                            <span className="mr-1 line-through">{money(item.regularPrice)}</span>
+                          ) : null}
+                          {quantity > 1 ? `${money(item.price)} × ${quantity}` : null}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -101,7 +101,7 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
                       {(item.attributes || []).map((attribute, position) => (
                         <span
                           key={`${attribute.attributeName}-${position}`}
-                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600"
+                          className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
                         >
                           {attribute.colorHex ? (
                             <span
@@ -118,7 +118,7 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
                   ) : null}
 
                   {item.customizeDetails || item.customizePrice > 0 ? (
-                    <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-800">
+                    <p className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs leading-snug text-amber-900">
                       {item.customizeDetails}
                       {item.customizePrice > 0 ? (
                         <span className={`font-semibold ${item.customizeDetails ? 'ml-1' : ''}`}>
@@ -136,9 +136,9 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
                         type="button"
                         onClick={() => onComplain(item)}
                         title="Open a complaint for this item"
-                        className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:underline"
+                        className="btn-ghost btn-sm ml-auto !text-rose-700 hover:!bg-rose-50"
                       >
-                        <FiAlertTriangle size={11} /> Report issue
+                        <FiAlertTriangle size={14} aria-hidden /> Report issue
                       </button>
                     ) : null}
                   </div>
@@ -148,7 +148,7 @@ export default function ItemsCard({ order, packing, onPack, onComplain, canCompl
           })}
         </ul>
       ) : (
-        <p className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">No items</p>
+        <p className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">This order has no items.</p>
       )}
     </Card>
   );

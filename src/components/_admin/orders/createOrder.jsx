@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
-import Swal from 'sweetalert2';
 import Image from 'next/image';
-import { FiCopy, FiLock, FiTrash2 } from 'react-icons/fi';
+import { FiAlertCircle, FiArrowLeft, FiCheck, FiChevronDown, FiCopy, FiLock, FiSearch, FiTrash2, FiX } from 'react-icons/fi';
+import { toast as toastify } from 'react-toastify';
+import { alertError, confirmAction, alertWarning } from 'src/utils/swal';
+import { ErrorState } from 'src/components/_admin/ui/TableStates';
 import * as api from 'src/services';
 import { usePermissions } from 'src/context/PermissionsContext';
 import { addressDistrict, addressUpazila, districts, upazilasForDistrict } from 'src/utils/bangladeshAddress';
@@ -290,34 +292,70 @@ const uploadAdminNoteImages = async (images = []) => {
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 const inp =
-  'w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)] disabled:bg-gray-50 disabled:text-gray-400';
-const sm =
-  'border border-gray-200 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)] disabled:bg-gray-50 disabled:text-gray-400';
+  'input-ui w-full';
+// Compact inputs for the item grid, where a row holds seven controls.
+const sm = 'input-ui h-8 px-2 text-[13px] sm:text-[13px]';
 
-function Card({ title, children, className = '' }) {
+// The order desk packs every section onto one screen; sections read this to
+// tighten their own spacing. The edit screen keeps the roomy layout.
+const Compact = createContext(false);
+
+function Card({ title, description, action, children, className = '' }) {
+  const compact = useContext(Compact);
+  if (compact) {
+    return (
+      <section className={`card-ui ${className}`}>
+        {title && (
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+            <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+            {action}
+          </div>
+        )}
+        <div className="p-4">{children}</div>
+      </section>
+    );
+  }
   return (
-    <div className={`bg-white border border-gray-200 rounded-md shadow-sm ${className}`}>
+    <section className={`card-ui ${className}`}>
       {title && (
-        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 rounded-t-md">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{title}</p>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pt-5">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
+            {description ? <p className="mt-0.5 text-[13px] text-slate-500">{description}</p> : null}
+          </div>
+          {action}
         </div>
       )}
-      <div className="p-4">{children}</div>
-    </div>
+      <div className="p-5">{children}</div>
+    </section>
   );
 }
 
-function Label({ children, required }) {
+function Label({ children, required, htmlFor }) {
+  const compact = useContext(Compact);
   return (
-    <label className="block text-xs font-medium text-gray-500 mb-1">
+    <label htmlFor={htmlFor} className={compact ? 'mb-1 block text-xs font-medium text-slate-700' : 'mb-1.5 block text-[13px] font-medium text-slate-800'}>
       {children}
-      {required && <span className="text-red-400 ml-0.5">*</span>}
+      {required && (
+        <span className="ml-0.5 text-rose-700" aria-hidden>
+          *
+        </span>
+      )}
     </label>
   );
 }
 
+function FieldError({ children, id }) {
+  if (!children) return null;
+  return (
+    <p id={id} className="mt-1.5 text-[13px] font-medium text-rose-700" role="alert">
+      {children}
+    </p>
+  );
+}
+
 // ─── Product Search ──────────────────────────────────────────────────────────
-function POSProductSearch({ onAdd }) {
+function POSProductSearch({ onAdd, autoFocus = false, large = false }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -408,21 +446,36 @@ function POSProductSearch({ onAdd }) {
 
   return (
     <div ref={wrapRef} className="relative">
+      <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden />
       <input
         value={q}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Search products by name or code — ↑↓ to choose, Enter to add"
-        className={inp}
+        autoFocus={autoFocus}
+        className={`${inp} h-10 pl-9`}
         autoComplete="off"
+        role="combobox"
+        aria-label="Search products to add"
+        aria-expanded={results.length > 0}
+        aria-controls="order-product-results"
+        aria-activedescendant={results.length ? `order-product-${active}` : undefined}
       />
 
-      {busy && <span className="absolute right-3 top-2.5 text-xs text-gray-400 animate-pulse">Searching…</span>}
+      {busy && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500" role="status">
+          Searching…
+        </span>
+      )}
 
-      {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+      {error && <p className="mt-1.5 text-[13px] font-medium text-rose-700">{error}</p>}
 
       {results.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-[99] mt-1 max-h-80 overflow-auto rounded-md border border-gray-200 bg-white shadow-xl">
+        <div
+          id="order-product-results"
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-[99] mt-1 max-h-80 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+        >
           {results.map((product, index) => {
             const key = product.id || product.id || product.slug;
             const stock =
@@ -433,18 +486,21 @@ function POSProductSearch({ onAdd }) {
             return (
               <button
                 key={key}
+                id={`order-product-${index}`}
+                role="option"
+                aria-selected={index === active}
                 type="button"
                 onClick={() => pick(product)}
                 onMouseEnter={() => setActive(index)}
-                className={`flex w-full items-center justify-between gap-4 border-b border-gray-50 px-4 py-2.5 text-left text-sm last:border-0 ${
-                  index === active ? 'bg-[var(--brand-soft)]' : 'hover:bg-[var(--brand-soft)]'
+                className={`flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left text-sm ${
+                  index === active ? 'bg-slate-100' : 'hover:bg-slate-50'
                 }`}
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-gray-800">{product.name || product.title}</p>
-                  <p className="text-[11px] text-gray-400">Stock: {stock ?? '—'}</p>
+                  <p className="truncate font-medium text-slate-900">{product.name || product.title}</p>
+                  <p className="text-xs text-slate-500">{stock ?? '—'} in stock</p>
                 </div>
-                <span className="shrink-0 text-xs font-semibold text-gray-500">
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums text-slate-700">
                   {fmt(product.price || product.regularPrice)}
                 </span>
               </button>
@@ -457,7 +513,8 @@ function POSProductSearch({ onAdd }) {
 }
 
 // ─── Products Table ──────────────────────────────────────────────────────────
-function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, canOverridePrice = true }) {
+function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, canOverridePrice = true, missing = false }) {
+  const compact = useContext(Compact);
   const updateAttrs = (item, attrName, value) => {
     let selectedAttrs = { ...item.selectedAttrs, [attrName]: value };
     const isCustom = selectedAttrs['Type'] === 'Custom';
@@ -491,27 +548,228 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
 
   if (!items.length) {
     return (
-      <div className="rounded-md border border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center">
-        <p className="text-sm font-medium text-gray-500">No product added yet</p>
-        <p className="mt-1 text-xs text-gray-400">Search above and press Enter, or click a product.</p>
+      <div
+        className={`rounded-lg border border-dashed px-4 text-center ${compact ? 'py-6' : 'py-10'} ${
+          missing ? 'border-rose-300 bg-rose-50/50' : 'border-slate-300 bg-slate-50'
+        }`}
+      >
+        <p className={`text-sm font-semibold ${missing ? 'text-rose-700' : 'text-slate-900'}`}>No products added yet</p>
+        <p className="mt-1 text-[13px] text-slate-500">Search above and press Enter, or click a product.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-gray-200">
-      <table className="w-full min-w-[960px] border-collapse text-xs">
+    compact ? (
+      // The desk's cart: the same table with fewer columns — stock sits under
+      // the product name and the custom surcharge in the custom row — so it
+      // fits the column without scrolling sideways.
+      <div className="admin-sidebar-scroll overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full min-w-[640px] border-collapse text-[13px]">
+          <caption className="sr-only">Products in this order</caption>
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+              <th scope="col" className="px-3 py-1.5 text-left">Product</th>
+              <th scope="col" className="px-2 py-1.5 text-left">Options</th>
+              <th scope="col" className="w-20 px-2 py-1.5 text-right">Regular</th>
+              <th scope="col" className="w-20 px-2 py-1.5 text-right">Sale</th>
+              <th scope="col" className="w-16 px-2 py-1.5 text-center">Qty</th>
+              <th scope="col" className="w-24 px-2 py-1.5 text-right">Total</th>
+              <th scope="col" className="w-16 px-2 py-1.5">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
+              const lineTotal = getLineUnit(item) * Number(item.qty || 1);
+              const totalAvailable =
+                item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
+              const stockLabel = isTypeCustom
+                ? 'Made to order'
+                : item.stock > 0
+                  ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
+                  : totalAvailable == null
+                    ? 'To make'
+                    : totalAvailable > 0
+                      ? `${totalAvailable} to make`
+                      : 'Out of stock';
+              const stockTone = isTypeCustom
+                ? 'text-violet-700'
+                : item.stock > 0
+                  ? 'text-emerald-700'
+                  : item.overSale
+                    ? 'text-amber-700'
+                    : 'text-rose-700';
+              const priceLocked = locked || !canOverridePrice;
+              const priceChanged = isPriceOverridden(item);
+              const nonTypeDims = item.attrDimensions.filter((d) => d.name !== 'Type');
+              const field = `${sm} !h-7 !px-2 text-xs`;
+
+              return (
+                <React.Fragment key={item._key}>
+                  <tr className="border-t border-slate-100 align-top">
+                    <td className="px-3 py-1.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="max-w-[220px] truncate text-[13px] font-semibold text-slate-900" title={item.productName}>
+                          {item.productName}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={locked}
+                          aria-pressed={isTypeCustom}
+                          title={isTypeCustom ? 'Made to order — switch back to standard' : 'Switch to a custom, made-to-order piece'}
+                          onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
+                          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                            isTypeCustom ? 'bg-violet-50 text-violet-800 ring-violet-600/20' : 'bg-slate-100 text-slate-700 ring-slate-500/10 hover:bg-slate-200'
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${isTypeCustom ? 'bg-violet-500' : 'bg-slate-400'}`} aria-hidden />
+                          {isTypeCustom ? 'Custom' : 'Standard'}
+                        </button>
+                        <span className={`text-xs ${stockTone}`}>{stockLabel}</span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {nonTypeDims.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {nonTypeDims.map((dim) => {
+                            const values = isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
+                            return (
+                              <select
+                                key={dim.name}
+                                value={item.selectedAttrs[dim.name] || ''}
+                                onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
+                                title={dim.name}
+                                aria-label={`${dim.name} for ${item.productName}`}
+                                disabled={locked}
+                                className={`${field} min-w-[84px] py-0 font-medium text-slate-700`}
+                              >
+                                {values.map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.regularPrice ?? ''}
+                        onChange={(e) => onUpdate(item._key, { regularPrice: Number(e.target.value) || 0 })}
+                        readOnly={priceLocked}
+                        aria-label={`Regular price for ${item.productName}`}
+                        title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
+                        className={`${field} w-full text-right ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.discountPrice ?? ''}
+                        onChange={(e) => onUpdate(item._key, { discountPrice: e.target.value === '' ? null : Number(e.target.value) || 0 })}
+                        readOnly={priceLocked}
+                        placeholder="—"
+                        aria-label={`Sale price for ${item.productName}`}
+                        className={`${field} w-full text-right ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
+                      />
+                      {priceChanged ? <span className="mt-0.5 block text-right text-xs font-medium text-amber-700">Changed</span> : null}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="number"
+                        min="1"
+                        max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
+                        value={item.qty}
+                        onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                        disabled={locked}
+                        aria-label={`Quantity of ${item.productName}`}
+                        className={`${field} w-full text-center`}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <p className="pt-1 font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</p>
+                      {Number(item.qty || 1) > 1 ? <p className="text-xs text-slate-500">{fmt(getLineUnit(item))} each</p> : null}
+                    </td>
+                    <td className="px-1 py-1.5">
+                      {locked ? null : (
+                        <div className="flex justify-end gap-0.5">
+                          <button type="button" onClick={() => onDuplicate(item._key)} className="btn-icon btn-icon-sm !h-7 !w-7" title="Duplicate" aria-label={`Duplicate ${item.productName}`}>
+                            <FiCopy size={14} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onRemove(item._key)}
+                            className="btn-icon btn-icon-sm btn-icon-danger !h-7 !w-7"
+                            title="Remove"
+                            aria-label={`Remove ${item.productName}`}
+                          >
+                            <FiTrash2 size={14} aria-hidden />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {isTypeCustom ? (
+                    <tr className="align-top">
+                      <td colSpan={7} className="px-3 pb-1.5">
+                        <div className="flex gap-2">
+                          <input
+                            value={item.customizeDetails}
+                            onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
+                            disabled={locked}
+                            placeholder="Measurements and instructions for production"
+                            aria-label={`Custom details for ${item.productName}`}
+                            className={`${field} min-w-0 flex-1`}
+                          />
+                          <label className="flex shrink-0 items-center gap-1 text-xs text-slate-500">
+                            Custom +
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.customizePrice || ''}
+                              onChange={(e) => onUpdate(item._key, { customizePrice: Number(e.target.value) || 0 })}
+                              placeholder="0"
+                              disabled={locked}
+                              className={`${field} w-20 text-right`}
+                            />
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+    <div className="admin-sidebar-scroll overflow-x-auto rounded-lg border border-slate-200">
+      <table className="w-full min-w-[960px] border-collapse text-[13px]">
+        <caption className="sr-only">Products in this order</caption>
         <thead>
-          <tr className="bg-gray-50 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-            <th className="w-44 px-2 py-2 text-left">Product</th>
-            <th className="px-2 py-2 text-left">Options</th>
-            <th className="w-24 px-2 py-2 text-center">Stock</th>
-            <th className="w-20 px-2 py-2 text-right">Regular</th>
-            <th className="w-20 px-2 py-2 text-right">Sale</th>
-            <th className="w-20 px-2 py-2 text-right">Custom +</th>
-            <th className="w-16 px-2 py-2 text-center">Qty</th>
-            <th className="w-24 px-2 py-2 text-right">Total</th>
-            <th className="w-16 px-2 py-2" />
+          <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+            <th scope="col" className="w-44 px-3 py-2.5 text-left">Product</th>
+            <th scope="col" className="px-3 py-2.5 text-left">Options</th>
+            <th scope="col" className="w-28 px-3 py-2.5 text-center">Stock</th>
+            <th scope="col" className="w-24 px-3 py-2.5 text-right">Regular</th>
+            <th scope="col" className="w-24 px-3 py-2.5 text-right">Sale</th>
+            <th scope="col" className="w-24 px-3 py-2.5 text-right">Custom +</th>
+            <th scope="col" className="w-20 px-3 py-2.5 text-center">Qty</th>
+            <th scope="col" className="w-28 px-3 py-2.5 text-right">Total</th>
+            <th scope="col" className="w-20 px-3 py-2.5">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
 
@@ -534,26 +792,28 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
             const priceChanged = isPriceOverridden(item);
             const priceLocked = locked || !canOverridePrice;
             const stockTone = isTypeCustom
-              ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]'
+              ? 'bg-violet-50 text-violet-800 ring-violet-600/20'
               : item.stock > 0
-                ? 'bg-green-50 text-green-700'
+                ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/20'
                 : item.overSale
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-red-50 text-red-600';
+                  ? 'bg-amber-50 text-amber-800 ring-amber-600/20'
+                  : 'bg-rose-50 text-rose-700 ring-rose-600/20';
 
             return (
               <React.Fragment key={item._key}>
-                <tr className="border-t border-gray-100 align-top hover:bg-gray-50/40">
+                <tr className="border-t border-slate-100 align-top hover:bg-slate-50/40">
                   <td rowSpan={2} className="px-2 py-2 align-top">
-                    <p className="text-sm font-semibold leading-tight text-gray-800">{item.productName}</p>
+                    <p className="text-sm font-semibold leading-tight text-slate-900">{item.productName}</p>
                     <button
                       type="button"
                       disabled={locked}
+                      aria-pressed={isTypeCustom}
+                      title={isTypeCustom ? 'Made to order — switch back to standard' : 'Switch to a custom, made-to-order piece'}
                       onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
-                      className={`mt-1 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${isTypeCustom ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]' : 'bg-gray-100 text-gray-400'}`}
+                      className={`mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset transition-colors ${isTypeCustom ? 'bg-violet-50 text-violet-800 ring-violet-600/20' : 'bg-slate-100 text-slate-700 ring-slate-500/10 hover:bg-slate-200'}`}
                     >
                       <span
-                        className={`h-2 w-2 rounded-full transition-colors ${isTypeCustom ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
+                        className={`h-2 w-2 rounded-full transition-colors ${isTypeCustom ? 'bg-[var(--brand)]' : 'bg-slate-300'}`}
                       />
                       {isTypeCustom ? 'Custom' : 'Standard'}
                     </button>
@@ -563,7 +823,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                     {(() => {
                       const nonTypeDims = item.attrDimensions.filter((d) => d.name !== 'Type');
                       if (!nonTypeDims.length)
-                        return <span className="text-xs italic text-gray-300">No options</span>;
+                        return <span className="text-xs italic text-slate-400">No options</span>;
                       return (
                         <div className="flex flex-wrap items-center gap-1.5">
                           {nonTypeDims.map((dim) => {
@@ -576,7 +836,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                                   onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
                                   title={dim.name}
                                   disabled={locked}
-                                  className={`${sm} h-8 min-w-[96px] py-0 text-xs font-medium text-gray-700`}
+                                  className={`${sm} h-8 min-w-[96px] py-0 text-xs font-medium text-slate-700`}
                                 >
                                   {values.map((value) => (
                                     <option key={value} value={value}>
@@ -593,7 +853,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                   </td>
 
                   <td className="px-2 py-2 text-center align-top">
-                    <span className={`inline-block rounded-md px-2 py-1 text-[11px] font-semibold leading-tight ${stockTone}`}>
+                    <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium leading-snug ring-1 ring-inset ${stockTone}`}>
                       {stockLabel}
                     </span>
                   </td>
@@ -606,7 +866,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                       onChange={(e) => onUpdate(item._key, { regularPrice: Number(e.target.value) || 0 })}
                       readOnly={priceLocked}
                       title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
-                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-gray-50 text-gray-500' : ''}`}
+                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
                     />
                   </td>
 
@@ -622,10 +882,10 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                       }
                       readOnly={priceLocked}
                       placeholder="—"
-                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-gray-50 text-gray-500' : ''}`}
+                      className={`${sm} h-8 w-full text-right text-xs ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
                     />
                     {priceChanged ? (
-                      <span className="mt-0.5 block text-[10px] font-semibold text-amber-600">Price changed</span>
+                      <span className="mt-1 block text-xs font-medium text-amber-700">Price changed</span>
                     ) : null}
                   </td>
 
@@ -654,9 +914,9 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                   </td>
 
                   <td className="px-2 py-2 text-right align-top">
-                    <p className="pt-1.5 text-sm font-bold tabular-nums text-gray-800">{fmt(lineTotal)}</p>
+                    <p className="pt-1.5 text-sm font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</p>
                     {Number(item.qty || 1) > 1 ? (
-                      <p className="text-[10px] text-gray-400">{fmt(getLineUnit(item))} each</p>
+                      <p className="text-xs text-slate-500">{fmt(getLineUnit(item))} each</p>
                     ) : null}
                   </td>
 
@@ -666,7 +926,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                         <button
                           type="button"
                           onClick={() => onDuplicate(item._key)}
-                          className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                          className="btn-icon btn-icon-sm"
                           title="Duplicate item"
                           aria-label="Duplicate item"
                         >
@@ -675,7 +935,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                         <button
                           type="button"
                           onClick={() => onRemove(item._key)}
-                          className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          className="btn-icon btn-icon-sm btn-icon-danger"
                           title="Remove item"
                           aria-label="Remove item"
                         >
@@ -686,7 +946,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                   </td>
                 </tr>
 
-                <tr className="border-b border-gray-100 bg-gray-50/30 align-top">
+                <tr className="border-b border-slate-100 align-top">
                   <td colSpan={8} className="px-2 pb-2 pt-0">
                     {isTypeCustom ? (
                       <input
@@ -694,7 +954,8 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                         onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
                         disabled={locked}
                         placeholder="Measurements and instructions for production"
-                        className={`${sm} h-8 w-full text-xs placeholder:text-gray-300`}
+                        aria-label={`Custom details for ${item.productName}`}
+                        className={`${sm} w-full`}
                       />
                     ) : null}
                   </td>
@@ -705,6 +966,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
         </tbody>
       </table>
     </div>
+    )
   );
 }
 
@@ -735,13 +997,16 @@ function AdminNote({ value, onChange, images, onImagesChange }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const compact = useContext(Compact);
   return (
-    <div className="space-y-3">
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
       <textarea
-        rows={4}
+        rows={compact ? 2 : 4}
+        autoFocus={compact}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Admin note — internal only"
+        placeholder="Anything the team should know about this order"
+        aria-label="First internal note"
         className={`${inp} resize-none`}
       />
 
@@ -749,13 +1014,15 @@ function AdminNote({ value, onChange, images, onImagesChange }) {
         {images.map((img) => (
           <div
             key={img.id}
-            className="group relative h-16 w-16 overflow-hidden rounded-md border border-gray-200 bg-gray-50"
+            className={`group relative overflow-hidden rounded-md border border-slate-200 bg-slate-50 ${compact ? 'h-10 w-10' : 'h-16 w-16'}`}
           >
             <Image src={img.preview} alt={img.name || 'Admin note'} fill className="object-cover" />
             <button
               type="button"
               onClick={() => removeImage(img.id)}
-              className="absolute inset-0 hidden items-center justify-center bg-black/50 text-xl text-white group-hover:flex"
+              aria-label={`Remove ${img.name || 'image'}`}
+              title="Remove image"
+              className="absolute inset-0 flex items-center justify-center bg-slate-950/50 text-xl text-white opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
             >
               ×
             </button>
@@ -765,10 +1032,21 @@ function AdminNote({ value, onChange, images, onImagesChange }) {
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex h-16 w-16 flex-col items-center justify-center rounded-md border-2 border-dashed border-gray-200 text-gray-400 hover:border-[var(--brand)] hover:text-[var(--brand-strong)]"
+          aria-label="Attach an image"
+          className={
+            compact
+              ? 'btn-ghost btn-sm'
+              : 'flex h-16 w-16 flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 text-slate-500 transition hover:border-slate-400 hover:text-slate-800'
+          }
         >
-          <span className="text-2xl leading-none">+</span>
-          <span className="mt-0.5 text-[10px]">Image</span>
+          {compact ? (
+            '+ Attach image'
+          ) : (
+            <>
+              <span className="text-2xl leading-none" aria-hidden>+</span>
+              <span className="mt-0.5 text-xs">Image</span>
+            </>
+          )}
         </button>
 
         <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={addFiles} />
@@ -778,7 +1056,8 @@ function AdminNote({ value, onChange, images, onImagesChange }) {
 }
 
 // ─── Customer Section ─────────────────────────────────────────────────────────
-function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudData, onShippingChange, addressLocked = false }) {
+function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudData, onShippingChange, addressLocked = false, errors = {} }) {
+  const compact = useContext(Compact);
   const [phone, setPhone] = useState(address.phone || '');
   const [loading, setLoading] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -905,22 +1184,24 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
 
   if (addressLocked) {
     return (
-      <div className="space-y-1 text-sm text-gray-700">
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
-          <FiLock size={12} /> The parcel has left — the delivery address can no longer change.
+      <div className="space-y-1 text-sm text-slate-700">
+        <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600">
+          <FiLock size={14} aria-hidden /> The parcel has left — the delivery address can no longer change.
         </p>
         <p className="font-semibold">{address.name}</p>
         <p>{address.phone}</p>
-        <p className="text-gray-500">{[address.address, address.upazila, address.district].filter(Boolean).join(', ')}</p>
+        <p className="text-slate-500">{[address.address, address.upazila, address.district].filter(Boolean).join(', ')}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className={compact ? 'space-y-2.5' : 'space-y-3'}>
       {/* Phone + Find button */}
       <div>
-        <Label required>Phone</Label>
+        <Label required htmlFor="order-phone">
+          Phone
+        </Label>
         <div ref={addrWrapRef} className="relative flex gap-2">
           <div className="relative flex-1">
             <input
@@ -928,14 +1209,19 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
               value={phone}
               onChange={handlePhoneChange}
               onKeyDown={(e) => e.key === 'Enter' && doLookup()}
-              placeholder="Customer phone number"
-              className={`${inp} w-full ${savedAddresses.length > 0 ? 'pr-7' : ''}`}
+              id="order-phone"
+              placeholder="01XXXXXXXXX — press Enter to look up"
+              aria-invalid={Boolean(errors.phone)}
+              aria-describedby={errors.phone ? 'order-phone-error' : undefined}
+              className={`${inp} w-full ${savedAddresses.length > 0 ? 'pr-9' : ''}`}
             />
             {savedAddresses.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowAddrList((v) => !v)}
-                className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+                aria-label={`${showAddrList ? 'Hide' : 'Show'} ${savedAddresses.length} saved address${savedAddresses.length === 1 ? '' : 'es'}`}
+                aria-expanded={showAddrList}
+                className="absolute inset-y-0 right-1 flex w-7 items-center justify-center rounded text-slate-500 hover:text-slate-800"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -956,14 +1242,15 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             type="button"
             onClick={doLookup}
             disabled={loading || phone.trim().length < 7}
-            className="shrink-0 rounded-md border border-[var(--brand-ring)] bg-[var(--brand-soft)] px-4 py-2 text-xs font-semibold text-[var(--brand-strong)] hover:bg-[var(--brand-soft)] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="btn-ghost shrink-0"
           >
-            {loading ? 'Finding…' : 'Find'}
+            <FiSearch size={15} aria-hidden /> {loading ? 'Finding…' : compact ? 'Find' : 'Find customer'}
           </button>
 
           {/* Address dropdown — same pattern as product search */}
           {showAddrList && savedAddresses.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-60 overflow-auto rounded-md border border-gray-200 bg-white shadow-xl">
+            <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
+              <p className="section-label px-4 pb-1 pt-2">Saved addresses</p>
               {savedAddresses.map((addr, i) => {
                 const text = [addr.name, addressDistrict(addr), addressUpazila(addr), addr.address].filter(Boolean).join(' - ');
                 return (
@@ -971,7 +1258,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
                     key={i}
                     type="button"
                     onClick={() => handleSelectSavedAddress(addr, i)}
-                    className={`flex w-full items-center border-b border-gray-50 px-4 py-2.5 text-left text-sm last:border-0 hover:bg-[var(--brand-soft)] ${selectedAddrIdx === i ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]' : 'text-gray-700'}`}
+                    className={`flex w-full items-center px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selectedAddrIdx === i ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'}`}
                   >
                     <p className="truncate">{text}</p>
                   </button>
@@ -980,20 +1267,33 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             </div>
           )}
         </div>
-        {phoneLooksWrong ? (
-          <p className="mt-1 text-[11px] font-medium text-amber-600">This does not look like a Bangladeshi mobile number (01XXXXXXXXX).</p>
+        <FieldError id="order-phone-error">{errors.phone}</FieldError>
+        {phoneLooksWrong && !errors.phone ? (
+          <p className="mt-1.5 text-[13px] font-medium text-amber-700">This doesn’t look like a Bangladeshi mobile number (01XXXXXXXXX).</p>
         ) : null}
       </div>
 
-      {/* Name (4) · District (3) · Upazila (3) · Address (10) */}
-      <div className="grid grid-cols-10 gap-3">
-        <div className="col-span-4">
-          <Label required>Name</Label>
-          <input value={address.name || ''} onChange={(e) => updateAddress('name', e.target.value)} className={inp} />
+      {/* Name (4) · District (3) · Upazila (3) · Address (10); one column on phones.
+          On the desk the column is narrow: name, then district | upazila, then address. */}
+      <div className={compact ? 'grid grid-cols-2 gap-x-2 gap-y-2.5' : 'grid grid-cols-1 gap-4 sm:grid-cols-10'}>
+        <div className={compact ? 'col-span-2' : 'sm:col-span-4'}>
+          <Label required htmlFor="order-name">
+            Name
+          </Label>
+          <input
+            id="order-name"
+            value={address.name || ''}
+            onChange={(e) => updateAddress('name', e.target.value)}
+            aria-invalid={Boolean(errors.name)}
+            className={inp}
+          />
+          <FieldError>{errors.name}</FieldError>
         </div>
-        <div className="col-span-3">
-          <Label required>District</Label>
-          <select value={address.district || ''} onChange={(e) => handleDistrictChange(e.target.value)} className={inp}>
+        <div className={compact ? '' : 'sm:col-span-3'}>
+          <Label required htmlFor="order-district">
+            District
+          </Label>
+          <select id="order-district" value={address.district || ''} onChange={(e) => handleDistrictChange(e.target.value)} className={inp}>
             <option value="">Select district...</option>
             {districts.map((district) => (
               <option key={district} value={district}>
@@ -1002,9 +1302,12 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             ))}
           </select>
         </div>
-        <div className="col-span-3">
-          <Label required>Upazila</Label>
+        <div className={compact ? '' : 'sm:col-span-3'}>
+          <Label required htmlFor="order-upazila">
+            Upazila
+          </Label>
           <select
+            id="order-upazila"
             value={address.upazila || ''}
             onChange={(e) => handleUpazilaChange(e.target.value)}
             disabled={!address.district}
@@ -1018,14 +1321,19 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             ))}
           </select>
         </div>
-        <div className="col-span-10">
-          <Label required>Address</Label>
+        <div className={compact ? 'col-span-2' : 'sm:col-span-10'}>
+          <Label required htmlFor="order-address">
+            Address
+          </Label>
           <textarea
+            id="order-address"
             rows={2}
             value={address.address || ''}
             onChange={(e) => updateAddress('address', e.target.value)}
+            aria-invalid={Boolean(errors.address)}
             className={`${inp} resize-none`}
           />
+          <FieldError>{errors.address}</FieldError>
         </div>
       </div>
     </div>
@@ -1034,6 +1342,8 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
 
 // ─── Customer Stats Card ──────────────────────────────────────────────────────
 function CustomerStatsCard({ customer, fraudData, className = '' }) {
+  const compact = useContext(Compact);
+  const cell = compact ? 'py-1' : 'py-2';
   const isNew = customer?.isNew === true;
   const hasAnyData = customer || fraudData; // show table once lookup ran
 
@@ -1049,67 +1359,82 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
   const carryBee = fraudData?.carryBee ?? null;
 
   // Colored number cell
-  const N = ({ v, color = 'text-gray-700' }) => (
-    <td className={`py-2 pr-3 text-right text-xs font-bold tabular-nums ${v ? color : 'text-gray-300'}`}>{v ?? '—'}</td>
+  const N = ({ v, color = 'text-slate-900' }) => (
+    <td className={`${cell} pr-3 text-right text-[13px] font-semibold tabular-nums ${v ? color : 'text-slate-400'}`}>{v ?? '—'}</td>
   );
 
   // Label + error spanning all data columns
   const ErrRow = ({ label, msg }) => (
     <tr>
-      <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">{label}</td>
-      <td colSpan={4} className={`py-2 pr-3 text-[10px] italic ${courierLoading ? 'text-gray-400' : 'text-red-400'}`}>
+      <td className={`px-3 ${cell} text-[13px] font-medium text-slate-700`}>{label}</td>
+      <td colSpan={4} className={`${cell} pr-3 text-xs ${courierLoading ? 'text-slate-500' : 'text-rose-700'}`}>
         {courierLoading ? 'Checking…' : msg}
       </td>
     </tr>
   );
 
   return (
-    <div className={`bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden flex flex-col ${className}`}>
-      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Customer Stats</p>
-      </div>
+    <section className={`card-ui flex flex-col overflow-hidden ${className}`}>
+      {compact ? (
+        <div className="px-4 py-2.5">
+          <h2 className="text-sm font-semibold text-slate-900">Delivery history</h2>
+        </div>
+      ) : (
+        <div className="px-5 pb-3 pt-5">
+          <h2 className="text-[15px] font-semibold text-slate-900">Delivery history</h2>
+          <p className="mt-0.5 text-[13px] text-slate-500">Orders with us and with each courier.</p>
+        </div>
+      )}
 
       {!hasAnyData ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-center">
-          <p className="text-xs text-gray-300">Enter phone to load stats.</p>
+        <div className={`flex flex-1 items-center justify-center border-t border-slate-100 text-center ${compact ? 'p-3' : 'p-6'}`}>
+          <p className="text-[13px] text-slate-500">Look up a phone number to see this customer’s history.</p>
         </div>
       ) : (
         <div className="flex-1 overflow-hidden">
-          <table className="w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-gray-400 w-[35%]"></th>
-                <th className="pr-3 py-1.5 text-right text-[10px] font-semibold text-gray-500">Total</th>
-                <th className="pr-3 py-1.5 text-right text-[10px] font-semibold text-green-500">Deliv.</th>
-                <th className="pr-3 py-1.5 text-right text-[10px] font-semibold text-amber-500">Pend.</th>
-                <th className="pr-3 py-1.5 text-right text-[10px] font-semibold text-red-400">Ret.</th>
+              <tr className="border-y border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+                <th scope="col" className={`w-[35%] px-3 ${cell} text-left`}>
+                  <span className="sr-only">Source</span>
+                </th>
+                <th scope="col" className={`${cell} pr-3 text-right`}>Total</th>
+                <th scope="col" className={`${cell} pr-3 text-right`}>
+                  <abbr title="Delivered" className="no-underline">Deliv.</abbr>
+                </th>
+                <th scope="col" className={`${cell} pr-3 text-right`}>
+                  <abbr title="Pending" className="no-underline">Pend.</abbr>
+                </th>
+                <th scope="col" className={`${cell} pr-3 text-right`}>
+                  <abbr title="Returned" className="no-underline">Ret.</abbr>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-50">
               {/* Our orders — always show; 0s for new customer make it clear they have none */}
               <tr>
-                <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">Our Orders</td>
+                <td className={`px-3 ${cell} text-[13px] font-medium text-slate-700`}>Our Orders</td>
                 {isNew ? (
-                  <td colSpan={4} className="py-2 pr-3 text-[10px] italic text-gray-300 text-right">
-                    New customer
+                  <td colSpan={4} className={`${cell} pr-3 text-right text-xs font-medium text-slate-600`}>
+                    New customer — no orders yet
                   </td>
                 ) : (
                   <>
-                    <N v={our.total} color="text-gray-700" />
-                    <N v={our.delivered} color="text-green-600" />
-                    <N v={our.pending} color="text-amber-500" />
-                    <N v={our.returned} color="text-red-500" />
+                    <N v={our.total} color="text-slate-900" />
+                    <N v={our.delivered} color="text-emerald-700" />
+                    <N v={our.pending} color="text-amber-700" />
+                    <N v={our.returned} color="text-rose-700" />
                   </>
                 )}
               </tr>
               {/* Pathao */}
               {pathao ? (
                 <tr>
-                  <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">Pathao</td>
-                  <N v={pathao.total} color="text-gray-700" />
-                  <N v={pathao.success} color="text-green-600" />
-                  <td className="py-2 pr-3 text-right text-xs text-gray-300">—</td>
-                  <N v={pathao.returned} color="text-red-500" />
+                  <td className={`px-3 ${cell} text-[13px] font-medium text-slate-700`}>Pathao</td>
+                  <N v={pathao.total} color="text-slate-900" />
+                  <N v={pathao.success} color="text-emerald-700" />
+                  <td className={`${cell} pr-3 text-right text-xs text-slate-400`}>—</td>
+                  <N v={pathao.returned} color="text-rose-700" />
                 </tr>
               ) : (
                 <ErrRow label="Pathao" msg={fraudData?.errors?.pathao || fraudData?.errors?.all || '—'} />
@@ -1117,22 +1442,22 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
               {/* Steadfast */}
               {sf ? (
                 <tr>
-                  <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">Steadfast</td>
-                  <N v={sf.total} color="text-gray-700" />
-                  <N v={sf.success} color="text-green-600" />
-                  <td className="py-2 pr-3 text-right text-xs text-gray-300">—</td>
-                  <N v={sf.returned} color="text-red-500" />
+                  <td className={`px-3 ${cell} text-[13px] font-medium text-slate-700`}>Steadfast</td>
+                  <N v={sf.total} color="text-slate-900" />
+                  <N v={sf.success} color="text-emerald-700" />
+                  <td className={`${cell} pr-3 text-right text-xs text-slate-400`}>—</td>
+                  <N v={sf.returned} color="text-rose-700" />
                 </tr>
               ) : (
                 <ErrRow label="Steadfast" msg={fraudData?.errors?.steadFast || fraudData?.errors?.all || '—'} />
               )}
               {carryBee ? (
                 <tr>
-                  <td className="px-3 py-2 text-[11px] font-semibold text-gray-600">CarryBee</td>
-                  <N v={carryBee.total} color="text-gray-700" />
-                  <N v={carryBee.success} color="text-green-600" />
-                  <td className="py-2 pr-3 text-right text-xs text-gray-300">—</td>
-                  <N v={carryBee.returned} color="text-red-500" />
+                  <td className={`px-3 ${cell} text-[13px] font-medium text-slate-700`}>CarryBee</td>
+                  <N v={carryBee.total} color="text-slate-900" />
+                  <N v={carryBee.success} color="text-emerald-700" />
+                  <td className={`${cell} pr-3 text-right text-xs text-slate-400`}>—</td>
+                  <N v={carryBee.returned} color="text-rose-700" />
                 </tr>
               ) : (
                 <ErrRow label="CarryBee" msg={fraudData?.errors?.carryBee || fraudData?.errors?.all || '—'} />
@@ -1141,7 +1466,7 @@ function CustomerStatsCard({ customer, fraudData, className = '' }) {
           </table>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1157,14 +1482,15 @@ function TagPicker({ selected, onChange }) {
     { staleTime: 5 * 60 * 1000 }
   );
 
+  const compact = useContext(Compact);
   const toggle = (id) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 
   if (!tags.length) {
-    return <p className="text-xs text-gray-400">No active tags found.</p>;
+    return <p className="text-[13px] text-slate-500">No active tags. Create them in Sales settings → Tags.</p>;
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className={`flex flex-wrap ${compact ? 'gap-1.5' : 'gap-2'}`}>
       {tags.map((tag) => {
         const id = tag.id || tag.id;
         const active = selected.includes(id);
@@ -1174,13 +1500,14 @@ function TagPicker({ selected, onChange }) {
             key={id}
             type="button"
             onClick={() => toggle(id)}
-            className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
+            aria-pressed={active}
+            className={`inline-flex items-center gap-1.5 rounded-md border font-medium transition ${compact ? 'h-7 px-2 text-xs' : 'h-8 px-3 text-[13px]'} ${
               active
-                ? 'border-transparent text-white shadow-sm'
-                : 'border-gray-200 bg-white text-gray-500 hover:border-gray-400'
+                ? 'border-slate-900 bg-slate-900 text-white'
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
             }`}
-            style={active ? { backgroundColor: tag.color || '#4f46e5', borderColor: tag.color || '#4f46e5' } : {}}
           >
+            <span className="h-2 w-2 rounded-full ring-1 ring-white/60" style={{ backgroundColor: tag.color || '#94a3b8' }} aria-hidden />
             {tag.name || tag.title}
           </button>
         );
@@ -1191,6 +1518,7 @@ function TagPicker({ selected, onChange }) {
 
 // ─── Delivery ─────────────────────────────────────────────────────────────────
 function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYPES }) {
+  const compact = useContext(Compact);
   const today = new Date().toISOString().split('T')[0];
 
   const selectType = (type) => {
@@ -1199,8 +1527,8 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
+      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Delivery type">
         {deliveryTypes.map((type) => {
           const active = value.deliveryType === type.key;
           return (
@@ -1208,27 +1536,36 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
               key={type.key}
               type="button"
               onClick={() => selectType(type.key)}
-              className={`rounded-md border px-2 py-2 text-center transition ${
+              aria-pressed={active}
+              title={type.hint || undefined}
+              className={`rounded-md border px-2 text-center transition ${compact ? 'py-1.5' : 'py-2'} ${
                 active
-                  ? 'border-[var(--brand-ring)] bg-[var(--brand-soft)] text-[var(--brand-strong)]'
-                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-400'
+                  ? 'border-slate-900 bg-slate-50 text-slate-900 ring-1 ring-slate-900'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <span className="block text-xs font-bold">{type.label}</span>
-              <span className="mt-0.5 block text-[10px] opacity-70">{type.hint}</span>
+              <span className="block text-[13px] font-semibold">{type.label}</span>
+              {compact ? null : <span className="mt-0.5 block text-xs text-slate-500">{type.hint}</span>}
             </button>
           );
         })}
       </div>
 
-      <div>
-        <Label>Estimated Delivery Time</Label>
+      <div className={compact ? 'flex items-center gap-2' : ''}>
+        {compact ? (
+          <label htmlFor="order-eta" className="shrink-0 text-xs font-medium text-slate-700">
+            Delivery by
+          </label>
+        ) : (
+          <Label htmlFor="order-eta">Estimated delivery</Label>
+        )}
         <input
+          id="order-eta"
           type="date"
           min={today}
           value={value.estimatedDelivery || ''}
           onChange={(e) => onChange({ ...value, estimatedDelivery: e.target.value })}
-          className={`${sm} w-full`}
+          className={inp}
         />
       </div>
     </div>
@@ -1237,32 +1574,30 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
 
 // ─── Payment TrxID Lookup ──────────────────────────────────────────────────────
 function TrxLookupSection({ linked, onChange }) {
+  const compact = useContext(Compact);
   const [trxInput, setTrxInput] = useState('');
   const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState('');
 
   const search = async () => {
     const val = trxInput.trim();
     if (!val) return;
-    if (linked.find((p) => p.trxId === val))
-      return Swal.fire('Already added', `TrxID ${val} is already in this order`, 'info');
+    setMessage('');
+    if (linked.find((p) => p.trxId === val)) return setMessage(`TrxID ${val} is already on this order.`);
     setSearching(true);
     try {
       const res = await api.getPaymentByTrxId(val);
       const payment = res?.data;
-      if (!payment) return Swal.fire('Not found', 'No payment with that TrxID', 'warning');
+      if (!payment) return setMessage('No payment found with that TrxID.');
       // One payment pays one order. The server refuses a second link, so say
       // so here instead of letting the whole order fail on submit.
       if (payment.orderId) {
-        return Swal.fire(
-          'Already used',
-          `This payment is already linked to order #${payment.orderNo}. Unlink it from that order first.`,
-          'warning'
-        );
+        return setMessage(`This payment already pays order #${payment.orderNo}. Unlink it from that order first.`);
       }
       onChange([...linked, payment]);
       setTrxInput('');
     } catch (e) {
-      Swal.fire('Not found', e?.response?.data?.message || 'No payment with that TrxID', 'warning');
+      setMessage(e?.response?.data?.message || 'No payment found with that TrxID.');
     } finally {
       setSearching(false);
     }
@@ -1271,60 +1606,74 @@ function TrxLookupSection({ linked, onChange }) {
   const remove = (id) => onChange(linked.filter((p) => p.id !== id));
 
   return (
-    <div className="space-y-3">
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
       <div className="flex gap-2">
         <input
           value={trxInput}
-          onChange={(e) => setTrxInput(e.target.value)}
+          onChange={(e) => {
+            setTrxInput(e.target.value);
+            setMessage('');
+          }}
           onKeyDown={(e) => e.key === 'Enter' && search()}
-          placeholder="Enter TrxID to find payment"
-          className={`${sm} flex-1`}
+          placeholder="TrxID of a received payment"
+          aria-label="Transaction ID to link"
+          spellCheck={false}
+          className={`${inp} ops-code flex-1`}
         />
         <button
           type="button"
           onClick={search}
           disabled={searching || !trxInput.trim()}
-          className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-50 whitespace-nowrap"
+          className="btn-brand btn-sm"
         >
-          {searching ? '…' : 'Find'}
+          {searching ? 'Finding…' : 'Link'}
         </button>
       </div>
+      {message ? (
+        <p className="flex items-start gap-1.5 text-[13px] font-medium text-amber-800" role="status">
+          <FiAlertCircle size={15} className="mt-0.5 shrink-0" aria-hidden /> {message}
+        </p>
+      ) : null}
 
       {linked.length > 0 && (
-        <div className="overflow-hidden rounded-md border border-gray-100">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 text-gray-400">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <table className="w-full text-[13px]">
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
               <tr>
-                <th className="px-3 py-2 text-left font-medium">Type</th>
-                <th className="px-3 py-2 text-left font-medium">TrxID</th>
-                <th className="px-3 py-2 text-right font-medium">Amount</th>
-                <th className="w-9 px-2" />
+                <th scope="col" className="px-3 py-2 text-left">Type</th>
+                <th scope="col" className="px-3 py-2 text-left">TrxID</th>
+                <th scope="col" className="px-3 py-2 text-right">Amount</th>
+                <th scope="col" className="w-10 px-2">
+                  <span className="sr-only">Remove</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-slate-50">
               {linked.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-3 py-2 font-semibold uppercase text-gray-700">{p.type}</td>
-                  <td className="px-3 py-2 font-mono text-gray-400">{p.trxId || '—'}</td>
-                  <td className="px-3 py-2 text-right font-bold text-gray-700">{fmt(p.amount)}</td>
+                  <td className="px-3 py-2 font-semibold uppercase text-slate-700">{p.type}</td>
+                  <td className="px-3 py-2 font-mono text-slate-500">{p.trxId || '—'}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmt(p.amount)}</td>
                   <td className="px-2 text-center">
                     <button
                       type="button"
                       onClick={() => remove(p.id)}
-                      className="text-lg leading-none text-gray-300 hover:text-red-500"
+                      aria-label={`Unlink payment ${p.trxId || ''}`}
+                      title="Unlink payment"
+                      className="btn-icon btn-icon-sm btn-icon-danger"
                     >
-                      ×
+                      <FiX size={15} />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t border-gray-100 bg-gray-50">
+            <tfoot className="border-t border-slate-100 bg-slate-50">
               <tr>
-                <td colSpan={2} className="px-3 py-2 font-bold text-gray-500">
-                  Total Linked
+                <td colSpan={2} className="px-3 py-2 font-medium text-slate-600">
+                  Total linked
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-gray-800">
+                <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
                   {fmt(linked.reduce((s, p) => s + Number(p.amount || 0), 0))}
                 </td>
                 <td />
@@ -1334,10 +1683,8 @@ function TrxLookupSection({ linked, onChange }) {
         </div>
       )}
 
-      {linked.length === 0 && (
-        <p className="text-xs text-center text-gray-400 py-2">
-          Search a TrxID to link an existing payment to this order
-        </p>
+      {linked.length === 0 && !message && !compact && (
+        <p className="text-[13px] text-slate-500">Link a payment the customer already sent, by its TrxID.</p>
       )}
     </div>
   );
@@ -1345,74 +1692,173 @@ function TrxLookupSection({ linked, onChange }) {
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
 function OrderSummary({ items, linkedPayments, shipping, discount, onShippingChange, onDiscountChange, locked = false }) {
+  const compact = useContext(Compact);
   const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
   const totalPaid = linkedPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const total = Math.max(0, subTotal + Number(shipping || 0) - Number(discount || 0));
   const due = Math.max(0, total - totalPaid);
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
+    <div className={compact ? 'space-y-2.5' : 'space-y-3'}>
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Shipping</Label>
+          <Label htmlFor="order-shipping">Shipping (৳)</Label>
           <input
+            id="order-shipping"
             type="number"
+            inputMode="decimal"
             min="0"
             value={shipping}
             onChange={(e) => onShippingChange(e.target.value)}
             disabled={locked}
-            className={`${sm} w-full text-right`}
+            className={`${inp} text-right tabular-nums`}
           />
         </div>
         <div>
-          <Label>Order Discount</Label>
+          <Label htmlFor="order-discount">Discount (৳)</Label>
           <input
+            id="order-discount"
             type="number"
+            inputMode="decimal"
             min="0"
             value={discount}
             onChange={(e) => onDiscountChange(e.target.value)}
             disabled={locked}
-            className={`${sm} w-full text-right`}
+            className={`${inp} text-right tabular-nums`}
           />
         </div>
       </div>
 
-      <div className="space-y-1.5 border-t border-gray-100 pt-2 text-sm">
-        <div className="flex justify-between text-gray-400">
-          <span>Product subtotal</span>
-          <span>{fmt(subTotal)}</span>
+      <dl className={`border-t border-slate-200 text-[13px] ${compact ? 'space-y-1 pt-2.5' : 'space-y-2 pt-4'}`}>
+        <div className="flex justify-between text-slate-600">
+          <dt>Product subtotal</dt>
+          <dd className="tabular-nums text-slate-900">{fmt(subTotal)}</dd>
         </div>
-        <div className="flex justify-between text-gray-400">
-          <span>Shipping</span>
-          <span>{fmt(shipping)}</span>
+        <div className="flex justify-between text-slate-600">
+          <dt>Shipping</dt>
+          <dd className="tabular-nums text-slate-900">{fmt(shipping)}</dd>
         </div>
-        <div className="flex justify-between text-gray-400">
-          <span>Discount</span>
-          <span>-{fmt(discount)}</span>
+        <div className="flex justify-between text-slate-600">
+          <dt>Discount</dt>
+          <dd className="tabular-nums text-emerald-700">−{fmt(discount)}</dd>
         </div>
-        <div className="flex justify-between border-t border-gray-100 pt-2  font-bold text-gray-800">
-          <span>Total</span>
-          <span>{fmt(total)}</span>
+        <div className="flex justify-between border-t border-slate-200 pt-2.5 text-base font-semibold text-slate-900">
+          <dt>Total</dt>
+          <dd className="tabular-nums">{fmt(total)}</dd>
         </div>
-        <div className="flex justify-between text-xs font-semibold text-[var(--brand-strong)]">
-          <span>Paid</span>
-          <span>{fmt(totalPaid)}</span>
+        <div className="flex justify-between text-slate-600">
+          <dt>Paid</dt>
+          <dd className="tabular-nums font-medium text-emerald-700">{fmt(totalPaid)}</dd>
         </div>
-        <div className="flex justify-between text-xs font-bold text-orange-500">
-          <span>Due</span>
-          <span>{fmt(due)}</span>
+        <div className="flex justify-between font-semibold">
+          <dt className="text-slate-900">Due</dt>
+          <dd className={`tabular-nums ${due > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{fmt(due)}</dd>
         </div>
         {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
-          <p className="text-[11px] font-medium text-red-500">The discount is larger than the order.</p>
+          <p className="text-[13px] font-medium text-rose-700" role="alert">The discount is larger than the order.</p>
         ) : null}
+      </dl>
+    </div>
+  );
+}
+
+// ─── Order desk parts ─────────────────────────────────────────────────────────
+
+/** One numbered step of the order panel; ticks green once it is complete. */
+function DeskStep({ n, title, done = false, aside, children }) {
+  return (
+    <section className="px-4 py-4" aria-label={title}>
+      <div className="mb-3 flex items-center gap-2.5">
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            done ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'
+          }`}
+          aria-hidden
+        >
+          {done ? <FiCheck size={13} /> : n}
+        </span>
+        <h2 className="text-sm font-semibold text-slate-900">
+          {title}
+          {done ? <span className="sr-only"> (complete)</span> : null}
+        </h2>
+        {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * The customer's delivery record in one line — every courier added up — so a
+ * risky customer is obvious at a glance. The full breakdown opens on demand.
+ */
+function CourierRecord({ customer, fraudData }) {
+  const [open, setOpen] = useState(false);
+  if (!customer && !fraudData) return null;
+
+  const loading = fraudData?.loading === true;
+  const couriers = [fraudData?.pathao, fraudData?.steadFast, fraudData?.carryBee].filter(Boolean);
+  const parcels = couriers.reduce((sum, c) => sum + Number(c.total || 0), 0);
+  const delivered = couriers.reduce((sum, c) => sum + Number(c.success || 0), 0);
+  const returned = couriers.reduce((sum, c) => sum + Number(c.returned || 0), 0);
+  const rate = parcels ? Math.round((delivered / parcels) * 100) : null;
+  const tone = rate == null ? 'slate' : rate >= 85 ? 'emerald' : rate >= 70 ? 'amber' : 'rose';
+  const toneClass = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    rose: 'border-rose-200 bg-rose-50 text-rose-900'
+  }[tone];
+  const ours = customer?.isNew ? 'New customer' : `${customer?.totalOrders ?? 0} order${customer?.totalOrders === 1 ? '' : 's'} with us`;
+
+  return (
+    <div className={`rounded-lg border ${toneClass}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="font-semibold">{ours}</span>
+          <span className="opacity-80">
+            {' · '}
+            {loading
+              ? 'checking couriers…'
+              : parcels
+                ? `${parcels} courier parcels · ${rate}% delivered${returned ? ` · ${returned} returned` : ''}`
+                : 'no courier history'}
+          </span>
+        </span>
+        <FiChevronDown size={15} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        <span className="sr-only">{open ? 'Hide' : 'Show'} the breakdown</span>
+      </button>
+      {open ? (
+        <div className="border-t border-black/5 bg-white">
+          <CustomerStatsCard customer={customer} fraudData={fraudData} className="!rounded-none !border-0 !shadow-none" />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function CreateOrder({ orderNo = null }) {
+export default function CreateOrder({ orderNo = null, desk = false }) {
   const isEdit = Boolean(orderNo);
+  const [noteOpen, setNoteOpen] = useState(false);
+  useEffect(() => {
+    if (!desk) return undefined;
+    const onKey = (event) => {
+      if (event.key !== '/' || event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      const search = document.querySelector('[aria-label="Search products to add"]');
+      if (search) {
+        event.preventDefault();
+        search.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [desk]);
   const router = useRouter();
   const { can } = usePermissions();
   const canOverridePrice = can('overridePrice', 'OrderItem');
@@ -1435,6 +1881,16 @@ export default function CreateOrder({ orderNo = null }) {
   const [shipping, setShipping] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  // What stops the order being placed, shown where it can be fixed.
+  const [errors, setErrors] = useState({});
+  useEffect(() => {
+    setErrors((current) => ({
+      ...current,
+      phone: address.phone?.trim() ? undefined : current.phone,
+      name: address.name ? undefined : current.name,
+      address: address.address ? undefined : current.address
+    }));
+  }, [address.phone, address.name, address.address]);
 
   // Edit-mode tracking
   const [originalServerItemIds, setOriginalServerItemIds] = useState([]);
@@ -1456,7 +1912,7 @@ export default function CreateOrder({ orderNo = null }) {
   const deliveryTypes = buildDeliveryTypes(orderSettingsData?.data);
 
   // Load existing order (edit mode only)
-  const { data: existingOrderData } = useQuery(['admin-order-edit', orderNo], () => api.getOrderByAdmin(orderNo), {
+  const { data: existingOrderData, isError: orderLoadFailed, error: orderLoadError, refetch: retryOrderLoad } = useQuery(['admin-order-edit', orderNo], () => api.getOrderByAdmin(orderNo), {
     enabled: isEdit,
     refetchOnWindowFocus: false
   });
@@ -1598,20 +2054,27 @@ export default function CreateOrder({ orderNo = null }) {
     // as a stand-in let an order through with an empty shipping phone — the
     // courier has no one to call, and the account number may belong to someone
     // other than the recipient.
-    if (!address.phone?.trim()) return Swal.fire('Enter the delivery phone number', '', 'warning');
-    if (!address.name) return Swal.fire('Enter customer name', '', 'warning');
-    if (!address.address) return Swal.fire('Enter customer address', '', 'warning');
-    if (!items.length) return Swal.fire('Add at least one product', '', 'warning');
+    const nextErrors = {};
+    if (!address.phone?.trim()) nextErrors.phone = 'Enter the delivery phone number.';
+    if (!address.name) nextErrors.name = 'Enter the customer’s name.';
+    if (!address.address) nextErrors.address = 'Enter the delivery address.';
+    if (!items.length) nextErrors.items = 'Add at least one product.';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      const first = nextErrors.phone ? 'order-phone' : nextErrors.name ? 'order-name' : nextErrors.address ? 'order-address' : null;
+      if (first) document.getElementById(first)?.focus();
+      return;
+    }
 
     const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
     if (Number(discount || 0) < 0 || Number(shipping || 0) < 0) {
-      return Swal.fire('Shipping and discount cannot be negative', '', 'warning');
+      return alertError(null, { title: 'Check the charges', text: 'Shipping and discount cannot be negative.' });
     }
     if (Number(discount || 0) > subTotal + Number(shipping || 0)) {
-      return Swal.fire('The discount is larger than the order', 'Lower the discount before saving.', 'warning');
+      return alertError(null, { title: 'The discount is larger than the order', text: 'Lower the discount before saving.' });
     }
     if (!canOverridePrice && !itemsLocked && items.some(isPriceOverridden)) {
-      return Swal.fire('Price change not allowed', 'You do not have permission to change product prices.', 'warning');
+      return alertError(null, { title: 'Price change not allowed', text: 'You do not have permission to change product prices.' });
     }
     const warnings = [];
     if (!addressLocked && (!address.district || !address.upazila)) {
@@ -1620,15 +2083,14 @@ export default function CreateOrder({ orderNo = null }) {
     const digits = String(address.phone || '').replace(/\D/g, '');
     if (!BD_PHONE.test(digits)) warnings.push(`"${address.phone}" does not look like a Bangladeshi mobile number.`);
     if (warnings.length) {
-      const go = await Swal.fire({
+      const go = await confirmAction({
+        tone: 'warning',
         title: 'Check before saving',
-        html: warnings.map((w) => `<p style="margin:4px 0">${w}</p>`).join(''),
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Save anyway',
-        cancelButtonText: 'Go back'
+        items: warnings,
+        confirmText: 'Save anyway',
+        cancelText: 'Go back'
       });
-      if (!go.isConfirmed) return;
+      if (!go) return;
     }
 
     setSubmitting(true);
@@ -1646,7 +2108,7 @@ export default function CreateOrder({ orderNo = null }) {
         // 2. Update existing items whose product, variation, quantity, or customization changed.
         for (const item of items.filter((i) => i._serverId)) {
           if (!item.selectedVariationId) {
-            await Swal.fire('Missing variation', `Select a variation for "${item.productName}"`, 'warning');
+            await alertWarning('Choose a variation', `“${item.productName}” needs a size or variation before the order can be saved.`);
             setSubmitting(false);
             return;
           }
@@ -1661,15 +2123,15 @@ export default function CreateOrder({ orderNo = null }) {
 
           let confirmProductionUpdate = false;
           if (productionSensitive) {
-            const result = await Swal.fire({
-              title: 'Update item already in production?',
-              text: 'This custom item may already be in the production workflow. Updating it will release the old reservation and reserve/queue the new selection.',
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonText: 'Yes, update item',
-              cancelButtonText: 'Keep current item'
+            const confirmed = await confirmAction({
+              tone: 'warning',
+              title: 'Update an item already in production?',
+              text: 'This custom item may already be in the production workflow. Updating it releases the old reservation and reserves or queues the new selection.',
+              subject: item.productName,
+              confirmText: 'Update item',
+              cancelText: 'Keep current item'
             });
-            if (!result.isConfirmed) {
+            if (!confirmed) {
               setSubmitting(false);
               return;
             }
@@ -1685,15 +2147,15 @@ export default function CreateOrder({ orderNo = null }) {
             });
           } catch (error) {
             if (error?.response?.status === 409 && error?.response?.data?.code === 'PRODUCTION_UPDATE_CONFIRMATION_REQUIRED') {
-              const result = await Swal.fire({
-                title: 'Production confirmation required',
+              const confirmed = await confirmAction({
+                tone: 'warning',
+                title: 'This item is already in production',
                 text: error.response.data.message || 'This custom item is already in production. Confirm before updating it.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Update anyway',
-                cancelButtonText: 'Cancel update'
+                subject: item.productName,
+                confirmText: 'Update anyway',
+                cancelText: 'Cancel update'
               });
-              if (!result.isConfirmed) {
+              if (!confirmed) {
                 setSubmitting(false);
                 return;
               }
@@ -1712,7 +2174,7 @@ export default function CreateOrder({ orderNo = null }) {
         // 3. Add newly added items (no _serverId)
         for (const item of items.filter((i) => !i._serverId)) {
           if (!item.selectedVariationId) {
-            await Swal.fire('Missing variation', `Select a variation for "${item.productName}"`, 'warning');
+            await alertWarning('Choose a variation', `“${item.productName}” needs a size or variation before the order can be saved.`);
             setSubmitting(false);
             return;
           }
@@ -1744,10 +2206,10 @@ export default function CreateOrder({ orderNo = null }) {
           tags
         });
 
-        await Swal.fire('Order Updated', `Order #${orderNo} has been updated.`, 'success');
+        toastify.success(`Order #${orderNo} updated`);
         router.push(`/orders/${orderNo}`);
       } catch (e) {
-        Swal.fire(e?.response?.data?.message || e?.message || 'Failed to update order', '', 'error');
+        alertError(e, { title: 'The order was not updated' });
       } finally {
         setSubmitting(false);
       }
@@ -1797,152 +2259,339 @@ export default function CreateOrder({ orderNo = null }) {
 
       const res = await api.createAdminOrder(payload);
       const createdNo = res?.data?.orderNo || res?.data?.orderNumber;
-      await Swal.fire('Order Created', `Order No: ${createdNo || 'Created'}`, 'success');
+      toastify.success(createdNo ? `Order #${createdNo} created` : 'Order created');
       router.push(createdNo ? `/orders/${createdNo}` : '/orders');
     } catch (e) {
-      Swal.fire(e?.response?.data?.message || e?.message || 'Failed to create order', '', 'error');
+      alertError(e, { title: 'The order was not created' });
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (isEdit && !initialized && orderLoadFailed) {
+    return <ErrorState error={orderLoadError} title={`Order ${orderNo} could not be loaded`} onRetry={retryOrderLoad} />;
+  }
+
   // Loading skeleton for edit mode while fetching order + products
   if (isEdit && !initialized) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6" aria-busy="true">
         {[180, 320, 120].map((h, i) => (
-          <div key={i} className="bg-gray-100 rounded-md animate-pulse" style={{ height: h }} />
+          <div key={i} className="card-ui animate-pulse" style={{ height: h }} />
         ))}
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen">
-      {/* Edit-mode breadcrumb */}
-      {isEdit && (
-        <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => router.push(`/orders/${orderNo}`)}
-              className="text-sm text-gray-500 hover:text-gray-800 transition"
-            >
-              ← Back to order
-            </button>
-            <span className="text-gray-300">/</span>
-            <span className="text-sm font-semibold text-gray-700">
-              Edit Order <span className="text-[var(--brand-strong)]">#{orderNo}</span>
-            </span>
-          </div>
+  const orderTotal = Math.max(
+    0,
+    items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0) + Number(shipping || 0) - Number(discount || 0)
+  );
+  const errorList = Object.values(errors).filter(Boolean);
+
+  const customerCard = (
+    <Card title="Customer" description="Look up by phone to fill in a saved address.">
+      {/* key forces re-mount after edit-mode data loads so phone initialises correctly */}
+      <CustomerSection
+        key={initialized ? 'ready' : 'init'}
+        address={address}
+        onCustomerChange={setCustomer}
+        onAddressChange={setAddress}
+        onFraudData={setFraudData}
+        onShippingChange={setShipping}
+        addressLocked={addressLocked}
+        errors={errors}
+      />
+    </Card>
+  );
+  const statsCard = <CustomerStatsCard customer={customer} fraudData={fraudData} />;
+  const deliveryCard = (
+    <Card title="Delivery and tags">
+      <div className="space-y-5">
+        <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
+        <div className="border-t border-slate-100 pt-4">
+          <p className="mb-2 text-[13px] font-medium text-slate-800">Tags</p>
+          <TagPicker selected={tags} onChange={setTags} />
         </div>
+      </div>
+    </Card>
+  );
+  const lockedNotice = (
+    <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+      <FiLock size={15} className="mt-0.5 shrink-0" aria-hidden /> This order is {orderStatus}. Products, prices, shipping
+      and discount are locked once packing starts — use Return items or Finance review on the order page instead.
+    </p>
+  );
+  const productSearch = (
+    <POSProductSearch
+      autoFocus={desk}
+      large={desk}
+      onAdd={(item) => {
+        addItem(item);
+        setErrors((current) => ({ ...current, items: undefined }));
+      }}
+    />
+  );
+  const itemsTable = (
+    <ItemsTable
+      items={items}
+      onUpdate={updateItem}
+      onRemove={removeItem}
+      onDuplicate={duplicateItem}
+      locked={itemsLocked}
+      canOverridePrice={canOverridePrice}
+      missing={Boolean(errors.items)}
+    />
+  );
+  const noteCard = !isEdit ? (
+    <Card title="First internal note" description="Visible to staff only.">
+      <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
+    </Card>
+  ) : null;
+  const summary = (
+    <OrderSummary
+      items={items}
+      linkedPayments={linkedPayments}
+      shipping={shipping}
+      discount={discount}
+      onShippingChange={setShipping}
+      onDiscountChange={setDiscount}
+      locked={itemsLocked}
+    />
+  );
+  const payments = <TrxLookupSection linked={linkedPayments} onChange={setLinkedPayments} />;
+  const errorsBlock = errorList.length ? (
+    <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800" role="alert">
+      <p className="font-semibold">Before this order can be saved:</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+        {errorList.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
+  const submitLabel = submitting ? (isEdit ? 'Saving…' : 'Placing order…') : isEdit ? 'Save changes' : `Place order · ${fmt(orderTotal)}`;
+
+  // ── Order desk: a full-screen, POS-style workstation ─────────────────────
+  // Two panels: what is being sold on the left, and the order itself on the
+  // right as numbered steps — customer, delivery, payment — with the total and
+  // the one button that matters pinned at the bottom. Each step ticks green
+  // once it is complete, so what is left to do is always visible.
+  if (desk) {
+    const pieces = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+    const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
+    const paidLinked = linkedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const dueNow = Math.max(0, orderTotal - paidLinked);
+    const customerDone = Boolean(address.phone && address.name && address.district && address.upazila && address.address);
+    const deliveryDone = Boolean(delivery.deliveryType && delivery.estimatedDelivery);
+    const paymentDone = paidLinked > 0 || Number(shipping || 0) > 0;
+    const row = (label, value, tone = 'text-slate-900') => (
+      <div className="flex justify-between gap-4 text-[13px]">
+        <dt className="text-slate-500">{label}</dt>
+        <dd className={`tabular-nums ${tone}`}>{value}</dd>
+      </div>
+    );
+
+    return (
+      <Compact.Provider value>
+        <div
+          className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_440px] 2xl:grid-cols-[minmax(0,1fr)_500px]"
+          onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && items.length && !submitting) {
+              event.preventDefault();
+              handleSubmit();
+            }
+          }}
+        >
+          {/* ── Products ─────────────────────────────────────────────────── */}
+          <section className="card-ui flex min-h-[420px] flex-col xl:min-h-0" aria-labelledby="desk-products-title">
+            <header className="border-b border-slate-200 px-4 pb-3 pt-3.5">
+              <div className="mb-2.5 flex items-baseline justify-between gap-3">
+                <h2 id="desk-products-title" className="text-sm font-semibold text-slate-900">
+                  Products
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Press <kbd className="rounded border border-slate-300 bg-slate-50 px-1 font-sans text-[11px]">/</kbd> to search
+                </p>
+              </div>
+              {itemsLocked ? lockedNotice : productSearch}
+            </header>
+            <div className="min-h-0 flex-1 overflow-auto p-3">{itemsTable}</div>
+            <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px]">
+              <span className="text-slate-600">
+                {items.length} line{items.length === 1 ? '' : 's'} · {pieces} piece{pieces === 1 ? '' : 's'}
+              </span>
+              <span className="text-slate-600">
+                Subtotal <span className="ml-1 font-semibold tabular-nums text-slate-900">{fmt(subTotal)}</span>
+              </span>
+            </footer>
+          </section>
+
+          {/* ── Order ────────────────────────────────────────────────────── */}
+          <aside className="card-ui flex min-h-0 flex-col" aria-label="Order">
+            <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
+              <DeskStep n={1} title="Customer" done={customerDone}>
+                <div className="space-y-3">
+                  <CustomerSection
+                    key={initialized ? 'ready' : 'init'}
+                    address={address}
+                    onCustomerChange={setCustomer}
+                    onAddressChange={setAddress}
+                    onFraudData={setFraudData}
+                    onShippingChange={setShipping}
+                    addressLocked={addressLocked}
+                    errors={errors}
+                  />
+                  <CourierRecord customer={customer} fraudData={fraudData} />
+                </div>
+              </DeskStep>
+
+              <DeskStep n={2} title="Delivery" done={deliveryDone}>
+                <div className="space-y-3">
+                  <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-slate-700">Tags</p>
+                    <TagPicker selected={tags} onChange={setTags} />
+                  </div>
+                </div>
+              </DeskStep>
+
+              <DeskStep n={3} title="Payment" done={paymentDone}>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="desk-shipping">Shipping (৳)</Label>
+                      <input
+                        id="desk-shipping"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        value={shipping}
+                        onChange={(e) => setShipping(e.target.value)}
+                        disabled={itemsLocked}
+                        className={`${inp} text-right tabular-nums`}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="desk-discount">Discount (৳)</Label>
+                      <input
+                        id="desk-discount"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        value={discount}
+                        onChange={(e) => setDiscount(e.target.value)}
+                        disabled={itemsLocked}
+                        className={`${inp} text-right tabular-nums`}
+                      />
+                    </div>
+                  </div>
+                  {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
+                    <p className="text-[13px] font-medium text-rose-700" role="alert">
+                      The discount is larger than the order.
+                    </p>
+                  ) : null}
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-slate-700">Payment already received</p>
+                    {payments}
+                  </div>
+                </div>
+              </DeskStep>
+
+              {!isEdit ? (
+                <section>
+                  <button
+                    type="button"
+                    onClick={() => setNoteOpen((v) => !v)}
+                    aria-expanded={noteOpen}
+                    aria-controls="desk-note"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
+                  >
+                    <span className="text-sm font-semibold text-slate-900">Internal note</span>
+                    <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                      {adminNote?.trim() || adminNoteImages?.length ? 'Added' : 'Optional · staff only'}
+                      <FiChevronDown size={15} className={`transition-transform ${noteOpen ? 'rotate-180' : ''}`} aria-hidden />
+                    </span>
+                  </button>
+                  {noteOpen ? (
+                    <div id="desk-note" className="px-4 pb-4">
+                      <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+            </div>
+
+            {/* Checkout — always in view */}
+            <footer className="space-y-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
+              <dl className="space-y-1">
+                {row('Subtotal', fmt(subTotal))}
+                {row('Shipping', fmt(shipping))}
+                {Number(discount || 0) > 0 ? row('Discount', `−${fmt(discount)}`, 'text-emerald-700') : null}
+                {paidLinked > 0 ? row('Paid', `−${fmt(paidLinked)}`, 'text-emerald-700') : null}
+              </dl>
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2.5">
+                <span className="text-sm font-semibold text-slate-900">{paidLinked > 0 ? 'To collect' : 'Total'}</span>
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(paidLinked > 0 ? dueNow : orderTotal)}</span>
+              </div>
+              {errorsBlock}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || !items.length}
+                className="btn-brand h-12 w-full text-[15px]"
+                title="Ctrl + Enter"
+              >
+                {submitting ? 'Placing order…' : items.length ? 'Place order' : 'Add a product to continue'}
+              </button>
+            </footer>
+          </aside>
+        </div>
+      </Compact.Provider>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {isEdit ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => router.push(`/orders/${orderNo}`)} className="btn-ghost btn-sm">
+            <FiArrowLeft size={15} aria-hidden /> Back to order
+          </button>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Edit order <span className="ops-code">#{orderNo}</span>
+          </h1>
+        </div>
+      ) : (
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Create order</h1>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-        {/* Left column */}
-        <div className="space-y-4">
-          {/* Top row: Customer | Stats | Delivery+Tags — all equal height via grid stretch */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-            <Card title="Customer" className="xl:col-span-2">
-              {/* key forces re-mount after edit-mode data loads so phone initialises correctly */}
-              <CustomerSection
-                key={initialized ? 'ready' : 'init'}
-                address={address}
-                onCustomerChange={setCustomer}
-                onAddressChange={setAddress}
-                onFraudData={setFraudData}
-                onShippingChange={setShipping}
-                addressLocked={addressLocked}
-              />
-            </Card>
-            <CustomerStatsCard customer={customer} fraudData={fraudData} />
-            {/* Delivery type + Tags in one card */}
-            <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden flex flex-col">
-              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Delivery &amp; Tags</p>
-              </div>
-              <div className="p-4 flex flex-col gap-4 flex-1">
-                <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Tags</p>
-                  <TagPicker selected={tags} onChange={setTags} />
-                </div>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+            <div className="xl:col-span-2">{customerCard}</div>
+            {statsCard}
+            {deliveryCard}
           </div>
 
-          <Card title="Products">
-            <div className="space-y-3">
-              {itemsLocked ? (
-                <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                  <FiLock size={13} /> This order is {orderStatus}. Products, prices, shipping and discount are locked
-                  once packing starts — use Return items or Finance review on the order page instead.
-                </p>
-              ) : (
-                <POSProductSearch onAdd={addItem} />
-              )}
-              <ItemsTable
-                items={items}
-                onUpdate={updateItem}
-                onRemove={removeItem}
-                onDuplicate={duplicateItem}
-                locked={itemsLocked}
-                canOverridePrice={canOverridePrice}
-              />
+          <Card title="Products" description={items.length ? `${items.length} line${items.length === 1 ? '' : 's'}` : undefined}>
+            <div className="space-y-4">
+              {itemsLocked ? lockedNotice : productSearch}
+              {itemsTable}
             </div>
           </Card>
-          {!isEdit && (
-            <Card title="Initial Admin Comment">
-              <AdminNote
-                value={adminNote}
-                onChange={setAdminNote}
-                images={adminNoteImages}
-                onImagesChange={setAdminNoteImages}
-              />
-            </Card>
-          )}
+          {noteCard}
         </div>
 
-        {/* Right column */}
-        <div className="space-y-4">
-          <Card title="Payment Summary">
-            <OrderSummary
-              items={items}
-              linkedPayments={linkedPayments}
-              shipping={shipping}
-              discount={discount}
-              onShippingChange={setShipping}
-              onDiscountChange={setDiscount}
-              locked={itemsLocked}
-            />
-          </Card>
-
-          <Card title="Payments">
-            <TrxLookupSection linked={linkedPayments} onChange={setLinkedPayments} />
-          </Card>
-
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || !items.length}
-            className="mt-4 w-full rounded-md bg-[var(--brand)] py-3 text-sm font-bold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting
-              ? isEdit
-                ? 'Saving…'
-                : 'Placing Order…'
-              : isEdit
-                ? 'Save Changes'
-                : `Place Order · ${fmt(
-                    Math.max(
-                      0,
-                      items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0) +
-                        Number(shipping || 0) -
-                        Number(discount || 0)
-                    )
-                  )}`}
+        {/* Right column — stays in view while the product list scrolls */}
+        <aside className="space-y-6 xl:sticky xl:top-0" aria-label="Order total and payment">
+          <Card title="Summary">{summary}</Card>
+          <Card title="Payments received">{payments}</Card>
+          {errorsBlock}
+          <button type="button" onClick={handleSubmit} disabled={submitting || !items.length} className="btn-brand h-11 w-full text-[15px]">
+            {submitLabel}
           </button>
-        </div>
+        </aside>
       </div>
     </div>
   );

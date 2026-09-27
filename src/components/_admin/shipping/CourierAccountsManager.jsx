@@ -1,13 +1,18 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { MdAdd, MdDelete, MdEdit, MdOutlineLocalShipping, MdStar, MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import * as api from 'src/services';
-import { confirmDelete } from 'src/utils/swal';
-import { FiCopy, FiEye, FiEyeOff, FiPlus, FiStar, FiTrash2 } from 'react-icons/fi';
-import { MdOutlineLocalShipping } from 'react-icons/md';
+import { confirmDelete, toastSuccess, alertError } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import Panel from 'src/components/_admin/ui/Panel';
+import Badge, { RecordStatus } from 'src/components/_admin/ui/Badge';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { Field, Toggle } from 'src/components/_admin/ui/fields';
+import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { CopyButton } from 'src/components/_admin/ui/primitives';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000';
 const WEBHOOK_URLS = {
@@ -16,30 +21,30 @@ const WEBHOOK_URLS = {
   carrybee: `${BASE_URL}/api/webhooks/courier/carrybee`
 };
 
-const PROVIDER_META = {
-  pathao: { label: 'Pathao', cls: 'bg-red-50 text-red-600 border-red-200' },
-  steadfast: { label: 'Steadfast', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  carrybee: { label: 'CarryBee', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+const PROVIDERS = {
+  steadfast: { label: 'Steadfast', webhookNote: 'Set the webhook secret as the Bearer token.' },
+  pathao: { label: 'Pathao', webhookNote: 'Set the webhook secret in the Pathao merchant dashboard.' },
+  carrybee: { label: 'CarryBee', webhookNote: 'Use the webhook integration secret set on the account.' }
 };
 
 const CREDENTIAL_FIELDS = {
   pathao: [
     { key: 'clientId', label: 'Client ID', hint: 'From Pathao Merchant → API Credentials' },
-    { key: 'clientSecret', label: 'Client Secret', secret: true },
+    { key: 'clientSecret', label: 'Client secret', secret: true },
     { key: 'username', label: 'Merchant email (username)', hint: 'Needed for the password grant token' },
     { key: 'password', label: 'Merchant password', secret: true },
     { key: 'storeId', label: 'Store ID', hint: 'The Pathao store parcels are sent from' }
   ],
   steadfast: [
-    { key: 'apiKey', label: 'API Key', secret: true },
-    { key: 'secretKey', label: 'Secret Key', secret: true },
+    { key: 'apiKey', label: 'API key', secret: true },
+    { key: 'secretKey', label: 'Secret key', secret: true },
     { key: 'merchantEmail', label: 'Merchant login email', hint: 'Used for the portal fraud check, which is not subject to API limits' },
     { key: 'merchantPassword', label: 'Merchant login password', secret: true }
   ],
   carrybee: [
     { key: 'clientId', label: 'Client ID' },
-    { key: 'clientSecret', label: 'Client Secret', secret: true },
-    { key: 'clientContext', label: 'Client Context', secret: true },
+    { key: 'clientSecret', label: 'Client secret', secret: true },
+    { key: 'clientContext', label: 'Client context', secret: true },
     { key: 'accessToken', label: 'Fraud-check access token', secret: true, hint: 'Required by api-merchant.carrybee.com' },
     { key: 'merchantPhone', label: 'Merchant login phone', hint: 'Used server-side to obtain the fraud-check token automatically' },
     { key: 'merchantPassword', label: 'Merchant login password', secret: true },
@@ -57,132 +62,170 @@ const EMPTY_FORM = {
   isDefault: false
 };
 
-function SecretInput({ value, onChange, placeholder }) {
+function SecretInput({ id, value, onChange, placeholder, ...rest }) {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
       <input
+        id={id}
         type={show ? 'text' : 'password'}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         autoComplete="new-password"
-        className="border border-gray-200 rounded-md px-3 py-2 pr-9 w-full text-sm font-mono focus:outline-none focus:border-[var(--brand)]"
+        spellCheck={false}
+        className="input-ui ops-code w-full pr-10"
+        {...rest}
       />
       <button
         type="button"
         onClick={() => setShow((v) => !v)}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        aria-label={show ? 'Hide value' : 'Show value'}
+        aria-pressed={show}
       >
-        {show ? <FiEyeOff size={15} /> : <FiEye size={15} />}
+        {show ? <MdVisibilityOff size={17} aria-hidden /> : <MdVisibility size={17} aria-hidden />}
       </button>
     </div>
   );
 }
 
-function AccountForm({ initial, onSave, onCancel, saving }) {
+function AccountDrawer({ initial, onSave, onClose, saving }) {
   const editing = Boolean(initial?.id);
   const [form, setForm] = useState(
     initial ? { ...EMPTY_FORM, ...initial, credentials: { ...(initial.credentials || {}) } } : EMPTY_FORM
   );
+  const [nameError, setNameError] = useState('');
   const set = (patch) => setForm((p) => ({ ...p, ...patch }));
   const setCred = (key, value) => setForm((p) => ({ ...p, credentials: { ...p.credentials, [key]: value } }));
   const fields = CREDENTIAL_FIELDS[form.provider] || [];
+  const provider = PROVIDERS[form.provider];
 
   const submit = (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return Swal.fire('Validation', 'Give the account a name.', 'warning');
+    if (!form.name.trim()) {
+      setNameError('Give the account a name.');
+      return;
+    }
     onSave(form);
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4 bg-gray-50 border border-gray-200 rounded-md p-5">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Provider</label>
-          <select
-            value={form.provider}
-            disabled={editing}
-            onChange={(e) => set({ provider: e.target.value, credentials: {} })}
-            className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm bg-white focus:outline-none focus:border-[var(--brand)] disabled:bg-gray-100 disabled:text-gray-500"
-          >
-            <option value="steadfast">Steadfast</option>
-            <option value="pathao">Pathao</option>
-            <option value="carrybee">CarryBee</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Account name *</label>
-          <input
-            value={form.name}
-            onChange={(e) => set({ name: e.target.value })}
-            placeholder="e.g. Steadfast — Main"
-            className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-[var(--brand)]"
-          />
-        </div>
-        {fields.map((field) => (
-          <div key={field.key}>
-            <label className="block text-xs font-medium text-gray-700 mb-1">{field.label}</label>
-            {field.secret ? (
-              <SecretInput
-                value={form.credentials[field.key] || ''}
-                onChange={(e) => setCred(field.key, e.target.value)}
-                placeholder={editing ? 'Leave blank to keep current' : ''}
-              />
-            ) : (
-              <input
-                value={form.credentials[field.key] || ''}
-                onChange={(e) => setCred(field.key, e.target.value)}
-                className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-[var(--brand)]"
-              />
-            )}
-            {field.hint && <p className="text-[11px] text-gray-400 mt-1">{field.hint}</p>}
-          </div>
-        ))}
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Webhook secret</label>
-          <input
-            value={form.webhookSecret}
-            onChange={(e) => set({ webhookSecret: e.target.value })}
-            placeholder="Any random string — set the same value in the courier dashboard"
-            className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm font-mono focus:outline-none focus:border-[var(--brand)]"
-          />
-          <p className="text-[11px] text-gray-400 mt-1">
-            Webhook URL for {PROVIDER_META[form.provider].label}:{' '}
-            <span className="font-mono text-gray-500">{WEBHOOK_URLS[form.provider]}</span> — the courier calls it on
-            every parcel status change so tracking updates automatically.
-          </p>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-gray-600">
-          <input type="checkbox" checked={form.isActive} onChange={(e) => set({ isActive: e.target.checked })} className="accent-[var(--brand)]" />
-          Active
-        </label>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
-          <input type="checkbox" checked={form.isDefault} onChange={(e) => set({ isDefault: e.target.checked })} className="accent-[var(--brand)]" />
-          Default for {PROVIDER_META[form.provider].label}
-        </label>
-        <div className="ml-auto flex gap-2">
-          <button type="button" onClick={onCancel} className="btn-ghost">
+    <Drawer
+      title={editing ? `Edit ${initial.name}` : 'Add courier account'}
+      eyebrow="Couriers"
+      onClose={onClose}
+      onSubmit={submit}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-brand">
-            {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Account'}
+            {saving ? 'Saving…' : editing ? 'Save changes' : 'Add account'}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <section className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Courier" help={editing ? 'The courier of an existing account cannot change.' : undefined}>
+              <select
+                value={form.provider}
+                disabled={editing}
+                onChange={(e) => set({ provider: e.target.value, credentials: {} })}
+                className="select-ui w-full"
+              >
+                {Object.entries(PROVIDERS).map(([value, meta]) => (
+                  <option key={value} value={value}>
+                    {meta.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Account name" required error={nameError}>
+              <input
+                value={form.name}
+                onChange={(e) => {
+                  set({ name: e.target.value });
+                  setNameError('');
+                }}
+                placeholder="e.g. Steadfast — Main"
+                className="input-ui"
+                autoFocus={!editing}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="space-y-4 border-t border-slate-200 pt-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">{provider.label} credentials</h3>
+            {editing && <p className="mt-0.5 text-[13px] text-slate-500">Leave a secret blank to keep the one already saved.</p>}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {fields.map((field) => (
+              <Field key={field.key} label={field.label} help={field.hint}>
+                {field.secret ? (
+                  <SecretInput
+                    value={form.credentials[field.key] || ''}
+                    onChange={(e) => setCred(field.key, e.target.value)}
+                    placeholder={editing ? 'Unchanged' : ''}
+                  />
+                ) : (
+                  <input value={form.credentials[field.key] || ''} onChange={(e) => setCred(field.key, e.target.value)} className="input-ui" />
+                )}
+              </Field>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4 border-t border-slate-200 pt-5">
+          <Field
+            label="Webhook secret"
+            optional
+            help="Any random string. Set the same value in the courier dashboard so tracking updates on every parcel status change."
+          >
+            <input
+              value={form.webhookSecret}
+              onChange={(e) => set({ webhookSecret: e.target.value })}
+              className="input-ui ops-code"
+              spellCheck={false}
+            />
+          </Field>
+          <div className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+            <span className="shrink-0">Webhook URL</span>
+            <span className="ops-code min-w-0 flex-1 truncate text-slate-900">{WEBHOOK_URLS[form.provider]}</span>
+            <CopyButton value={WEBHOOK_URLS[form.provider]} label={`Copy the ${provider.label} webhook URL`} />
+          </div>
+        </section>
+
+        <section className="divide-y divide-slate-100 border-t border-slate-200 pt-2">
+          <Toggle
+            label="Active"
+            help="Inactive accounts cannot book new shipments."
+            checked={form.isActive}
+            onChange={(on) => set({ isActive: on })}
+          />
+          <Toggle
+            label={`Default for ${provider.label}`}
+            help="Used when a shipment is booked without choosing an account."
+            checked={form.isDefault}
+            onChange={(on) => set({ isDefault: on })}
+          />
+        </section>
       </div>
-    </form>
+    </Drawer>
   );
 }
 
 export default function CourierAccountsManager() {
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [editingAccount, setEditingAccount] = useState(null);
+  const [drawer, setDrawer] = useState(null); // null | { account?: object }
   const [balances, setBalances] = useState({});
 
-  const { data, isLoading } = useQuery(['courier-accounts'], api.getCourierAccounts, {
+  const { data, isLoading, isError, error, refetch } = useQuery(['courier-accounts'], api.getCourierAccounts, {
     select: (d) => d?.data ?? []
   });
   const accounts = data || [];
@@ -190,194 +233,201 @@ export default function CourierAccountsManager() {
 
   const create = useMutation(api.createCourierAccount, {
     onSuccess: () => {
+      toastSuccess('Courier account added');
       invalidate();
-      setShowForm(false);
+      setDrawer(null);
     },
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onError: (e) => alertError(e, { title: 'The account was not added' })
   });
   const update = useMutation(api.updateCourierAccount, {
     onSuccess: () => {
+      toastSuccess('Courier account saved');
       invalidate();
-      setEditingAccount(null);
+      setDrawer(null);
     },
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onError: (e) => alertError(e, { title: 'The account was not saved' })
   });
   const setDefault = useMutation(api.setDefaultCourierAccount, {
-    onSuccess: invalidate,
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onSuccess: () => {
+      toastSuccess('Default account changed');
+      invalidate();
+    },
+    onError: (e) => alertError(e, { title: 'The default was not changed' })
   });
   const remove = useMutation(api.deleteCourierAccount, {
-    onSuccess: invalidate,
-    onError: (e) => Swal.fire('Error', e?.response?.data?.message || 'Failed', 'error')
+    onSuccess: () => {
+      toastSuccess('Courier account removed');
+      invalidate();
+    },
+    onError: (e) => alertError(e, { title: 'The account was not removed' })
   });
 
   const handleDelete = async (account) => {
     const confirmed = await confirmDelete({
+      title: 'Remove this courier account?',
       subject: account.name,
       text: 'Existing shipments keep their history; you just can’t book new ones with it.',
-      confirmText: 'Remove'
+      confirmText: 'Remove account'
     });
     if (confirmed) remove.mutate(account.id);
   };
 
   const checkBalance = async (account) => {
-    setBalances((p) => ({ ...p, [account.id]: '…' }));
+    setBalances((p) => ({ ...p, [account.id]: 'Checking…' }));
     try {
       const res = await api.getCourierAccountBalance(account.id);
       setBalances((p) => ({ ...p, [account.id]: `৳${res?.data?.balance ?? '?'}` }));
     } catch (e) {
-      setBalances((p) => ({ ...p, [account.id]: 'error' }));
-      Swal.fire('Balance check failed', e?.response?.data?.message || 'Check the credentials.', 'error');
+      setBalances((p) => ({ ...p, [account.id]: 'Could not check' }));
+      alertError(e, { title: 'The balance could not be checked' });
     }
   };
 
-  const copy = (text) => {
-    navigator.clipboard?.writeText(text);
-    Swal.fire({ title: 'Copied', icon: 'success', timer: 900, showConfirmButton: false, toast: true, position: 'top-end' });
-  };
+  const openAdd = () => setDrawer({});
+  const openEdit = (account) => setDrawer({ account });
+
+  const columns = [
+    {
+      key: 'name',
+      label: 'Account',
+      render: (account) => (
+        <div>
+          <p className="text-[13px] font-semibold text-slate-900">{account.name}</p>
+          {account.webhookSecret ? (
+            <p className="text-xs text-slate-500">Webhook secret set</p>
+          ) : (
+            <p className="text-xs text-amber-800">No webhook secret — tracking won’t update on its own</p>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'provider',
+      label: 'Courier',
+      render: (account) => <Badge>{PROVIDERS[account.provider]?.label || account.provider}</Badge>
+    },
+    {
+      key: 'isDefault',
+      label: 'Default',
+      render: (account) =>
+        account.isDefault ? (
+          <span className="inline-flex items-center gap-1 text-[13px] font-medium text-slate-900">
+            <MdStar size={15} className="text-amber-500" aria-hidden /> Default
+          </span>
+        ) : (
+          <span className="text-slate-400">—</span>
+        )
+    },
+    {
+      key: 'isActive',
+      label: 'Status',
+      render: (account) => <RecordStatus status={account.isActive ? 'active' : 'inactive'} />
+    },
+    {
+      key: 'balance',
+      label: 'Balance',
+      hideBelow: 'md',
+      render: (account) =>
+        account.provider === 'steadfast' ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              stopRow(e);
+              checkBalance(account);
+            }}
+            className="btn-ghost btn-sm"
+          >
+            {balances[account.id] || 'Check balance'}
+          </button>
+        ) : (
+          <span className="text-slate-400">—</span>
+        )
+    },
+    {
+      key: 'actions',
+      label: '',
+      srLabel: 'Actions',
+      align: 'right',
+      render: (account) => (
+        <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+          <button type="button" onClick={() => openEdit(account)} className="btn-ghost btn-sm">
+            Edit
+          </button>
+          <ActionMenu
+            label={`More actions for ${account.name}`}
+            items={[
+              {
+                label: 'Make default',
+                icon: MdStar,
+                onClick: () => setDefault.mutate(account.id),
+                hidden: account.isDefault,
+                disabled: setDefault.isLoading
+              },
+              { label: 'Edit', icon: MdEdit, onClick: () => openEdit(account) },
+              { label: 'Remove', icon: MdDelete, tone: 'danger', onClick: () => handleDelete(account) }
+            ]}
+          />
+        </div>
+      )
+    }
+  ];
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Courier Accounts"
-        subtitle="Pathao & Steadfast accounts used to send shipments — mark one default per provider"
-        icon={MdOutlineLocalShipping}
-      >
-        {!showForm && !editingAccount && (
-          <button onClick={() => setShowForm(true)} className="btn-brand">
-            <FiPlus size={15} /> Add Account
-          </button>
-        )}
+    <div className="space-y-6">
+      <PageHeader title="Courier accounts" subtitle="Accounts used to book shipments — one default per courier.">
+        <button type="button" onClick={openAdd} className="btn-brand">
+          <MdAdd size={18} aria-hidden /> Add account
+        </button>
       </PageHeader>
 
-      {(showForm || editingAccount) && (
-        <AccountForm
-          initial={editingAccount}
+      <DataTable
+        caption="Courier accounts"
+        columns={columns}
+        data={accounts}
+        onRowClick={openEdit}
+        rowLabel={(account) => `Edit ${account.name}`}
+        selectable={false}
+        isLoading={isLoading}
+        error={isError ? error : null}
+        onRetry={refetch}
+        empty={
+          <EmptyState
+            icon={MdOutlineLocalShipping}
+            title="No courier accounts yet"
+            hint="Add your Steadfast, Pathao or CarryBee credentials to start booking shipments."
+            action={
+              <button type="button" onClick={openAdd} className="btn-brand">
+                <MdAdd size={18} aria-hidden /> Add account
+              </button>
+            }
+          />
+        }
+      />
+
+      <Panel title="Webhook setup" description="One-time, per courier. The courier calls this address on every parcel status change.">
+        <ul className="divide-y divide-slate-100">
+          {Object.entries(PROVIDERS).map(([key, meta]) => (
+            <li key={key} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-4">
+              <p className="text-[13px] font-medium text-slate-900">{meta.label}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="ops-code min-w-0 truncate text-[13px] text-slate-700">{WEBHOOK_URLS[key]}</span>
+                  <CopyButton value={WEBHOOK_URLS[key]} label={`Copy the ${meta.label} webhook URL`} />
+                </div>
+                <p className="text-xs text-slate-500">{meta.webhookNote}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      {drawer && (
+        <AccountDrawer
+          initial={drawer.account}
           saving={create.isLoading || update.isLoading}
-          onSave={(form) =>
-            editingAccount ? update.mutate({ id: editingAccount.id, ...form }) : create.mutate(form)
-          }
-          onCancel={() => {
-            setShowForm(false);
-            setEditingAccount(null);
-          }}
+          onSave={(form) => (drawer.account ? update.mutate({ id: drawer.account.id, ...form }) : create.mutate(form))}
+          onClose={() => setDrawer(null)}
         />
-      )}
-
-      <div className="rounded-md border border-blue-100 bg-blue-50/60 p-4 text-xs text-blue-800 space-y-1">
-        <p className="font-semibold">Webhook setup (one-time, per provider)</p>
-        <p className="flex items-center gap-2">
-          Steadfast: <span className="font-mono">{WEBHOOK_URLS.steadfast}</span>
-          <button onClick={() => copy(WEBHOOK_URLS.steadfast)} className="text-blue-500 hover:text-blue-700"><FiCopy size={12} /></button>
-          — set the webhook secret as the Bearer token.
-        </p>
-        <p className="flex items-center gap-2">
-          Pathao: <span className="font-mono">{WEBHOOK_URLS.pathao}</span>
-          <button onClick={() => copy(WEBHOOK_URLS.pathao)} className="text-blue-500 hover:text-blue-700"><FiCopy size={12} /></button>
-          — set the webhook secret in the Pathao merchant dashboard.
-        </p>
-        <p className="flex items-center gap-2">
-          CarryBee: <span className="font-mono">{WEBHOOK_URLS.carrybee}</span>
-          <button onClick={() => copy(WEBHOOK_URLS.carrybee)} className="text-blue-500 hover:text-blue-700"><FiCopy size={12} /></button>
-          — use the webhook integration secret configured above.
-        </p>
-      </div>
-
-      {isLoading ? (
-        <div className="py-10 text-center text-sm text-gray-400">Loading…</div>
-      ) : accounts.length === 0 ? (
-        <div className="text-center py-14 text-sm text-gray-500 border border-dashed border-gray-300 rounded-md">
-          No courier accounts yet — add your Pathao or Steadfast credentials above to start sending shipments.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-md border border-gray-200">
-          <DataTable className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">Account</th>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">Provider</th>
-                <th className="px-4 py-2.5 text-center text-xs text-gray-500 uppercase tracking-wide">Default</th>
-                <th className="px-4 py-2.5 text-center text-xs text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="px-4 py-2.5 text-left text-xs text-gray-500 uppercase tracking-wide">Balance</th>
-                <th className="px-4 py-2.5 text-right text-xs text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((account) => {
-                const meta = PROVIDER_META[account.provider] || PROVIDER_META.steadfast;
-                return (
-                  <tr key={account.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-gray-800">{account.name}</p>
-                      {account.webhookSecret ? (
-                        <p className="text-[11px] text-gray-400">webhook secret set</p>
-                      ) : (
-                        <p className="text-[11px] text-amber-500">no webhook secret — tracking won’t auto-update</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {account.isDefault ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600">
-                          <FiStar size={12} /> Default
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setDefault.mutate(account.id)}
-                          disabled={setDefault.isLoading}
-                          className="text-xs text-gray-400 hover:text-[var(--brand-strong)] hover:underline"
-                        >
-                          Make default
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-xs font-medium ${account.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}
-                      >
-                        {account.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {account.provider === 'steadfast' ? (
-                        <button
-                          onClick={() => checkBalance(account)}
-                          className="text-xs text-[var(--brand-strong)] hover:underline"
-                        >
-                          {balances[account.id] || 'Check balance'}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => {
-                            setShowForm(false);
-                            setEditingAccount(account);
-                          }}
-                          className="px-2 py-1 text-xs text-[var(--brand-strong)] hover:bg-[var(--brand-soft)] rounded-md transition"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(account)}
-                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition"
-                          title="Remove account"
-                        >
-                          <FiTrash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-        </div>
       )}
     </div>
   );

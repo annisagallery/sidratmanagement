@@ -1,5 +1,7 @@
 'use client';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast as toastify } from 'react-toastify';
+import { alertError } from 'src/utils/swal';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { useMutation, useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Swal from 'sweetalert2';
@@ -32,6 +34,7 @@ import { FaRegStar } from 'react-icons/fa6';
 import { FiStar } from 'react-icons/fi';
 import RichTextEditor from 'src/components/richTextEditor';
 import ProductBom from 'src/components/_admin/products/productBom';
+import { OverlayPanel } from 'src/components/_admin/ui/Drawer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -138,7 +141,7 @@ function SizeChartUploader({ value, onChange }) {
     try {
       onChange(await doUpload(file));
     } catch {
-      Swal.fire('Upload failed', '', 'error');
+      alertError(null, { title: 'Upload failed', text: 'The image could not be uploaded. Check the file and try again.' });
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -153,14 +156,14 @@ function SizeChartUploader({ value, onChange }) {
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-slate-950/70 text-white transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-md bg-slate-950/70 text-white transition hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             aria-label="Remove size chart"
           >
             <MdClose size={19} />
           </button>
         </div>
       ) : (
-        <label className="flex h-48 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
+        <label className="flex h-48 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-slate-400 hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
           {uploading ? (
             <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={28} />
           ) : (
@@ -168,7 +171,7 @@ function SizeChartUploader({ value, onChange }) {
               <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-[var(--brand-strong)] shadow-sm">
                 <MdImage size={22} />
               </span>
-              <span className="mt-3 text-sm font-bold text-slate-700">Upload size chart</span>
+              <span className="mt-3 text-sm font-semibold text-slate-700">Upload size chart</span>
               <span className="mt-1 text-xs text-slate-500">Optional guide shown on the product page</span>
             </>
           )}
@@ -196,7 +199,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
         return next;
       });
     } catch {
-      Swal.fire('Upload failed', '', 'error');
+      alertError(null, { title: 'Upload failed', text: 'The image could not be uploaded. Check the file and try again.' });
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -214,7 +217,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
   return (
     <div>
       {pool.length === 0 ? (
-        <label className="flex h-56 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
+        <label className="flex h-56 cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-center transition hover:border-slate-400 hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
           {uploading ? (
             <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={32} />
           ) : (
@@ -222,7 +225,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
               <span className="flex h-12 w-12 items-center justify-center rounded-md bg-white text-[var(--brand-strong)] shadow-sm">
                 <MdPhotoLibrary size={24} />
               </span>
-              <span className="mt-4 text-sm font-bold text-slate-700">Upload product images</span>
+              <span className="mt-4 text-sm font-semibold text-slate-700">Upload product images</span>
               <span className="mt-1 text-xs text-slate-500">Select multiple square or portrait images at once</span>
             </>
           )}
@@ -236,12 +239,12 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
               return (
                 <div
                   key={img.id}
-                    className={`group relative aspect-square overflow-hidden rounded-md border-2 transition-all ${isFeatured ? 'border-[var(--brand)] shadow-sm' : 'border-slate-200'}`}
+                    className={`group relative aspect-square overflow-hidden rounded-md border-2 transition-all ${isFeatured ? 'border-slate-900 shadow-sm' : 'border-slate-200'}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <Image src={img.path} alt={img.originalName || 'Product image'} fill sizes="180px" className="object-cover" />
                   {isFeatured && (
-                    <div className="absolute inset-x-0 bottom-0 bg-[var(--brand)] py-1 text-center text-[10px] font-bold uppercase tracking-wide text-white">
+                    <div className="section-label absolute inset-x-0 bottom-0 bg-slate-900 py-1 text-center text-white">
                       Featured image
                     </div>
                   )}
@@ -257,7 +260,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
                     <button
                       type="button"
                       onClick={() => removeFromPool(img.id)}
-                      className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950/40 text-white transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                      className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-950/40 text-white transition hover:bg-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                       aria-label="Remove product image"
                     >
                       <MdClose size={18} />
@@ -266,7 +269,7 @@ function ImagePool({ pool, setPool, featuredId, setFeaturedId }) {
                 </div>
               );
             })}
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-slate-400 hover:bg-[var(--brand-soft)] focus-within:ring-2 focus-within:ring-[var(--brand-ring)]">
               {uploading ? (
                 <MdAutorenew className="animate-spin text-[var(--brand-strong)]" size={22} />
               ) : (
@@ -349,7 +352,7 @@ function LivePreview({
       <section className="card-ui overflow-hidden">
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
           <MdStorefront size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Storefront preview</p>
+          <p className="section-label">Storefront preview</p>
           {/* Moved out of the page header: the live page is the thing this
               panel approximates, so the link belongs next to the preview. Only
               shown once the product has a slug — an unsaved draft has no page. */}
@@ -363,21 +366,21 @@ function LivePreview({
                   'noopener'
                 )
               }
-              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-[var(--brand-strong)] transition hover:bg-[var(--brand-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[var(--brand-strong)] transition hover:bg-[var(--brand-soft)]"
             >
               <MdOpenInNew size={14} aria-hidden="true" /> View on site
             </button>
           )}
         </div>
           {/* Image carousel */}
-          <div className="relative bg-gray-50 aspect-square overflow-hidden">
+          <div className="relative bg-slate-50 aspect-square overflow-hidden">
             {displayImg?.path ? (
               // eslint-disable-next-line @next/next/no-img-element
                <Image src={displayImg.path} alt={name || 'Product preview'} fill sizes="320px" className="object-contain" />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-gray-200">
+              <div className="w-full h-full flex flex-col items-center justify-center text-slate-200">
                 <MdImage size={56} />
-                <span className="text-xs text-gray-300 mt-2">No image yet</span>
+                <span className="text-xs text-slate-400 mt-2">No image yet</span>
               </div>
             )}
             {/* Nav arrows */}
@@ -386,7 +389,7 @@ function LivePreview({
                 <button
                   type="button"
                   onClick={() => setCarouselIdx((i) => (i - 1 + images.length) % images.length)}
-                   className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                   className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white"
                    aria-label="Previous preview image"
                 >
                   <MdChevronLeft size={18} />
@@ -394,7 +397,7 @@ function LivePreview({
                 <button
                   type="button"
                   onClick={() => setCarouselIdx((i) => (i + 1) % images.length)}
-                   className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                   className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-white/90 text-slate-700 shadow transition hover:bg-white"
                    aria-label="Next preview image"
                 >
                   <MdChevronRight size={18} />
@@ -410,7 +413,7 @@ function LivePreview({
                     type="button"
                     onClick={() => setCarouselIdx(i)}
                     aria-label={`Show preview image ${i + 1}`}
-                    className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-md border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${i === carouselIdx ? 'border-[var(--brand)]' : 'border-transparent'}`}
+                    className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-md border-2 transition ${i === carouselIdx ? 'border-slate-900' : 'border-transparent'}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <Image src={img.path} alt="" fill sizes="44px" className="object-cover" />
@@ -422,12 +425,12 @@ function LivePreview({
             <div className="absolute top-2 left-2 flex flex-col gap-1">
               <StatusBadge status={status} />
               {isFeatured && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-[var(--brand)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-1.5 py-0.5 text-xs font-semibold text-white">
                   <FiStar size={10} aria-hidden="true" /> Featured
                 </span>
               )}
               {priceSale && (
-                <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md font-semibold">SALE</span>
+                <span className="text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded-md font-semibold">SALE</span>
               )}
             </div>
           </div>
@@ -436,37 +439,37 @@ function LivePreview({
           <div className="p-4 space-y-3">
             {/* Name */}
             <div>
-              <h2 className="font-bold text-gray-900 text-base leading-tight line-clamp-2">
-                {name || <span className="text-gray-300 font-normal italic text-sm">Product name…</span>}
+              <h2 className="font-semibold text-slate-900 text-base leading-tight line-clamp-2">
+                {name || <span className="text-slate-400 font-normal italic text-sm">Product name…</span>}
               </h2>
-              {catName && <p className="text-xs text-gray-400 mt-0.5">{catName}</p>}
-              {slug && <p className="text-[10px] text-gray-300 font-mono mt-0.5 truncate">/{slug}</p>}
+              {catName && <p className="text-xs text-slate-500 mt-0.5">{catName}</p>}
+              {slug && <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">/{slug}</p>}
             </div>
 
             {/* Stars (placeholder) */}
             <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((s) => (
-                <FaRegStar key={s} className="text-gray-200 w-3 h-3" />
+                <FaRegStar key={s} className="text-slate-200 w-3 h-3" />
               ))}
-              <span className="text-xs text-gray-300 ml-1">No reviews yet</span>
+              <span className="text-xs text-slate-400 ml-1">No reviews yet</span>
             </div>
 
             {/* Price */}
             <div className="flex items-baseline gap-2">
               {displayPrice.show ? (
                 <>
-                  <span className="text-xl font-bold text-gray-900">৳{displayPrice.show}</span>
+                  <span className="text-xl font-semibold text-slate-900">৳{displayPrice.show}</span>
                   {displayPrice.original && (
-                    <span className="text-sm text-red-400 line-through">৳{displayPrice.original}</span>
+                    <span className="text-sm text-rose-700 line-through">৳{displayPrice.original}</span>
                   )}
                 </>
               ) : (
-                <span className="text-gray-300 italic text-sm">Set a price…</span>
+                <span className="text-slate-400 italic text-sm">Set a price…</span>
               )}
             </div>
 
             {/* Short description */}
-            {shortDescription && <p className="text-xs text-gray-500 border-t pt-2 line-clamp-2">{shortDescription}</p>}
+            {shortDescription && <p className="text-xs text-slate-500 border-t pt-2 line-clamp-2">{shortDescription}</p>}
 
             {/* Variation attributes */}
             {varAttrEntries.length > 0 && (
@@ -476,9 +479,9 @@ function LivePreview({
                   const sel = previewAttr[e.attr.id];
                   return (
                     <div key={e.attr.id}>
-                      <p className="text-xs font-semibold text-gray-700 mb-1">
+                      <p className="text-xs font-semibold text-slate-700 mb-1">
                         {e.attr.name}
-                        {sel && <span className="font-normal text-gray-400 ml-1">: {sel.value}</span>}
+                        {sel && <span className="font-normal text-slate-500 ml-1">: {sel.value}</span>}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {e.values.map((v) => {
@@ -495,7 +498,7 @@ function LivePreview({
                               }
                               title={v.value}
                               aria-label={`${isSel ? 'Deselect' : 'Select'} ${v.value}`}
-                              className={`h-10 w-10 rounded-md border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isSel ? 'border-[var(--brand)] ring-2 ring-[var(--brand-ring)]' : 'border-white shadow'}`}
+                              className={`h-10 w-10 rounded-md border-2 transition ${isSel ? 'border-slate-900 ring-2 ring-[var(--brand-ring)]' : 'border-white shadow'}`}
                               style={{ backgroundColor: v.colorHex }}
                             />
                           ) : (
@@ -509,7 +512,7 @@ function LivePreview({
                                 }))
                               }
                               aria-pressed={isSel}
-                              className={`min-h-9 rounded-md border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isSel ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-[var(--brand)]'}`}
+                              className={`min-h-9 rounded-md border px-2.5 text-xs transition ${isSel ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-900'}`}
                             >
                               {v.value}
                             </button>
@@ -525,17 +528,17 @@ function LivePreview({
             {/* Info-only attributes */}
             {infoAttrEntries.length > 0 && (
               <div className="border-t pt-2">
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Product Info</p>
+                <p className="section-label mb-1.5">Product info</p>
                 <div className="space-y-1">
                   {infoAttrEntries.map((e) => (
                     <div key={e.attr.id} className="flex items-start gap-2 text-xs">
-                      <span className="text-gray-500 font-medium min-w-[60px]">{e.attr.name}:</span>
+                      <span className="text-slate-500 font-medium min-w-[60px]">{e.attr.name}:</span>
                       <div className="flex flex-wrap gap-1">
                         {e.values.map((v) => (
-                          <span key={v.id} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md text-[10px]">
+                          <span key={v.id} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-xs">
                             {e.attr.type === 'color' && v.colorHex && (
                               <span
-                                className="inline-block w-2 h-2 rounded-md mr-1 border border-gray-300"
+                                className="inline-block w-2 h-2 rounded-md mr-1 border border-slate-300"
                                 style={{ backgroundColor: v.colorHex }}
                               />
                             )}
@@ -551,8 +554,8 @@ function LivePreview({
 
             {/* Qty + stock summary */}
             <div className="flex items-center gap-2 border-t pt-2">
-              <span className="text-xs text-gray-500">Qty:</span>
-              <div className="flex items-center border rounded-md overflow-hidden text-xs">
+              <span className="text-xs text-slate-500">Qty:</span>
+              <div className="flex items-center overflow-hidden rounded-md border border-slate-200 text-xs" aria-hidden>
                 <button type="button" className="flex h-10 w-10 items-center justify-center bg-slate-50 transition hover:bg-slate-100" aria-label="Decrease preview quantity">
                   –
                 </button>
@@ -562,7 +565,7 @@ function LivePreview({
                 </button>
               </div>
               {variations.length > 0 && (
-                <span className="text-[10px] text-gray-400 ml-auto">
+                <span className="text-xs text-slate-500 ml-auto">
                   {variations.length} variation{variations.length !== 1 ? 's' : ''}
                 </span>
               )}
@@ -572,10 +575,10 @@ function LivePreview({
             {sizeChart?.path && (
               <button
                 type="button"
-                onClick={() => Swal.fire({ imageUrl: sizeChart.path, imageAlt: 'Size Chart', padding: '10px' })}
-                className="min-h-10 w-full rounded-md bg-info text-xs font-semibold text-white"
+                onClick={() => Swal.fire({ imageUrl: sizeChart.path, imageAlt: 'Size chart', padding: '10px' })}
+                className="btn-ghost btn-sm w-full"
               >
-                Size Chart
+                Size chart
               </button>
             )}
 
@@ -583,13 +586,13 @@ function LivePreview({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-black text-xs font-semibold text-white transition hover:bg-gray-800"
+                className="btn-brand btn-sm flex min-h-10"
               >
                 <MdShoppingCart size={14} /> Add to Cart
               </button>
               <button
                 type="button"
-                className="flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-emerald-600 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                className="btn-brand btn-sm flex min-h-10"
               >
                 <MdFlashOn size={14} /> Buy Now
               </button>
@@ -601,10 +604,10 @@ function LivePreview({
       <section className="card-ui overflow-hidden" aria-label="Search result preview">
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
           <MdSearch size={17} className="text-[var(--brand-strong)]" aria-hidden="true" />
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Search preview</p>
+          <p className="section-label">Search preview</p>
         </div>
         <div className="p-4">
-          <p className="break-words text-base font-semibold text-blue-800">
+          <p className="break-words text-base font-semibold text-sky-800">
             {metaTitle.trim() || name.trim() || 'Product search title'}
           </p>
           <p className="mt-1 break-all text-xs text-emerald-700">/product/{slug || 'product-slug'}</p>
@@ -645,7 +648,7 @@ const PRODUCT_STATUSES = [
 function ProductStatusPicker({ value, onChange }) {
   return (
     <fieldset>
-      <legend className="mb-2 text-xs font-semibold text-slate-700">Product status</legend>
+      <legend className="mb-2 text-[13px] font-medium text-slate-800">Product status</legend>
       <div className="grid gap-2 sm:grid-cols-3">
         {PRODUCT_STATUSES.map((option) => {
           const selected = option.value === value;
@@ -655,10 +658,10 @@ function ProductStatusPicker({ value, onChange }) {
               type="button"
               aria-pressed={selected}
               onClick={() => onChange(option.value)}
-              className={`min-h-[68px] rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${selected ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+              className={`min-h-[68px] rounded-md border p-3 text-left transition ${selected ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
             >
               <StatusBadge status={option.value} />
-              <span className="mt-2 block text-xs leading-5 text-slate-500">{option.help}</span>
+              <span className="mt-2 block text-[13px] leading-5 text-slate-600">{option.help}</span>
             </button>
           );
         })}
@@ -671,6 +674,8 @@ export default function ProductForm({ currentProduct }) {
   const router = useRouter();
   const isEdit = !!currentProduct;
   const [step, setStep] = useState(0);
+  // What stops a save, shown under the field that needs it.
+  const [errors, setErrors] = useState({});
   const attrMenuRef = useRef(null);
   // Tracks which product ID has been loaded into form state.
   // Prevents background attrData refetches from overwriting the admin's in-progress edits.
@@ -712,10 +717,15 @@ export default function ProductForm({ currentProduct }) {
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkSalePrice, setBulkSalePrice] = useState('');
 
-  const { data: catData } = useQuery('admin-all-categories', api.getAllCategoriesByAdmin);
-  const { data: attrData } = useQuery('all-attributes-with-values', api.getAllAttributesWithValues, {
+  const catQuery = useQuery('admin-all-categories', api.getAllCategoriesByAdmin);
+  const attrQuery = useQuery('all-attributes-with-values', api.getAllAttributesWithValues, {
     staleTime: 5 * 60 * 1000
   });
+  const catData = catQuery.data;
+  const attrData = attrQuery.data;
+  // Without these lists the category picker and the options step are empty, so
+  // say why instead of letting the form look like there is nothing to choose.
+  const lookupFailed = catQuery.isError || attrQuery.isError;
   const categories = catData?.data || [];
   const allAttributes = attrData?.data || [];
 
@@ -877,27 +887,23 @@ export default function ProductForm({ currentProduct }) {
     {
       onSuccess: (res) => {
         initedForRef.current = null; // allow re-init from fresh server data after save
-        Swal.fire({ title: 'Saved!', icon: 'success', timer: 1500, showConfirmButton: false });
+        toastify.success(isEdit ? 'Product saved' : 'Product created');
         router.push(`/products/${res.data?.slug || ''}`);
       },
-      onError: (err) => Swal.fire('Error', err?.response?.data?.message || 'Something went wrong', 'error')
+      onError: (err) => alertError(err, { title: 'The product was not saved' })
     }
   );
 
   const handleSubmit = () => {
-    if (!name.trim()) {
-      Swal.fire('Name is required', '', 'warning');
+    const nextErrors = {};
+    if (!name.trim()) nextErrors.name = 'Give the product a name.';
+    if (!category) nextErrors.category = 'Choose a category.';
+    if (!price) nextErrors.price = 'Enter the base price.';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
       setStep(0);
-      return;
-    }
-    if (!category) {
-      Swal.fire('Category is required', '', 'warning');
-      setStep(0);
-      return;
-    }
-    if (!price) {
-      Swal.fire('Base price is required', '', 'warning');
-      setStep(0);
+      const first = nextErrors.name ? 'product-name' : nextErrors.category ? 'product-category' : 'product-price';
+      requestAnimationFrame(() => document.getElementById(first)?.focus());
       return;
     }
 
@@ -955,6 +961,23 @@ export default function ProductForm({ currentProduct }) {
     >
       {/* ═══════ LEFT: FORM ═══════ */}
       <div className="flex-1 min-w-0">
+        {lookupFailed && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900" role="alert">
+            <span>
+              {catQuery.isError ? 'Categories' : 'Product options'} could not be loaded, so some choices below are missing.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (catQuery.isError) catQuery.refetch();
+                if (attrQuery.isError) attrQuery.refetch();
+              }}
+              className="btn-ghost btn-sm"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         {/* Step tabs */}
         <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6">
           {STEPS.map((item, i) => {
@@ -965,16 +988,19 @@ export default function ProductForm({ currentProduct }) {
               type="button"
               onClick={() => setStep(i)}
               aria-current={step === i ? 'step' : undefined}
-              className={`flex min-h-[72px] items-start gap-2 rounded-md border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${step === i ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-slate-950' : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-800'}`}
+              className={`relative flex min-h-[72px] items-start gap-2 rounded-md border px-3 py-3 text-left transition ${step === i ? 'border-slate-900 bg-slate-50 text-slate-900 ring-1 ring-slate-900' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
             >
+              {i === 0 && Object.values(errors).some(Boolean) ? (
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-600" aria-label="Has errors" />
+              ) : null}
               <span
-                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${step === i ? 'bg-[var(--brand)] text-white' : 'bg-slate-100 text-slate-500'}`}
+                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${step === i ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
               >
                 <Icon size={18} aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block text-xs font-bold sm:text-sm">{item.label}</span>
-                <span className="mt-0.5 hidden text-[11px] font-normal leading-4 text-slate-500 lg:block">
+                <span className="block text-xs font-semibold sm:text-sm">{item.label}</span>
+                <span className="mt-0.5 hidden text-xs font-normal leading-4 text-slate-500 lg:block">
                   {item.description}
                 </span>
               </span>
@@ -988,16 +1014,22 @@ export default function ProductForm({ currentProduct }) {
           <div className="card-ui space-y-5 p-5 sm:p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
-                <FL>Product Name *</FL>
+                <FL required>Product name</FL>
                 <input
+                  id="product-name"
                   className="input-field"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErrors((current) => ({ ...current, name: undefined }));
+                  }}
+                  aria-invalid={Boolean(errors.name)}
                   placeholder="e.g. Silk Kurti Set"
                 />
+                <FieldError>{errors.name}</FieldError>
               </div>
               <div>
-                <FL>URL Slug</FL>
+                <FL>URL slug</FL>
                 <input
                   className="input-field font-mono text-sm"
                   value={slug}
@@ -1006,8 +1038,17 @@ export default function ProductForm({ currentProduct }) {
                 />
               </div>
               <div>
-                <FL>Category *</FL>
-                <select className="input-field" value={category} onChange={(e) => setCategory(e.target.value)}>
+                <FL required>Category</FL>
+                <select
+                  id="product-category"
+                  className="input-field"
+                  value={category}
+                  aria-invalid={Boolean(errors.category)}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    setErrors((current) => ({ ...current, category: undefined }));
+                  }}
+                >
                   <option value="">Select category…</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -1015,6 +1056,7 @@ export default function ProductForm({ currentProduct }) {
                     </option>
                   ))}
                 </select>
+                <FieldError>{errors.category}</FieldError>
               </div>
               <div className="md:col-span-2">
                 <ProductStatusPicker value={status} onChange={setStatus} />
@@ -1027,14 +1069,14 @@ export default function ProductForm({ currentProduct }) {
                   type="button"
                   onClick={() => setIsFeatured((f) => !f)}
                   aria-pressed={isFeatured}
-                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isFeatured ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white text-slate-600 hover:border-amber-300 hover:bg-amber-50'}`}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition ${isFeatured ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white text-slate-600 hover:border-amber-300 hover:bg-amber-50'}`}
                 >
                   <FiStar size={16} />
                   {isFeatured ? 'Featured product' : 'Mark as featured'}
                 </button>
               </div>
               <div>
-                <FL>Ecommerce Visibility</FL>
+                <FL>Ecommerce visibility</FL>
                 <button
                   type="button"
                   role="switch"
@@ -1045,25 +1087,32 @@ export default function ProductForm({ currentProduct }) {
                       ? 'Customers can discover this product in listings and search.'
                       : 'The direct page remains available, but the product is hidden from listings.'
                   }
-                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${isVisible ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-md border px-4 text-sm font-semibold transition ${isVisible ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
                 >
                   {isVisible ? <MdVisibility size={16} /> : <MdVisibilityOff size={16} />}
                   {isVisible ? 'Visible on ecommerce' : 'Hidden from ecommerce'}
                 </button>
               </div>
               <div>
-                <FL>Base Price (৳) *</FL>
+                <FL required>Base price (৳)</FL>
                 <input
+                  id="product-price"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   className="input-field"
                   value={price}
-                  onChange={(e) => setPrice(e.target.value)}
+                  onChange={(e) => {
+                    setPrice(e.target.value);
+                    setErrors((current) => ({ ...current, price: undefined }));
+                  }}
+                  aria-invalid={Boolean(errors.price)}
                   placeholder="0"
                 />
+                <FieldError>{errors.price}</FieldError>
               </div>
               <div>
-                <FL>Sale Price (৳)</FL>
+                <FL>Sale price (৳)</FL>
                 <input
                   type="number"
                   min="0"
@@ -1074,15 +1123,15 @@ export default function ProductForm({ currentProduct }) {
                 />
               </div>
               <div>
-                <FL>Product Code</FL>
+                <FL>Product code</FL>
                 <input
-                  className="input-field cursor-not-allowed bg-gray-50 font-mono text-gray-500"
+                  className="input-field cursor-not-allowed bg-slate-50 font-mono text-slate-500"
                   value={currentProduct?.code ? String(currentProduct.code).padStart(4, '0') : 'Assigned when saved'}
                   readOnly
                 />
               </div>
               <div>
-                <FL>Legacy Product Codes</FL>
+                <FL>Legacy product codes</FL>
                 <input
                   className="input-field font-mono"
                   value={legacyBarcodes}
@@ -1098,7 +1147,7 @@ export default function ProductForm({ currentProduct }) {
         {step === 1 && (
           <div className="card-ui space-y-5 p-5 sm:p-6">
             <div>
-              <FL>Short Description</FL>
+              <FL>Short description</FL>
               <textarea
                 rows={3}
                 className="input-field resize-none"
@@ -1108,7 +1157,7 @@ export default function ProductForm({ currentProduct }) {
               />
             </div>
             <div>
-              <FL>Full Description</FL>
+              <FL>Full description</FL>
               <RichTextEditor
                 value={description}
                 onChange={setDescription}
@@ -1119,12 +1168,15 @@ export default function ProductForm({ currentProduct }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold text-slate-700">Search title</label>
-                  <span className={`text-xs tabular-nums ${metaTitle.length > 60 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                  <label htmlFor="product-meta-title" className="text-[13px] font-medium text-slate-800">
+                    Search title
+                  </label>
+                  <span className={`text-xs tabular-nums ${metaTitle.length > 60 ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>
                     {metaTitle.length}/60
                   </span>
                 </div>
                 <input
+                  id="product-meta-title"
                   className="input-field"
                   value={metaTitle}
                   onChange={(e) => setMetaTitle(e.target.value)}
@@ -1133,12 +1185,15 @@ export default function ProductForm({ currentProduct }) {
               </div>
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold text-slate-700">Search description</label>
-                  <span className={`text-xs tabular-nums ${metaDescription.length > 160 ? 'font-semibold text-amber-700' : 'text-slate-400'}`}>
+                  <label htmlFor="product-meta-description" className="text-[13px] font-medium text-slate-800">
+                    Search description
+                  </label>
+                  <span className={`text-xs tabular-nums ${metaDescription.length > 160 ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>
                     {metaDescription.length}/160
                   </span>
                 </div>
                 <textarea
+                  id="product-meta-description"
                   rows={3}
                   className="input-field resize-y leading-6"
                   value={metaDescription}
@@ -1156,7 +1211,7 @@ export default function ProductForm({ currentProduct }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
               <div className="md:col-span-2">
                 <FL>
-                  Image Pool <span className="text-xs text-gray-400 font-normal ml-1">(star one = featured)</span>
+                  Image pool <span className="text-xs text-slate-500 font-normal ml-1">(star one = featured)</span>
                 </FL>
                 <ImagePool
                   pool={imagePool}
@@ -1167,7 +1222,7 @@ export default function ProductForm({ currentProduct }) {
               </div>
               <div>
                 <FL>
-                  Size Chart <span className="text-xs text-gray-400 font-normal ml-1">(separate)</span>
+                  Size chart <span className="text-xs text-slate-500 font-normal ml-1">(separate)</span>
                 </FL>
                 <SizeChartUploader value={sizeChart} onChange={setSizeChart} />
               </div>
@@ -1182,31 +1237,31 @@ export default function ProductForm({ currentProduct }) {
             <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/50 p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">Product attributes</p>
+                  <p className="text-sm font-semibold text-slate-800">Product attributes</p>
                 </div>
                 <div className="relative" ref={attrMenuRef}>
                   <button
                     type="button"
                     onClick={() => setShowAttrMenu((s) => !s)}
                     disabled={unselectedAttrs.length === 0}
-                    className="btn-ghost min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                    className="btn-ghost min-h-11"
                   >
                     <MdAdd size={17} /> Add attribute
                   </button>
                   {showAttrMenu && (
                     <div className="absolute right-0 top-full z-30 mt-2 max-h-72 min-w-[220px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-xl">
                       {unselectedAttrs.length === 0 ? (
-                        <p className="px-4 py-2.5 text-xs text-gray-400 italic">All attributes added</p>
+                        <p className="px-4 py-2.5 text-xs text-slate-500 italic">All attributes added</p>
                       ) : (
                         unselectedAttrs.map((attr) => (
                           <button
                             key={attr.id}
                             type="button"
                             onClick={() => addAttr(attr)}
-                            className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                            className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                           >
                             {attr.name}
-                            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md ml-2">
+                            <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md ml-2">
                               {attr.type}
                             </span>
                           </button>
@@ -1237,12 +1292,12 @@ export default function ProductForm({ currentProduct }) {
                     >
                       <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-800 text-sm">{sel.attr.name}</span>
-                          <span className="text-[10px] uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">
+                          <span className="font-semibold text-slate-800 text-sm">{sel.attr.name}</span>
+                          <span className="section-label bg-slate-100 px-1.5 py-0.5 rounded-md">
                             {sel.attr.type}
                           </span>
                           {hasValues && (
-                            <span className="rounded-md bg-[var(--brand-soft)] px-1.5 py-0.5 text-[10px] text-[var(--brand-strong)]">
+                            <span className="rounded-md bg-[var(--brand-soft)] px-1.5 py-0.5 text-xs text-[var(--brand-strong)]">
                               {sel.values.length} selected
                             </span>
                           )}
@@ -1253,14 +1308,14 @@ export default function ProductForm({ currentProduct }) {
                               <button
                                 type="button"
                                 onClick={() => setForVariation(sel.attr.id, false)}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${!sel.forVariation ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${!sel.forVariation ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'}`}
                               >
                                 <MdInfo size={12} /> Info only
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setForVariation(sel.attr.id, true)}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${sel.forVariation ? 'bg-[var(--brand)] text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${sel.forVariation ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
                               >
                                 <MdTune size={12} /> Variations
                               </button>
@@ -1269,7 +1324,7 @@ export default function ProductForm({ currentProduct }) {
                           <button
                             type="button"
                             onClick={() => removeAttr(sel.attr.id)}
-                            className="flex h-10 w-10 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                            className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
                             aria-label={`Remove ${sel.attr.name} attribute`}
                           >
                             <MdClose size={16} />
@@ -1279,7 +1334,7 @@ export default function ProductForm({ currentProduct }) {
                       <div className="px-4 py-3">
                         {isEdit && (
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-slate-500">
                               {isValuePickerOpen
                                 ? 'Choose the values used by this product.'
                                 : hasValues
@@ -1294,7 +1349,7 @@ export default function ProductForm({ currentProduct }) {
                                   [sel.attr.id]: !isValuePickerOpen
                                 }))
                               }
-                              className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700 transition hover:border-[var(--brand)] hover:text-[var(--brand-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                              className="btn-ghost btn-sm inline-flex min-h-10"
                             >
                               {isValuePickerOpen ? 'Done' : 'Change values'}
                             </button>
@@ -1303,7 +1358,7 @@ export default function ProductForm({ currentProduct }) {
 
                         <div className="flex flex-wrap gap-2">
                           {visibleValues.length === 0 ? (
-                            <span className="text-xs italic text-gray-400">
+                            <span className="text-xs italic text-slate-500">
                               {availableValues.length === 0
                                 ? 'No values are defined for this attribute.'
                                 : 'Click Change values to choose from the available options.'}
@@ -1317,7 +1372,7 @@ export default function ProductForm({ currentProduct }) {
                                   type="button"
                                   aria-pressed={selected}
                                   onClick={() => toggleValue(sel.attr, val)}
-                                  className={`flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${selected ? 'border-[var(--brand)] bg-[var(--brand)] text-white shadow-sm' : 'border-gray-300 bg-white text-gray-600 hover:border-[var(--brand)] hover:text-gray-800'} ${val.active === false ? 'opacity-60' : ''}`}
+                                  className={`flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-all ${selected ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-300 bg-white text-slate-600 hover:border-slate-900 hover:text-slate-800'} ${val.active === false ? 'opacity-60' : ''}`}
                                 >
                                   {sel.attr.type === 'color' && val.colorHex && (
                                     <span
@@ -1343,11 +1398,11 @@ export default function ProductForm({ currentProduct }) {
             {/* Variation table */}
             {variations.length > 0 && (
               <div className="overflow-hidden rounded-md border border-slate-200">
-                <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
-                  <p className="text-sm font-semibold text-gray-700 mr-auto">
+                <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+                  <p className="text-sm font-semibold text-slate-700 mr-auto">
                     {enabledVariations.length} of {variations.length} Variation{variations.length !== 1 ? 's' : ''}
                     {disabledCount > 0 && (
-                      <span className="ml-2 text-xs text-gray-400 font-normal">
+                      <span className="ml-2 text-xs text-slate-500 font-normal">
                         ({disabledCount} disabled — won't save)
                       </span>
                     )}
@@ -1368,12 +1423,12 @@ export default function ProductForm({ currentProduct }) {
                         value={val}
                         onChange={(e) => set(e.target.value)}
                         placeholder={label}
-                        className="h-10 w-28 rounded-md border border-slate-300 bg-white px-2.5 text-xs outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-ring)]"
+                        className="input-ui w-28"
                       />
                       <button
                         type="button"
                         onClick={apply}
-                        className="h-10 whitespace-nowrap rounded-md bg-[var(--brand)] px-3 text-xs font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                        className="btn-brand btn-sm"
                       >
                         Set all
                       </button>
@@ -1383,19 +1438,19 @@ export default function ProductForm({ currentProduct }) {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b text-xs text-gray-500 uppercase tracking-wide">
+                    <thead className="section-label bg-slate-50 border-b">
                       <tr>
                         <th className="px-3 py-2.5 text-center w-10" title="Enable/disable this combination">
                           On
                         </th>
                         <th className="px-4 py-2.5 text-left">Variation</th>
                         <th className="px-3 py-2.5 text-center w-16" title="Uncheck to use base price">
-                          Custom Price
+                          Custom price
                         </th>
                         <th className="px-3 py-2.5 text-right w-28">Reg. Price</th>
-                        <th className="px-3 py-2.5 text-right w-28">Sale Price</th>
-                        <th className="px-3 py-2.5 text-center w-24">Option Code</th>
-                        <th className="px-3 py-2.5 text-left w-44">Legacy Option Codes</th>
+                        <th className="px-3 py-2.5 text-right w-28">Sale price</th>
+                        <th className="px-3 py-2.5 text-center w-24">Option code</th>
+                        <th className="px-3 py-2.5 text-left w-44">Legacy option codes</th>
                         <th className="px-3 py-2.5 text-center w-20">Image</th>
                       </tr>
                     </thead>
@@ -1405,7 +1460,7 @@ export default function ProductForm({ currentProduct }) {
                         return (
                           <tr
                             key={idx}
-                            className={`border-b last:border-b-0 ${v.enabled === false ? 'opacity-40 bg-gray-50' : pickingFor === idx ? 'bg-blue-50' : 'hover:bg-gray-50/50'}`}
+                            className={`border-b last:border-b-0 ${v.enabled === false ? 'opacity-40 bg-slate-50' : pickingFor === idx ? 'bg-sky-50' : 'hover:bg-slate-50/50'}`}
                           >
                             <td className="px-2 py-1.5 text-center">
                               <button
@@ -1416,7 +1471,7 @@ export default function ProductForm({ currentProduct }) {
                                     ? 'Click to enable this combination'
                                     : 'Click to disable this combination'
                                 }
-                                className={`p-1 rounded-md transition ${v.enabled === false ? 'text-gray-300 hover:text-green-500' : 'text-green-500 hover:text-gray-300'}`}
+                                className={`p-1 rounded-md transition ${v.enabled === false ? 'text-slate-400 hover:text-emerald-700' : 'text-emerald-700 hover:text-slate-300'}`}
                               >
                                 {v.enabled === false ? <MdVisibilityOff size={16} /> : <MdVisibility size={16} />}
                               </button>
@@ -1424,22 +1479,22 @@ export default function ProductForm({ currentProduct }) {
                             <td className="px-4 py-2">
                               <div className="flex flex-wrap gap-1.5">
                                 {v.attributes.length === 0 && (
-                                  <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-md px-2.5 py-1 text-xs font-medium">
+                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 rounded-md px-2.5 py-1 text-xs font-medium">
                                     Standard
                                   </span>
                                 )}
                                 {v.attributes.map((a, ai) => (
                                   <span
                                     key={ai}
-                                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded-md px-2.5 py-1 text-xs font-medium"
+                                    className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 rounded-md px-2.5 py-1 text-xs font-medium"
                                   >
                                     {a.colorHex && (
                                       <span
-                                        className="w-3 h-3 rounded-md border border-gray-300 flex-shrink-0"
+                                        className="w-3 h-3 rounded-md border border-slate-300 flex-shrink-0"
                                         style={{ backgroundColor: a.colorHex }}
                                       />
                                     )}
-                                    <span className="text-gray-400 text-[10px]">{a.attributeName}:</span>
+                                    <span className="text-slate-500 text-xs">{a.attributeName}:</span>
                                     {a.valueName}
                                   </span>
                                 ))}
@@ -1451,8 +1506,9 @@ export default function ProductForm({ currentProduct }) {
                                 checked={!!v.customPrice}
                                 onChange={(e) => toggleCustomPrice(idx, e.target.checked)}
                                 disabled={v.attributes.length === 0}
-                                className="w-4 h-4 cursor-pointer accent-blue-500"
-                                title="Uncheck to use base price"
+                                className="h-4 w-4 cursor-pointer accent-slate-900"
+                                title="Uncheck to use the base price"
+                                aria-label={`Variation ${idx + 1} has its own price`}
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -1464,10 +1520,10 @@ export default function ProductForm({ currentProduct }) {
                                   onChange={(e) =>
                                     updateVar(idx, 'regularPrice', e.target.value ? Number(e.target.value) : null)
                                   }
-                                  className="w-full border rounded-md px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                                  className="input-ui w-full text-right"
                                 />
                               ) : (
-                                <span className="block w-full text-right text-sm text-gray-400 italic px-2 py-1.5">
+                                <span className="block w-full text-right text-sm text-slate-500 italic px-2 py-1.5">
                                   ৳{price || 0}
                                 </span>
                               )}
@@ -1482,15 +1538,15 @@ export default function ProductForm({ currentProduct }) {
                                     updateVar(idx, 'salePrice', e.target.value ? Number(e.target.value) : null)
                                   }
                                   placeholder="—"
-                                  className="w-full border rounded-md px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                                  className="input-ui w-full text-right"
                                 />
                               ) : (
-                                <span className="block w-full text-right text-sm text-gray-400 italic px-2 py-1.5">
+                                <span className="block w-full text-right text-sm text-slate-500 italic px-2 py-1.5">
                                   {priceSale ? `৳${priceSale}` : '—'}
                                 </span>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 text-center font-mono text-xs font-semibold text-gray-600">
+                            <td className="px-2 py-1.5 text-center font-mono text-xs font-semibold text-slate-600">
                               {v.productionCode ? String(v.productionCode).padStart(4, '0') : 'Auto'}
                             </td>
                             <td className="px-2 py-1.5">
@@ -1498,7 +1554,7 @@ export default function ProductForm({ currentProduct }) {
                                 value={v.legacyCodes || ''}
                                 onChange={(e) => updateVar(idx, 'legacyCodes', e.target.value)}
                                 placeholder="Old codes, comma separated"
-                                className="w-full border rounded-md px-2 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand-ring)]"
+                                className="input-ui w-full font-mono"
                               />
                             </td>
                             <td className="px-2 py-1.5 text-center">
@@ -1506,13 +1562,13 @@ export default function ProductForm({ currentProduct }) {
                                 <div className="relative w-10 h-10 mx-auto group">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <Image src={varImg.path} alt="" fill className="object-cover rounded-md border" />
-                                  <button
+                                  <button aria-label="Remove variation image" title="Remove variation image"
                                     type="button"
                                     onClick={() => {
                                       updateVar(idx, 'imageId', null);
                                       if (pickingFor === idx) setPickingFor(null);
                                     }}
-                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-md p-px opacity-0 group-hover:opacity-100 transition shadow"
+                                    className="absolute -right-1 -top-1 rounded-full bg-rose-600 p-0.5 text-white opacity-0 shadow transition focus:opacity-100 group-hover:opacity-100"
                                   >
                                     <MdClose size={10} />
                                   </button>
@@ -1521,7 +1577,7 @@ export default function ProductForm({ currentProduct }) {
                                 <button
                                   type="button"
                                   onClick={() => setPickingFor((p) => (p === idx ? null : idx))}
-                                  className={`p-1.5 rounded-md transition ${pickingFor === idx ? 'bg-blue-100 text-blue-600' : 'text-gray-300 hover:text-blue-500 hover:bg-blue-50'}`}
+                                  className={`p-1.5 rounded-md transition ${pickingFor === idx ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}
                                 >
                                   <MdImage size={18} />
                                 </button>
@@ -1537,26 +1593,26 @@ export default function ProductForm({ currentProduct }) {
                 {/* Variation image picker */}
                 {pickingFor !== null && (
                   <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[1px]"
+                    className="fixed inset-0 z-[100] !m-0 flex items-center justify-center bg-slate-900/40 p-4"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="variation-image-picker-title"
                     onMouseDown={(e) => e.target === e.currentTarget && setPickingFor(null)}
                   >
-                    <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-md bg-white shadow-2xl">
-                      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <OverlayPanel onClose={() => setPickingFor(null)} className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+                      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                         <div>
-                          <h3 id="variation-image-picker-title" className="text-base font-semibold text-gray-900">
+                          <h3 id="variation-image-picker-title" className="text-lg font-semibold text-slate-900">
                             Select variation image
                           </h3>
-                          <p className="mt-0.5 text-xs text-gray-500">
+                          <p className="mt-0.5 text-xs text-slate-500">
                             Choose from the product gallery for variation {pickingFor + 1}.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setPickingFor(null)}
-                          className="flex h-10 w-10 items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                          className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                           aria-label="Close image picker"
                         >
                           <MdClose size={20} />
@@ -1565,10 +1621,10 @@ export default function ProductForm({ currentProduct }) {
 
                       <div className="overflow-y-auto p-5">
                         {imagePool.length === 0 ? (
-                          <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center">
-                            <MdImage size={30} className="mx-auto mb-3 text-gray-300" />
-                            <p className="text-sm font-medium text-gray-600">No product images available</p>
-                            <p className="mt-1 text-xs text-gray-400">
+                          <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+                            <MdImage size={30} className="mx-auto mb-3 text-slate-300" />
+                            <p className="text-sm font-medium text-slate-600">No product images available</p>
+                            <p className="mt-1 text-xs text-slate-500">
                               Upload images in the Images step, then return here.
                             </p>
                           </div>
@@ -1584,10 +1640,10 @@ export default function ProductForm({ currentProduct }) {
                                     updateVar(pickingFor, 'imageId', img.id);
                                     setPickingFor(null);
                                   }}
-                                  className={`group relative aspect-square overflow-hidden rounded-md border-2 bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                  className={`group relative aspect-square overflow-hidden rounded-md border-2 bg-slate-50 transition focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
                                     selected
-                                      ? 'border-blue-600 ring-2 ring-blue-100'
-                                      : 'border-gray-200 hover:border-blue-500'
+                                      ? 'border-slate-900 ring-2 ring-slate-900/10'
+                                      : 'border-slate-200 hover:border-slate-400'
                                   }`}
                                   aria-label={`Select ${img.originalName || 'product image'}`}
                                 >
@@ -1599,7 +1655,7 @@ export default function ProductForm({ currentProduct }) {
                                     className="object-cover"
                                   />
                                   {selected && (
-                                    <span className="absolute right-2 top-2 rounded-md bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white shadow">
+                                    <span className="absolute right-2 top-2 rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white shadow">
                                       Selected
                                     </span>
                                   )}
@@ -1609,14 +1665,14 @@ export default function ProductForm({ currentProduct }) {
                           </div>
                         )}
                       </div>
-                    </div>
+                    </OverlayPanel>
                   </div>
                 )}
               </div>
             )}
 
             {Object.values(attrSelections).some((e) => e.forVariation) && variations.length === 0 && (
-              <div className="text-center py-6 text-amber-600 bg-amber-50 border border-amber-200 rounded-md text-sm">
+              <div className="text-center py-6 text-amber-700 bg-amber-50 border border-amber-200 rounded-md text-sm">
                 Select values for your variation attributes to generate variation rows.
               </div>
             )}
@@ -1630,7 +1686,7 @@ export default function ProductForm({ currentProduct }) {
                 off, presale is inert no matter what is switched on here. */}
             {!productionEnabled && (
               <div className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-3">
-                <MdInfo size={17} className="mt-0.5 shrink-0 text-amber-600" />
+                <MdInfo size={17} className="mt-0.5 shrink-0 text-amber-700" />
                 <p className="text-[13px] text-amber-900">
                   Production is off for this product, so presale will not apply until it is enabled from the admin portal.
                 </p>
@@ -1655,14 +1711,14 @@ export default function ProductForm({ currentProduct }) {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="btn-ghost !min-h-9 text-xs"
+                      className="btn-ghost btn-sm"
                       onClick={() => setVariations((prev) => prev.map((v) => (v.enabled === false ? v : { ...v, overSale: true })))}
                     >
                       Enable all
                     </button>
                     <button
                       type="button"
-                      className="btn-ghost !min-h-9 text-xs"
+                      className="btn-ghost btn-sm"
                       onClick={() => setVariations((prev) => prev.map((v) => (v.enabled === false ? v : { ...v, overSale: false })))}
                     >
                       Disable all
@@ -1685,15 +1741,15 @@ export default function ProductForm({ currentProduct }) {
                         role="switch"
                         aria-checked={Boolean(variation.overSale)}
                         onClick={() => updateVar(index, 'overSale', !variation.overSale)}
-                        className={`flex items-center gap-3 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                        className={`flex items-center gap-3 rounded-md border p-3 text-left transition ${
                           variation.overSale
-                            ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+                            ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900'
                             : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                       >
                         <span
                           className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
-                            variation.overSale ? 'bg-[var(--brand)]' : 'bg-slate-300'
+                            variation.overSale ? 'bg-slate-900' : 'bg-slate-300'
                           }`}
                         >
                           <span
@@ -1704,7 +1760,7 @@ export default function ProductForm({ currentProduct }) {
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-[13px] font-semibold text-slate-800">{label}</span>
-                          <span className="block text-[11px] text-slate-500">
+                          <span className="block text-xs text-slate-500">
                             {variation.overSale ? 'Can be presold' : 'Finished stock only'}
                           </span>
                         </span>
@@ -1743,7 +1799,7 @@ export default function ProductForm({ currentProduct }) {
             type="button"
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="btn-ghost min-h-11 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+            className="btn-ghost min-h-11 px-4"
           >
             <MdChevronLeft size={18} /> Previous
           </button>
@@ -1754,7 +1810,8 @@ export default function ProductForm({ currentProduct }) {
                 type="button"
                 onClick={() => setStep(i)}
                 aria-label={`Go to ${STEPS[i].label}`}
-                className={`h-3 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${i === step ? 'w-6 bg-[var(--brand)]' : 'w-3 bg-slate-300 hover:bg-slate-400'}`}
+                aria-current={i === step ? 'step' : undefined}
+                className={`h-2.5 rounded-full transition-all ${i === step ? 'w-6 bg-slate-900' : 'w-2.5 bg-slate-300 hover:bg-slate-400'}`}
               />
             ))}
           </div>
@@ -1767,7 +1824,7 @@ export default function ProductForm({ currentProduct }) {
               <button
                 type="button"
                 onClick={() => setStep((s) => s + 1)}
-                className={`min-h-11 px-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
+                className={`min-h-11 px-5 ${
                   step >= 3 ? 'btn-ghost' : 'btn-brand'
                 }`}
               >
@@ -1779,7 +1836,7 @@ export default function ProductForm({ currentProduct }) {
                 type="button"
                 onClick={handleSubmit}
                 disabled={saving}
-                className="btn-brand min-h-11 min-w-40 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+                className="btn-brand min-h-11 min-w-40 px-6"
               >
                 {saving ? (
                   <span className="flex items-center gap-2">
@@ -1824,20 +1881,56 @@ export default function ProductForm({ currentProduct }) {
 
 // SectionTitle removed: the step tabs above already name every step and
 // describe it, so a matching heading inside each card said it twice.
-function FL({ children }) {
-  return <label className="mb-2 block text-xs font-semibold text-slate-700">{children}</label>;
-}
-function StatusBadge({ status }) {
-  const m = {
-    active: 'bg-green-100 text-green-700',
-    inactive: 'bg-red-100 text-red-700',
-    draft: 'bg-yellow-100 text-yellow-700'
-  };
+/**
+ * Field label. It sits just before its control in the markup, so it finds that
+ * control (the next input, select or textarea) and links itself to it — one
+ * change that labels every field in the form for screen readers and clicks.
+ */
+function FL({ children, required = false }) {
+  const ref = useRef(null);
+  const fallbackId = useId();
+  useEffect(() => {
+    const label = ref.current;
+    const next = label?.nextElementSibling;
+    if (!next) return;
+    const control = next.matches('input,select,textarea') ? next : next.querySelector('input,select,textarea');
+    if (!control) return;
+    if (!control.id) control.id = `field-${fallbackId.replace(/:/g, '')}`;
+    label.htmlFor = control.id;
+  }, [fallbackId]);
   return (
-    <span
-      className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-medium capitalize ${m[status] || 'bg-gray-100 text-gray-600'}`}
-    >
-      {status}
+    <label ref={ref} className="block mb-1.5 text-[13px] font-medium text-slate-800">
+      {children}
+      {required ? (
+        <span className="ml-0.5 text-rose-700" aria-hidden>
+          *
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function FieldError({ children }) {
+  if (!children) return null;
+  return (
+    <p className="mt-1.5 text-[13px] font-medium text-rose-700" role="alert">
+      {children}
+    </p>
+  );
+}
+
+const STATUS_STYLE = {
+  active: ['Active', 'bg-emerald-50 text-emerald-800 ring-emerald-600/20', 'bg-emerald-500'],
+  inactive: ['Inactive', 'bg-slate-100 text-slate-700 ring-slate-500/10', 'bg-slate-400'],
+  draft: ['Draft', 'bg-amber-50 text-amber-800 ring-amber-600/20', 'bg-amber-500']
+};
+
+function StatusBadge({ status }) {
+  const [label, cls, dot] = STATUS_STYLE[status] || [status, 'bg-slate-100 text-slate-700 ring-slate-500/10', 'bg-slate-400'];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+      {label}
     </span>
   );
 }

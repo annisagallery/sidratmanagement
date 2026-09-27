@@ -267,7 +267,7 @@ export default function PurchaseForm({ purchase = null }) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Purchases"
         title={isEdit ? `Edit ${purchase.purchaseNo}` : 'Add purchase'}
@@ -344,9 +344,9 @@ export default function PurchaseForm({ purchase = null }) {
                 <td className="px-3 py-2.5">
                   <p className="font-medium text-slate-800">
                     {line.productName}
-                    {line.productCode ? <span className="ops-code ml-2 text-[11px] text-slate-400">#{line.productCode}</span> : null}
+                    {line.productCode ? <span className="ops-code ml-2 text-xs text-slate-500">#{line.productCode}</span> : null}
                   </p>
-                  <p className="text-[11px] text-slate-400">{line.variationName}</p>
+                  <p className="text-xs text-slate-500">{line.variationName}</p>
                 </td>
                 <td className="px-3 py-2.5 text-right">
                   <CellInput
@@ -381,7 +381,7 @@ export default function PurchaseForm({ purchase = null }) {
                     onChange={(value) => setLine(line.key, { salePrice: value })}
                   />
                 </td>
-                <td className="px-3 py-2.5 text-right text-[13px] font-bold tabular-nums text-slate-800">
+                <td className="px-3 py-2.5 text-right text-[13px] font-semibold tabular-nums text-slate-800">
                   {money(line.subTotal)}
                 </td>
               </DocketRow>

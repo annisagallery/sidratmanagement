@@ -17,7 +17,7 @@ const TYPE_LABELS = {
   earned: { label: 'Earned', cls: 'bg-emerald-100 text-emerald-700' },
   spent: { label: 'Spent', cls: 'bg-orange-100 text-orange-700' },
   manual_credit: { label: 'Manual Credit', cls: 'bg-sky-100 text-sky-700' },
-  manual_debit: { label: 'Manual Debit', cls: 'bg-red-100 text-red-600' },
+  manual_debit: { label: 'Manual Debit', cls: 'bg-rose-100 text-rose-700' },
   expired: { label: 'Expired', cls: 'bg-slate-100 text-slate-500' }
 };
 
@@ -43,7 +43,7 @@ export default function CashTransactions() {
   const [showModal, setShowModal] = useState(false);
   const qc = useQueryClient();
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(
     ['cash-transactions', page, typeFilter, activeSearch],
     () => getAllCashTransactions(page, typeFilter, activeSearch),
     { keepPreviousData: true }
@@ -63,10 +63,10 @@ export default function CashTransactions() {
         tx.user ? (
           <Link href={`/users/${encodeURIComponent(tx.user.phone)}`} className="block hover:underline">
             <p className="text-[13px] font-semibold text-slate-800">{tx.user.name || '—'}</p>
-            <p className="text-xs text-slate-400">{tx.user.phone}</p>
+            <p className="text-xs text-slate-500">{tx.user.phone}</p>
           </Link>
         ) : (
-          <span className="text-xs text-slate-400">—</span>
+          <span className="text-xs text-slate-500">—</span>
         )
     },
     {
@@ -78,7 +78,7 @@ export default function CashTransactions() {
       }
     },
     { key: 'description', label: 'Message', render: (tx) => <span className="block max-w-[160px] truncate text-xs text-slate-500">{tx.description || '—'}</span> },
-    { key: 'order', label: 'Order', render: (tx) => (tx.order?.orderNo ? <span className="font-mono text-xs text-slate-600">#{tx.order.orderNo}</span> : <span className="text-xs text-slate-400">—</span>) },
+    { key: 'order', label: 'Order', render: (tx) => (tx.order?.orderNo ? <span className="font-mono text-xs text-slate-600">#{tx.order.orderNo}</span> : <span className="text-xs text-slate-500">—</span>) },
     {
       key: 'amount',
       label: 'Amount',
@@ -86,7 +86,7 @@ export default function CashTransactions() {
       render: (tx) => {
         const isDebit = tx.type === 'spent' || tx.type === 'manual_debit' || tx.type === 'expired';
         return (
-          <span className={`font-bold ${isDebit ? 'text-red-500' : 'text-emerald-600'}`}>
+          <span className={`font-semibold ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>
             {isDebit ? '-' : '+'}
             {BDT}
             {tx.amount?.toLocaleString()}
@@ -94,9 +94,9 @@ export default function CashTransactions() {
         );
       }
     },
-    { key: 'balanceAfter', label: 'Balance After', align: 'right', render: (tx) => <span className="font-semibold text-slate-700">{BDT}{(tx.balanceAfter || 0).toLocaleString()}</span> },
-    { key: 'creator', label: 'Created By', render: (tx) => <span className="text-xs text-slate-500">{tx.creator?.name || <span className="text-slate-400">System</span>}</span> },
-    { key: 'createdAt', label: 'Date', align: 'right', render: (tx) => <span className="whitespace-nowrap text-xs text-slate-400">{fmtDate(tx.createdAt)}</span> }
+    { key: 'balanceAfter', label: 'Balance after', align: 'right', render: (tx) => <span className="font-semibold text-slate-700">{BDT}{(tx.balanceAfter || 0).toLocaleString()}</span> },
+    { key: 'creator', label: 'Created By', render: (tx) => <span className="text-xs text-slate-500">{tx.creator?.name || <span className="text-slate-500">System</span>}</span> },
+    { key: 'createdAt', label: 'Date', align: 'right', render: (tx) => <span className="whitespace-nowrap text-xs text-slate-500">{fmtDate(tx.createdAt)}</span> }
   ];
 
   return (
@@ -112,8 +112,8 @@ export default function CashTransactions() {
         }}
         searchPlaceholder="Search by user name or phone…"
         right={
-          <button onClick={() => setShowModal(true)} className="btn-brand">
-            <MdAdd size={18} /> Give Cashback
+          <button type="button" onClick={() => setShowModal(true)} className="btn-brand">
+            <MdAdd size={18} /> Give cashback
           </button>
         }
       >
@@ -124,13 +124,15 @@ export default function CashTransactions() {
         </select>
       </ListToolbar>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500">
         {isFetching && !isLoading ? 'Refreshing…' : `${total.toLocaleString()} transaction${total !== 1 ? 's' : ''}`}
         {activeSearch && <span> matching "<strong>{activeSearch}</strong>"</span>}
         {typeFilter && <span> · {TYPE_LABELS[typeFilter]?.label}</span>}
       </p>
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={transactions}
         selectionLabel="transactions"

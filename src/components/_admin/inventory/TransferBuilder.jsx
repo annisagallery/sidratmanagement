@@ -280,7 +280,7 @@ export default function TransferBuilder() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Transfers"
         title="Add transfer"
@@ -364,7 +364,7 @@ export default function TransferBuilder() {
         />
 
         {route.source ? (
-          <p className="border-b border-slate-200 bg-slate-50/50 px-4 py-2 text-[11px] text-slate-500">
+          <p className="border-b border-slate-200 bg-slate-50/50 px-4 py-2 text-xs text-slate-500">
             Stock is taken oldest first — you name the product and the quantity, the system picks which stock goes.
           </p>
         ) : null}
@@ -385,16 +385,16 @@ export default function TransferBuilder() {
                     <p className="font-medium text-slate-800">
                       {line.productName}
                       {line.productCode ? (
-                        <span className="ops-code ml-2 text-[11px] text-slate-400">#{line.productCode}</span>
+                        <span className="ops-code ml-2 text-xs text-slate-500">#{line.productCode}</span>
                       ) : null}
                     </p>
-                    <p className="text-[11px] text-slate-400">{line.variationName}</p>
-                    <p className={`text-[11px] font-semibold ${over ? 'text-rose-600' : 'text-slate-400'}`}>
+                    <p className="text-xs text-slate-500">{line.variationName}</p>
+                    <p className={`text-xs font-semibold ${over ? 'text-rose-700' : 'text-slate-500'}`}>
                       {qty(free)} free at source
                     </p>
                   </td>
                   <td className="px-3 py-2.5 text-right text-[13px] tabular-nums text-slate-600">
-                    {line.unitPrice ? money(line.unitPrice) : <span className="text-slate-300">—</span>}
+                    {line.unitPrice ? money(line.unitPrice) : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <CellInput
@@ -405,8 +405,8 @@ export default function TransferBuilder() {
                       invalid={over || num(line.quantity) < 1}
                     />
                   </td>
-                  <td className="px-3 py-2.5 text-right text-[13px] font-bold tabular-nums text-slate-800">
-                    {line.subTotal ? money(line.subTotal) : <span className="text-slate-300">—</span>}
+                  <td className="px-3 py-2.5 text-right text-[13px] font-semibold tabular-nums text-slate-800">
+                    {line.subTotal ? money(line.subTotal) : <span className="text-slate-400">—</span>}
                   </td>
                 </DocketRow>
               );

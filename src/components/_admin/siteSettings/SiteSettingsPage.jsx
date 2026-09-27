@@ -1,125 +1,29 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  IoSettingsOutline,
-  IoHomeOutline,
-  IoShirtOutline,
-  IoLocationOutline,
-  IoDocumentTextOutline,
-  IoConstructOutline,
-  IoCloudOutline
-} from 'react-icons/io5';
-import { FiFileText, FiExternalLink } from 'react-icons/fi';
-import { getSiteSettingsByAdmin, updateSiteSettings, uploadSiteLogo, uploadSiteFavicon } from 'src/services';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
 import Image from 'next/image';
+import {
+  MdAdd,
+  MdBuild,
+  MdCheck,
+  MdCheckCircle,
+  MdDelete,
+  MdImage,
+  MdOpenInNew,
+  MdOutlineFileUpload,
+  MdRemove
+} from 'react-icons/md';
+import { getSiteSettingsByAdmin, updateSiteSettings, uploadSiteLogo, uploadSiteFavicon } from 'src/services';
+import { alertError, toastSuccess } from 'src/utils/swal';
 import RichTextEditor from 'src/components/richTextEditor';
 import { fDateTime } from 'src/utils/formatTime';
-
-// ── Shared sub-components ────────────────────────────────────────────────────
-function Field({ label, hint, children }) {
-  return (
-    <div>
-      <label className="text-sm font-medium text-gray-700 block mb-1">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-function Input({ name, value, onChange, placeholder, type = 'text', min, max }) {
-  return (
-    <input
-      type={type}
-      name={name}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      min={min}
-      max={max}
-      className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400"
-    />
-  );
-}
-
-function Card({ title, subtitle, children, cols = 1, show = true }) {
-  if (!show) return null;
-  return (
-    <section className="w-full rounded-md border border-gray-100 bg-white p-4 shadow-sm">
-      <div className="mb-4">
-        <h2 className="font-semibold text-base text-gray-800">{title}</h2>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
-      </div>
-      <div className={cols > 1 ? `grid grid-cols-${cols} gap-4` : 'space-y-4'}>{children}</div>
-    </section>
-  );
-}
-
-// ── Static page content editor (rich text by default, raw HTML on demand) ────
-function PageContentEditor({ value, onChange }) {
-  const [showHtml, setShowHtml] = useState(false);
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowHtml((v) => !v)}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition ${
-            showHtml ? 'bg-gray-800 text-white border-gray-800' : 'text-gray-500 border-gray-200 hover:border-gray-400'
-          }`}
-        >
-          {showHtml ? 'Back to editor' : 'Edit HTML'}
-        </button>
-      </div>
-      {showHtml ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={14}
-          spellCheck={false}
-          placeholder="<h1>Heading</h1><p>Paragraph...</p>"
-          className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-gray-400 resize-y leading-relaxed bg-gray-50"
-        />
-      ) : (
-        <RichTextEditor value={value} onChange={onChange} minHeight={280} placeholder="Page content…" />
-      )}
-    </div>
-  );
-}
-
-// ── Number stepper for carousel/column counts ────────────────────────────────
-function CountStepper({ label, name, value, onChange, min = 1, max = 10, hint }) {
-  return (
-    <Field label={label} hint={hint}>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => onChange({ target: { name, value: Math.max(min, Number(value) - 1) } })}
-          className="w-9 h-9 rounded-md border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center"
-        >
-          −
-        </button>
-        <span className="w-10 text-center font-bold text-gray-800 text-lg">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange({ target: { name, value: Math.min(max, Number(value) + 1) } })}
-          className="w-9 h-9 rounded-md border border-gray-200 text-lg font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center"
-        >
-          +
-        </button>
-        <div className="flex gap-1 ml-2">
-          {Array.from({ length: max }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 w-5 rounded-md transition-colors ${i < value ? 'bg-[var(--brand)]' : 'bg-gray-100'}`}
-            />
-          ))}
-        </div>
-      </div>
-    </Field>
-  );
-}
+import PageHeader from 'src/components/_admin/ui/PageHeader';
+import Panel from 'src/components/_admin/ui/Panel';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Callout from 'src/components/_admin/ui/Callout';
+import Badge from 'src/components/_admin/ui/Badge';
+import { Field, LengthCounter, SettingsCard, Toggle } from 'src/components/_admin/ui/fields';
+import { ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
 
 // Reverse the HTML-entity encoding that xss-clean applies to request bodies.
 // This is needed when loading page content back from the DB so the textarea
@@ -141,174 +45,294 @@ const DEFAULT_PRIVACY_HTML = `<h1>Privacy Policy</h1><p>We are committed to prot
 const DEFAULT_REFUND_HTML = `<h1>Refund and Return Policy</h1><p>If you are not entirely satisfied with your purchase, we are here to help.</p><h2>Returns / Exchange</h2><p>You have <strong>5 calendar days</strong> to return or exchange an item from the date you received it. To be eligible, your item must be unused, in the same condition as received, and in original packaging with proof of purchase.</p><blockquote><strong>Note:</strong> Customized orders are not refundable or exchangeable unless the item is defective.</blockquote><h2>Refunds</h2><p>Once we receive your item, we will inspect it and notify you of the status of your refund. If approved, we will initiate a refund to your original method of payment within a certain number of days depending on your card issuer policies.</p><h2>Shipping</h2><p>You are responsible for paying your own shipping costs when returning an item. Shipping costs are non-refundable. If a refund is issued, return shipping costs will be deducted.</p><h2>Damaged or Defective Items</h2><p>If you received a damaged or defective item, please contact us immediately with photos of the item and packaging. We will arrange a replacement or full refund at no extra cost to you.</p>`;
 const DEFAULT_TERMS_HTML = `<h1>Terms and Conditions</h1><p>Welcome! These terms and conditions outline the rules and regulations for the use of our website. By accessing this website, we assume you accept these terms and conditions in full.</p><h2>License</h2><p>Unless otherwise stated, we and/or our licensors own the intellectual property rights for all material on this website. All intellectual property rights are reserved.</p><p>You must not:</p><ul><li>Republish material from this website</li><li>Sell, rent, or sub-license material from this website</li><li>Reproduce, duplicate, or copy material from this website</li><li>Redistribute content from this website</li></ul><h2>User Comments</h2><p>Certain parts of this website offer the opportunity for users to post and exchange opinions and information. We do not filter, edit, publish, or review comments prior to their appearance. Comments reflect the views of the person who posts them.</p><h2>iFrames</h2><p>Without prior approval and written permission, you may not create frames around our webpages that alter the visual presentation or appearance of our website.</p><h2>Content Liability</h2><p>We shall not be held responsible for any content that appears on your website. No links should appear on any website that could be interpreted as defamatory, obscene, or criminal.</p><h2>Your Privacy</h2><p>Please read our <a href="/privacy-policy">Privacy Policy</a>.</p><h2>Reservation of Rights</h2><p>We reserve the right to request the removal of all links or any specific link to our website at any time and to amend these terms and conditions. By continuing to browse and use this website, you agree to be bound by the then-current version of these terms.</p><h2>Disclaimer</h2><p>To the maximum extent permitted by applicable law, we exclude all representations, warranties, and conditions relating to our website and the use of this website.</p>`;
 
-// ── TABS ─────────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: 'global', label: 'Global', icon: <IoSettingsOutline size={15} /> },
-  { key: 'homepage', label: 'Homepage', icon: <IoHomeOutline size={15} /> },
-  { key: 'product', label: 'Product Page', icon: <IoShirtOutline size={15} /> },
-  { key: 'branch', label: 'Branch Page', icon: <IoLocationOutline size={15} /> },
-  { key: 'invoice', label: 'Invoice', icon: <FiFileText size={15} /> },
-  { key: 'pages', label: 'Pages', icon: <IoDocumentTextOutline size={15} /> },
-  { key: 'maintenance', label: 'Maintenance', icon: <IoConstructOutline size={15} /> },
-  { key: 'images', label: 'Image Server', icon: <IoCloudOutline size={15} /> }
+
+// Static pages editable under Settings → Additional pages
+const PAGE_CARDS = [
+  { key: 'aboutUs', label: 'About us', path: '/about' },
+  { key: 'privacyPolicy', label: 'Privacy policy', path: '/privacy-policy' },
+  { key: 'refundPolicy', label: 'Refund & return policy', path: '/refund-return-policy' },
+  { key: 'termsConditions', label: 'Terms & conditions', path: '/terms-and-conditions' }
 ];
 
-// Static pages editable under Settings → Additional Pages
-const PAGE_CARDS = [
-  { key: 'aboutUs', label: 'About Us', hint: 'Shown on /about' },
-  { key: 'privacyPolicy', label: 'Privacy Policy', hint: 'Shown on /privacy-policy' },
-  { key: 'refundPolicy', label: 'Refund & Return Policy', hint: 'Shown on /refund-return-policy' },
-  { key: 'termsConditions', label: 'Terms & Conditions', hint: 'Shown on /terms-and-conditions' }
+const DEFAULT_NAV = [
+  { title: 'Categories', path: '', isDropdown: true },
+  { title: 'Home', path: '/', isDropdown: false },
+  { title: 'Products', path: '/products', isDropdown: false },
+  { title: 'Branches', path: '/branches', isDropdown: false },
+  { title: 'Contact', path: '/contact', isDropdown: false },
+  { title: 'About', path: '/about', isDropdown: false }
 ];
+
+const DEFAULT_FORM = {
+  siteName: '',
+  imageServerUrl: '',
+  imageServerApiKey: '',
+  primaryColor: '#2563eb',
+  secondaryColor: '#000000',
+  accentColor: '#60a5fa',
+  phone: '',
+  email: '',
+  address: '',
+  facebookUrl: '',
+  instagramUrl: '',
+  whatsappNumber: '',
+  metaTitle: '',
+  metaDescription: '',
+  productNotes: [],
+  carouselDesktop: 5,
+  carouselTablet: 3,
+  carouselMobile: 2,
+  branchColumns: 2,
+  footerTagline: '',
+  footerCopyright: '',
+  logoType: 'default',
+  navItems: DEFAULT_NAV,
+  youtubeUrl: '',
+  showBreadcrumbs: true,
+  breadcrumbDevices: 'all',
+  productListDesktop: 'pagination',
+  productListMobile: 'infinite',
+  invoicePrintMode: 'full',
+  aboutUs: DEFAULT_ABOUT_HTML,
+  privacyPolicy: DEFAULT_PRIVACY_HTML,
+  refundPolicy: DEFAULT_REFUND_HTML,
+  termsConditions: DEFAULT_TERMS_HTML,
+  maintenanceMode: false,
+  maintenanceHeading: "We'll be back soon!",
+  maintenanceSubheading: 'Our site is currently undergoing scheduled maintenance.',
+  maintenanceMessage: '',
+  maintenanceEndTime: ''
+};
+
+/** The server's record, shaped into the form. */
+function toForm(d = {}) {
+  return {
+    siteName: d.siteName || '',
+    imageServerUrl: d.imageServerUrl || '',
+    imageServerApiKey: '',
+    primaryColor: d.primaryColor || '#2563eb',
+    secondaryColor: d.secondaryColor || '#000000',
+    accentColor: d.accentColor || '#60a5fa',
+    phone: d.phone || '',
+    email: d.email || '',
+    address: d.address || '',
+    facebookUrl: d.facebookUrl || '',
+    instagramUrl: d.instagramUrl || '',
+    whatsappNumber: d.whatsappNumber || '',
+    metaTitle: d.metaTitle || '',
+    metaDescription: d.metaDescription || '',
+    productNotes: d.productNotes || [],
+    footerTagline: d.footerTagline || '',
+    footerCopyright: d.footerCopyright || '',
+    carouselDesktop: d.carouselDesktop ?? 5,
+    carouselTablet: d.carouselTablet ?? 3,
+    carouselMobile: d.carouselMobile ?? 2,
+    branchColumns: d.branchColumns ?? 2,
+    logoType: d.logoType || 'default',
+    navItems: d.navItems?.length ? d.navItems : DEFAULT_NAV,
+    youtubeUrl: d.youtubeUrl || '',
+    showBreadcrumbs: d.showBreadcrumbs ?? true,
+    breadcrumbDevices: d.breadcrumbDevices || 'all',
+    productListDesktop: d.productListDesktop || 'pagination',
+    productListMobile: d.productListMobile || 'infinite',
+    invoicePrintMode: d.invoicePrintMode || 'full',
+    aboutUs: decodeHtml(d.aboutUs) || DEFAULT_ABOUT_HTML,
+    privacyPolicy: decodeHtml(d.privacyPolicy) || DEFAULT_PRIVACY_HTML,
+    refundPolicy: decodeHtml(d.refundPolicy) || DEFAULT_REFUND_HTML,
+    termsConditions: decodeHtml(d.termsConditions) || DEFAULT_TERMS_HTML,
+    maintenanceMode: d.maintenanceMode ?? false,
+    maintenanceHeading: d.maintenanceHeading || "We'll be back soon!",
+    maintenanceSubheading: d.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.',
+    maintenanceMessage: d.maintenanceMessage || '',
+    maintenanceEndTime: d.maintenanceEndTime ? new Date(d.maintenanceEndTime).toISOString().slice(0, 16) : ''
+  };
+}
+
+// ── Small building blocks ────────────────────────────────────────────────────
+
+/** One of a few mutually exclusive choices, each with a sentence of explanation. */
+function ChoiceCards({ label, options, value, onChange, columns = 2 }) {
+  return (
+    <div role="radiogroup" aria-label={label} className={`grid gap-3 ${columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            className={`rounded-lg border p-4 text-left transition ${
+              active ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-900">{opt.label}</span>
+              {active && <MdCheckCircle size={17} className="shrink-0 text-slate-900" aria-hidden />}
+            </span>
+            {opt.help && <span className="mt-1 block text-[13px] leading-relaxed text-slate-500">{opt.help}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A whole number within a range, with − and + either side. */
+function CountStepper({ label, value, onChange, min = 1, max = 10, help }) {
+  const n = Number(value) || min;
+  return (
+    <Field label={label} help={help}>
+      <div className="flex items-center gap-2" role="group" aria-label={label}>
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, n - 1))}
+          disabled={n <= min}
+          className="btn-icon border border-slate-200"
+          aria-label={`Fewer — ${label}`}
+        >
+          <MdRemove size={18} aria-hidden />
+        </button>
+        <output className="w-10 text-center text-lg font-semibold tabular-nums text-slate-900" aria-live="polite">
+          {n}
+        </output>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(max, n + 1))}
+          disabled={n >= max}
+          className="btn-icon border border-slate-200"
+          aria-label={`More — ${label}`}
+        >
+          <MdAdd size={18} aria-hidden />
+        </button>
+        <span className="ml-2 flex gap-1" aria-hidden>
+          {Array.from({ length: max }).map((_, i) => (
+            <span key={i} className={`h-1.5 w-4 rounded-full ${i < n ? 'bg-slate-900' : 'bg-slate-200'}`} />
+          ))}
+        </span>
+      </div>
+    </Field>
+  );
+}
+
+/** Static page content: rich text by default, raw HTML on demand. */
+function PageContentEditor({ value, onChange }) {
+  const [mode, setMode] = useState('visual');
+  return (
+    <div className="space-y-3">
+      <Segmented
+        label="Editor"
+        size="sm"
+        options={[
+          { id: 'visual', label: 'Visual' },
+          { id: 'html', label: 'HTML' }
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+      {mode === 'html' ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={16}
+          spellCheck={false}
+          aria-label="Page HTML"
+          placeholder="<h1>Heading</h1><p>Paragraph…</p>"
+          className="input-ui ops-code min-h-[320px] w-full resize-y py-2 text-[13px]"
+        />
+      ) : (
+        <RichTextEditor value={value} onChange={onChange} minHeight={320} placeholder="Page content…" />
+      )}
+    </div>
+  );
+}
+
+/** Logo or favicon: preview, then upload/replace. */
+function ImageSlot({ label, help, src, uploading, onPick, previewClass }) {
+  const ref = useRef();
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <p className="text-[13px] font-medium text-slate-800">{label}</p>
+      {help && <p className="mt-0.5 text-xs text-slate-500">{help}</p>}
+      <div className="mt-3 flex h-20 items-center justify-center rounded-md bg-slate-50">
+        {src ? (
+          <Image src={src} alt={`Current ${label.toLowerCase()}`} width={180} height={64} className={previewClass} />
+        ) : (
+          <span className="flex flex-col items-center gap-1 text-xs text-slate-500">
+            <MdImage size={22} className="text-slate-400" aria-hidden />
+            None yet
+          </span>
+        )}
+      </div>
+      <input type="file" accept="image/*" ref={ref} className="hidden" onChange={onPick} tabIndex={-1} aria-hidden />
+      <button type="button" onClick={() => ref.current?.click()} disabled={uploading} className="btn-ghost btn-sm mt-3 w-full">
+        <MdOutlineFileUpload size={16} aria-hidden /> {uploading ? 'Uploading…' : src ? `Replace ${label.toLowerCase()}` : `Upload ${label.toLowerCase()}`}
+      </button>
+    </div>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SiteSettingsPage({ section = 'global', page = null }) {
   const qc = useQueryClient();
   const tab = section;
-  const savedFormRef = useRef(null);
-  const DEFAULT_NAV = [
-    { title: 'Categories', path: '', isDropdown: true },
-    { title: 'Home', path: '/', isDropdown: false },
-    { title: 'Products', path: '/products', isDropdown: false },
-    { title: 'Branches', path: '/branches', isDropdown: false },
-    { title: 'Contact', path: '/contact', isDropdown: false },
-    { title: 'About', path: '/about', isDropdown: false }
-  ];
-
-  const [form, setForm] = useState({
-    siteName: '',
-    imageServerUrl: '',
-    imageServerApiKey: '',
-    primaryColor: '#2563eb',
-    secondaryColor: '#000000',
-    accentColor: '#60a5fa',
-    phone: '',
-    email: '',
-    address: '',
-    facebookUrl: '',
-    instagramUrl: '',
-    whatsappNumber: '',
-    metaTitle: '',
-    metaDescription: '',
-    productNotes: [],
-    carouselDesktop: 5,
-    carouselTablet: 3,
-    carouselMobile: 2,
-    branchColumns: 2,
-    footerTagline: '',
-    footerCopyright: '',
-    logoType: 'default',
-    navItems: DEFAULT_NAV,
-    youtubeUrl: '',
-    showBreadcrumbs: true,
-    breadcrumbDevices: 'all',
-    productListDesktop: 'pagination',
-    productListMobile: 'infinite',
-    invoicePrintMode: 'full',
-    aboutUs: DEFAULT_ABOUT_HTML,
-    privacyPolicy: DEFAULT_PRIVACY_HTML,
-    refundPolicy: DEFAULT_REFUND_HTML,
-    termsConditions: DEFAULT_TERMS_HTML,
-    maintenanceMode: false,
-    maintenanceHeading: "We'll be back soon!",
-    maintenanceSubheading: 'Our site is currently undergoing scheduled maintenance.',
-    maintenanceMessage: '',
-    maintenanceEndTime: ''
-  });
+  const [form, setForm] = useState(DEFAULT_FORM);
+  const [saved, setSaved] = useState(null); // JSON of the last saved form
   const [logo, setLogo] = useState(null);
   const [favicon, setFavicon] = useState(null);
+  const [uploading, setUploading] = useState(null); // 'logo' | 'favicon' | null
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState('');
+  const [loadState, setLoadState] = useState({ loading: true, error: null });
   const [imageKeyConfigured, setImageKeyConfigured] = useState(false);
-  const logoRef = useRef();
-  const faviconRef = useRef();
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoadState({ loading: true, error: null });
     getSiteSettingsByAdmin()
       .then((res) => {
         const d = res.data || {};
-        setForm({
-          siteName: d.siteName || '',
-          imageServerUrl: d.imageServerUrl || '',
-          imageServerApiKey: '',
-          primaryColor: d.primaryColor || '#2563eb',
-          secondaryColor: d.secondaryColor || '#000000',
-          accentColor: d.accentColor || '#60a5fa',
-          phone: d.phone || '',
-          email: d.email || '',
-          address: d.address || '',
-          facebookUrl: d.facebookUrl || '',
-          instagramUrl: d.instagramUrl || '',
-          whatsappNumber: d.whatsappNumber || '',
-          metaTitle: d.metaTitle || '',
-          metaDescription: d.metaDescription || '',
-          productNotes: d.productNotes || [],
-          footerTagline: d.footerTagline || '',
-          footerCopyright: d.footerCopyright || '',
-          carouselDesktop: d.carouselDesktop ?? 5,
-          carouselTablet: d.carouselTablet ?? 3,
-          carouselMobile: d.carouselMobile ?? 2,
-          branchColumns: d.branchColumns ?? 2,
-          logoType: d.logoType || 'default',
-          navItems: d.navItems?.length ? d.navItems : DEFAULT_NAV,
-          youtubeUrl: d.youtubeUrl || '',
-          showBreadcrumbs: d.showBreadcrumbs ?? true,
-          breadcrumbDevices: d.breadcrumbDevices || 'all',
-          productListDesktop: d.productListDesktop || 'pagination',
-          productListMobile: d.productListMobile || 'infinite',
-          invoicePrintMode: d.invoicePrintMode || 'full',
-          aboutUs: decodeHtml(d.aboutUs) || DEFAULT_ABOUT_HTML,
-          privacyPolicy: decodeHtml(d.privacyPolicy) || DEFAULT_PRIVACY_HTML,
-          refundPolicy: decodeHtml(d.refundPolicy) || DEFAULT_REFUND_HTML,
-          termsConditions: decodeHtml(d.termsConditions) || DEFAULT_TERMS_HTML,
-          maintenanceMode: d.maintenanceMode ?? false,
-          maintenanceHeading: d.maintenanceHeading || "We'll be back soon!",
-          maintenanceSubheading: d.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.',
-          maintenanceMessage: d.maintenanceMessage || '',
-          maintenanceEndTime: d.maintenanceEndTime ? new Date(d.maintenanceEndTime).toISOString().slice(0, 16) : ''
-        });
+        const next = toForm(d);
+        setForm(next);
+        setSaved(JSON.stringify(next));
         if (d.logo) setLogo(d.logo);
         if (d.favicon) setFavicon(d.favicon);
         setImageKeyConfigured(Boolean(d.imageServerApiKeyConfigured));
+        setLoadState({ loading: false, error: null });
       })
-      .catch((e) => Swal.fire('Error', e.message, 'error'))
-      .finally(() => setLoading(false));
+      // A failed load must not fall through to the form: saving the defaults
+      // it would show would overwrite every setting on the storefront.
+      .catch((e) => setLoadState({ loading: false, error: e }));
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((p) => ({ ...p, [name]: typeof value === 'number' ? value : value }));
-  };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const put = (name, value) => setForm((p) => ({ ...p, [name]: value }));
+  const handleChange = (e) => put(e.target.name, e.target.value);
+
+  const hasUnsavedChanges = saved !== null && saved !== JSON.stringify(form);
 
   const handleSave = async () => {
     setSaving(true);
-    setMsg('');
     try {
       await updateSiteSettings(form);
+      const next = form.imageServerApiKey ? { ...form, imageServerApiKey: '' } : form;
       if (form.imageServerApiKey) {
-        const savedForm = { ...form, imageServerApiKey: '' };
         setImageKeyConfigured(true);
-        setForm(savedForm);
-        savedFormRef.current = JSON.stringify(savedForm);
-      } else {
-        savedFormRef.current = JSON.stringify(form);
+        setForm(next);
       }
+      setSaved(JSON.stringify(next));
       qc.invalidateQueries('site-settings');
-      setMsg('Saved!');
-      setTimeout(() => setMsg(''), 3000);
+      toastSuccess('Settings saved', 'The storefront picks them up within a minute.');
     } catch (e) {
-      Swal.fire('Error', e.message, 'error');
+      alertError(e, { title: 'The settings were not saved' });
     } finally {
       setSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (!loading && savedFormRef.current === null) savedFormRef.current = JSON.stringify(form);
-  }, [loading, form]);
-
-  const hasUnsavedChanges = !loading && savedFormRef.current !== null && savedFormRef.current !== JSON.stringify(form);
+  const discard = () => saved && setForm(JSON.parse(saved));
 
   useEffect(() => {
     const warnBeforeLeave = (event) => {
@@ -320,885 +344,600 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
     return () => window.removeEventListener('beforeunload', warnBeforeLeave);
   }, [hasUnsavedChanges]);
 
-  const handleLogoUpload = async (e) => {
+  const upload = (kind, request, setter) => async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
+    setUploading(kind);
     try {
-      const res = await uploadSiteLogo(fd);
-      setLogo(res.data.path);
+      const res = await request(fd);
+      setter(res.data.path);
       qc.invalidateQueries('site-settings');
-      setMsg('Logo uploaded!');
-    } catch (e) {
-      Swal.fire('Error', e.message, 'error');
+      toastSuccess(kind === 'logo' ? 'Logo updated' : 'Favicon updated');
+    } catch (err) {
+      alertError(err, { title: `The ${kind} was not uploaded` });
+    } finally {
+      setUploading(null);
     }
   };
 
-  const handleFaviconUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const res = await uploadSiteFavicon(fd);
-      setFavicon(res.data.path);
-      qc.invalidateQueries('site-settings');
-      setMsg('Favicon uploaded!');
-    } catch (e) {
-      Swal.fire('Error', e.message, 'error');
-    }
-  };
+  const saveButton = (
+    <button type="button" onClick={handleSave} disabled={saving || !hasUnsavedChanges || loadState.loading || Boolean(loadState.error)} className="btn-brand">
+      {saving ? 'Saving…' : hasUnsavedChanges ? 'Save changes' : 'Saved'}
+    </button>
+  );
 
-  if (loading) return <div className="p-8 text-gray-500 animate-pulse">Loading…</div>;
+  const pageCard = PAGE_CARDS.find((c) => c.key === page);
+  const title =
+    {
+      brand: 'Brand',
+      contact: 'Contact',
+      seo: 'Search engines',
+      footer: 'Footer',
+      navigation: 'Navigation',
+      breadcrumbs: 'Breadcrumbs',
+      product: 'Product showcase',
+      branch: 'Branch page',
+      invoice: 'Invoice',
+      maintenance: 'Maintenance',
+      images: 'Image server'
+    }[tab] || pageCard?.label || 'Site settings';
 
-  const isBrand = tab === 'brand';
-  const isContact = tab === 'contact';
-  const isSeo = tab === 'seo';
-  const isFooter = tab === 'footer';
-  const isNavigation = tab === 'navigation';
-  const isBreadcrumbs = tab === 'breadcrumbs';
-  const isGlobal = ['brand', 'contact', 'seo', 'footer', 'navigation', 'breadcrumbs', 'product'].includes(tab);
-  const isProduct = tab === 'product';
-  const isBranch = tab === 'branch';
-  const isInvoice = tab === 'invoice';
-  const isPages = tab === 'pages';
-  const isMaintenance = tab === 'maintenance';
-  const isImages = tab === 'images';
+  if (loadState.loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={title}>{saveButton}</PageHeader>
+        <LoadingBlock rows={6} />
+      </div>
+    );
+  }
+  if (loadState.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={title} />
+        <ErrorState error={loadState.error} title="Settings could not be loaded" onRetry={load} />
+      </div>
+    );
+  }
+
+  const setNav = (i, patch) => put('navItems', form.navItems.map((n, j) => (j === i ? { ...n, ...patch } : n)));
+  const setNote = (i, value) => put('productNotes', form.productNotes.map((n, j) => (j === i ? value : n)));
 
   return (
-    <div className="w-full space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">
-            {{
-              brand: 'Brand Settings',
-              contact: 'Contact',
-              seo: 'SEO',
-              footer: 'Footer',
-              navigation: 'Navigation',
-              breadcrumbs: 'Breadcrumb Settings',
-              product: 'Product Showcase',
-              branch: 'Branch Page',
-              invoice: 'Invoice',
-              maintenance: 'Maintenance',
-              images: 'Image Server'
-            }[tab] || (isPages ? PAGE_CARDS.find((c) => c.key === page)?.label || 'Additional Pages' : 'Site Settings')}
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">Changes apply within 60 s on the storefront</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {hasUnsavedChanges && <span className="text-sm font-semibold text-amber-600">Unsaved changes</span>}
-          {!hasUnsavedChanges && msg && <span className="text-sm text-green-600 font-medium">{msg}</span>}
-          <button
-            onClick={handleSave}
-            disabled={saving || !hasUnsavedChanges}
-            className="btn-brand px-6 py-2.5 text-sm disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : hasUnsavedChanges ? 'Save Settings' : 'Saved'}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6 pb-20">
+      <PageHeader title={title} subtitle="Changes reach the storefront within a minute of saving.">
+        {saveButton}
+      </PageHeader>
 
-      {/* ── GLOBAL TAB ──────────────────────────────────────────────────────── */}
-      {isGlobal && (
-        <>
-          <div className="grid w-full grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* Branding */}
-            <Card show={isBrand} title="Branding" subtitle="Logo, favicon and site name across the storefront">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="flex flex-col items-center gap-3 p-4 border border-dashed border-gray-200 rounded-md">
-                  {logo ? (
-                    <Image src={logo} alt="Logo" width={180} height={64} className="h-16 w-auto object-contain" />
-                  ) : (
-                    <div className="h-16 w-full bg-gray-50 rounded-md flex items-center justify-center text-xs text-gray-400">
-                      No logo
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" ref={logoRef} className="hidden" onChange={handleLogoUpload} />
-                  <button
-                    onClick={() => logoRef.current?.click()}
-                    className="border px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 w-full text-center"
-                  >
-                    {logo ? 'Change Logo' : 'Upload Logo'}
-                  </button>
-                </div>
-                <div className="flex flex-col items-center gap-3 p-4 border border-dashed border-gray-200 rounded-md">
-                  {favicon ? (
-                    <Image src={favicon} alt="Favicon" width={40} height={40} className="h-10 w-10 object-contain" />
-                  ) : (
-                    <div className="h-10 w-full bg-gray-50 rounded-md flex items-center justify-center text-xs text-gray-400">
-                      No favicon
-                    </div>
-                  )}
+      {/* ── Brand ───────────────────────────────────────────────────────── */}
+      {tab === 'brand' && (
+        <div className="grid items-start gap-6 xl:grid-cols-2">
+          <SettingsCard title="Identity" description="The name, logo and browser icon used across the storefront.">
+            <Field label="Site name">
+              <input name="siteName" value={form.siteName} onChange={handleChange} placeholder="Your store name" className="input-ui" />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ImageSlot
+                label="Logo"
+                help="PNG or SVG with a transparent background."
+                src={logo}
+                uploading={uploading === 'logo'}
+                onPick={upload('logo', uploadSiteLogo, setLogo)}
+                previewClass="h-14 w-auto object-contain"
+              />
+              <ImageSlot
+                label="Favicon"
+                help="Square, at least 64 × 64 px."
+                src={favicon}
+                uploading={uploading === 'favicon'}
+                onPick={upload('favicon', uploadSiteFavicon, setFavicon)}
+                previewClass="h-10 w-10 object-contain"
+              />
+            </div>
+            {/* The storefront font picker was removed on purpose. Offering
+                nine families meant every app had to instantiate all nine, and
+                next/font preloads every family it can see — the storefront was
+                shipping 17 woff2 files (~311 KiB) per page load to render text
+                in one of them. The apps now hard-code Play via next/font. */}
+            <Field label="Logo shape">
+              <ChoiceCards
+                label="Logo shape"
+                value={form.logoType}
+                onChange={(v) => put('logoType', v)}
+                options={[
+                  { value: 'default', label: 'As uploaded', help: 'Shown at its own shape.' },
+                  { value: 'round', label: 'Round', help: 'Clipped to a circle — best for square or portrait logos.' }
+                ]}
+              />
+            </Field>
+          </SettingsCard>
+
+          <SettingsCard title="Brand colours" description="Used for buttons, links and accents on the storefront.">
+            {[
+              { key: 'primaryColor', label: 'Primary' },
+              { key: 'secondaryColor', label: 'Secondary' },
+              { key: 'accentColor', label: 'Accent' }
+            ].map(({ key, label }) => (
+              <Field key={key} label={label}>
+                <div className="flex items-center gap-3">
                   <input
-                    type="file"
-                    accept="image/*"
-                    ref={faviconRef}
-                    className="hidden"
-                    onChange={handleFaviconUpload}
+                    type="color"
+                    value={form[key]}
+                    onChange={(e) => put(key, e.target.value)}
+                    className="h-10 w-12 shrink-0 cursor-pointer rounded-md border border-slate-200 p-0.5"
+                    aria-label={`${label} colour picker`}
                   />
-                  <button
-                    onClick={() => faviconRef.current?.click()}
-                    className="border px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 w-full text-center"
-                  >
-                    {favicon ? 'Change Favicon' : 'Upload Favicon'}
-                  </button>
-                </div>
-              </div>
-              <Field label="Site Name">
-                <Input name="siteName" value={form.siteName} onChange={handleChange} placeholder="Your Store Name" />
-              </Field>
-              {/* The storefront font picker was removed on purpose. Offering
-                  nine families meant every app had to instantiate all nine, and
-                  next/font preloads every family it can see — the storefront was
-                  shipping 17 woff2 files (~311 KiB) per page load to render text
-                  in one of them. The apps now hard-code Play via next/font. */}
-              <Field label="Logo Shape" hint="Round clips the logo into a circle — best for square/portrait images">
-                <div className="flex gap-3">
-                  {['default', 'round'].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, logoType: type }))}
-                      className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-md border-2 transition-all ${
-                        form.logoType === type
-                          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div
-                        className={`w-10 h-10 bg-gray-200 flex items-center justify-center text-xs text-gray-500 ${
-                          type === 'round' ? 'rounded-md' : 'rounded-md'
-                        }`}
-                      >
-                        {logo ? (
-                          <Image
-                            src={logo}
-                            alt=""
-                            width={40}
-                            height={40}
-                            className={`w-10 h-10 object-cover ${type === 'round' ? 'rounded-md' : 'rounded-md'}`}
-                          />
-                        ) : (
-                          'Logo'
-                        )}
-                      </div>
-                      <span className="text-xs font-medium capitalize text-gray-700">{type}</span>
-                    </button>
-                  ))}
+                  <input name={key} value={form[key]} onChange={handleChange} placeholder="#000000" className="input-ui ops-code" spellCheck={false} />
                 </div>
               </Field>
-            </Card>
-
-            {/* Brand Colors */}
-            <Card
-              show={isBrand}
-              title="Brand Colors"
-              subtitle="Injected as CSS variables — affects buttons, links, and accents"
-            >
-              {[
-                { key: 'primaryColor', label: 'Primary Color' },
-                { key: 'secondaryColor', label: 'Secondary Color' },
-                { key: 'accentColor', label: 'Accent Color' }
-              ].map(({ key, label }) => (
-                <Field key={key} label={label}>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={form[key]}
-                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                      className="w-10 h-10 rounded-md border cursor-pointer p-0.5"
-                    />
-                    <Input name={key} value={form[key]} onChange={handleChange} placeholder="#000000" />
-                    <span className="w-10 h-10 rounded-md border shrink-0" style={{ backgroundColor: form[key] }} />
-                  </div>
-                </Field>
-              ))}
-              <div className="flex gap-2 pt-2">
-                <span
-                  className="px-4 py-2 rounded-md text-white text-xs font-medium"
-                  style={{ backgroundColor: form.primaryColor }}
-                >
+            ))}
+            <div>
+              <p className="mb-2 text-[13px] font-medium text-slate-800">Preview</p>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-md px-4 py-2 text-xs font-medium text-white" style={{ backgroundColor: form.primaryColor }}>
                   Primary
                 </span>
-                <span
-                  className="px-4 py-2 rounded-md text-white text-xs font-medium"
-                  style={{ backgroundColor: form.secondaryColor }}
-                >
+                <span className="rounded-md px-4 py-2 text-xs font-medium text-white" style={{ backgroundColor: form.secondaryColor }}>
                   Secondary
                 </span>
-                <span
-                  className="px-4 py-2 rounded-md text-xs font-medium border"
-                  style={{ backgroundColor: form.accentColor }}
-                >
+                <span className="rounded-md border border-slate-200 px-4 py-2 text-xs font-medium text-slate-900" style={{ backgroundColor: form.accentColor }}>
                   Accent
                 </span>
               </div>
-            </Card>
-          </div>
+            </div>
+          </SettingsCard>
+        </div>
+      )}
 
-          <div className="grid w-full grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* Contact Info */}
-            <Card show={isContact} title="Contact Info" subtitle="Shown in the footer, contact page, and order emails">
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Phone">
-                  <Input name="phone" value={form.phone} onChange={handleChange} placeholder="+880 1700-000000" />
-                </Field>
-                <Field label="Email">
-                  <Input name="email" value={form.email} onChange={handleChange} placeholder="info@site.com" />
-                </Field>
-                <Field label="WhatsApp">
-                  <Input
-                    name="whatsappNumber"
-                    value={form.whatsappNumber}
-                    onChange={handleChange}
-                    placeholder="8801700000000"
-                  />
-                </Field>
-                <Field label="Facebook URL">
-                  <Input
-                    name="facebookUrl"
-                    value={form.facebookUrl}
-                    onChange={handleChange}
-                    placeholder="https://facebook.com/page"
-                  />
-                </Field>
-                <Field label="Instagram URL">
-                  <Input
-                    name="instagramUrl"
-                    value={form.instagramUrl}
-                    onChange={handleChange}
-                    placeholder="https://instagram.com/page"
-                  />
-                </Field>
-                <Field label="YouTube URL">
-                  <Input
-                    name="youtubeUrl"
-                    value={form.youtubeUrl}
-                    onChange={handleChange}
-                    placeholder="https://youtube.com/@channel"
-                  />
-                </Field>
-                <Field label="Address">
-                  <textarea
-                    name="address"
-                    value={form.address}
-                    onChange={handleChange}
-                    rows={2}
-                    placeholder="123 Street, City"
-                    className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400 resize-none"
-                  />
-                </Field>
-              </div>
-            </Card>
-
-            {/* SEO */}
-            <Card show={isSeo} title="SEO Defaults" subtitle="Meta title and description for search engines">
-              <Field label="Meta Title">
-                <Input
-                  name="metaTitle"
-                  value={form.metaTitle}
-                  onChange={handleChange}
-                  placeholder="Your Store — Shop Online"
-                />
-                <p className="text-xs text-gray-400 mt-1">Falls back to Site Name.</p>
-              </Field>
-              <Field label="Meta Description">
-                <textarea
-                  name="metaDescription"
-                  value={form.metaDescription}
-                  onChange={handleChange}
-                  rows={4}
-                  placeholder="Brief description for search engines…"
-                  className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400 resize-none"
-                />
-                <p className="text-xs text-gray-400 mt-1">{form.metaDescription.length} / 160 characters</p>
-              </Field>
-            </Card>
-          </div>
-
-          {/* Footer Texts */}
-          <Card show={isFooter} title="Footer Texts" subtitle="Customise the text shown in the footer">
-            <Field label="Brand Tagline" hint="Shown below the logo. Leave empty to use the default.">
-              <Input
-                name="footerTagline"
-                value={form.footerTagline}
-                onChange={handleChange}
-                placeholder={`${form.siteName || 'Sidrat'} — premium fashion crafted for the modern woman.`}
-              />
+      {/* ── Contact ─────────────────────────────────────────────────────── */}
+      {tab === 'contact' && (
+        <SettingsCard title="Contact details" description="Shown in the footer, on the contact page and in order emails.">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Field label="Phone">
+              <input name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="+880 1700-000000" className="input-ui" />
             </Field>
-            <Field
-              label="Copyright Right Text"
-              hint='Shown at the bottom-right of the footer. Leave empty for "Crafted with care".'
-            >
-              <Input
-                name="footerCopyright"
-                value={form.footerCopyright}
-                onChange={handleChange}
-                placeholder="Crafted with care"
-              />
+            <Field label="Email">
+              <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="info@site.com" className="input-ui" />
             </Field>
-          </Card>
+            <Field label="WhatsApp number" help="Country code first, digits only.">
+              <input name="whatsappNumber" inputMode="tel" value={form.whatsappNumber} onChange={handleChange} placeholder="8801700000000" className="input-ui" />
+            </Field>
+            <Field label="Address" className="sm:col-span-2 xl:col-span-3">
+              <textarea name="address" value={form.address} onChange={handleChange} rows={2} placeholder="123 Street, City" className="input-ui min-h-[64px] resize-y py-2" />
+            </Field>
+          </div>
+          <div className="border-t border-slate-200 pt-5">
+            <h3 className="mb-4 text-sm font-semibold text-slate-900">Social links</h3>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <Field label="Facebook">
+                <input name="facebookUrl" type="url" value={form.facebookUrl} onChange={handleChange} placeholder="https://facebook.com/page" className="input-ui" />
+              </Field>
+              <Field label="Instagram">
+                <input name="instagramUrl" type="url" value={form.instagramUrl} onChange={handleChange} placeholder="https://instagram.com/page" className="input-ui" />
+              </Field>
+              <Field label="YouTube">
+                <input name="youtubeUrl" type="url" value={form.youtubeUrl} onChange={handleChange} placeholder="https://youtube.com/@channel" className="input-ui" />
+              </Field>
+            </div>
+          </div>
+        </SettingsCard>
+      )}
 
-          {/* Navigation Items */}
-          <Card
-            show={isNavigation}
-            title="Navigation Menu"
-            subtitle="Links shown in the top menu bar on desktop. The Categories dropdown is auto-populated."
-          >
-            <div className="space-y-2">
-              {form.navItems.map((item, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={item.title}
-                    onChange={(e) => {
-                      const updated = form.navItems.map((n, j) => (j === i ? { ...n, title: e.target.value } : n));
-                      setForm((p) => ({ ...p, navItems: updated }));
-                    }}
-                    placeholder="Label"
-                    className="border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-gray-400 w-32"
-                  />
-                  {item.isDropdown ? (
-                    <span className="flex-1 px-3 py-2 text-sm text-gray-400 bg-gray-50 rounded-md border border-dashed border-gray-200">
-                      Auto — categories from database
-                    </span>
-                  ) : (
-                    <input
-                      value={item.path}
-                      onChange={(e) => {
-                        const updated = form.navItems.map((n, j) => (j === i ? { ...n, path: e.target.value } : n));
-                        setForm((p) => ({ ...p, navItems: updated }));
-                      }}
-                      placeholder="/path"
-                      className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
-                    />
-                  )}
-                  <span
-                    className={`text-xs px-2 py-1 rounded-md font-medium ${item.isDropdown ? 'bg-[var(--brand-soft)] text-[var(--brand-strong)]' : 'bg-gray-100 text-gray-500'}`}
-                  >
-                    {item.isDropdown ? 'Dropdown' : 'Link'}
+      {/* ── SEO ─────────────────────────────────────────────────────────── */}
+      {tab === 'seo' && (
+        <SettingsCard title="Search engine defaults" description="Used on any page that does not set its own title and description.">
+          <Field label="Page title" help="Falls back to the site name." counter={<LengthCounter value={form.metaTitle} max={60} />}>
+            <input name="metaTitle" value={form.metaTitle} onChange={handleChange} placeholder="Your Store — Shop Online" className="input-ui" />
+          </Field>
+          <Field label="Description" counter={<LengthCounter value={form.metaDescription} max={160} />}>
+            <textarea
+              name="metaDescription"
+              value={form.metaDescription}
+              onChange={handleChange}
+              rows={4}
+              placeholder="A sentence or two about the store, for search results"
+              className="input-ui min-h-[96px] resize-y py-2"
+            />
+          </Field>
+        </SettingsCard>
+      )}
+
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      {tab === 'footer' && (
+        <SettingsCard title="Footer text" description="Leave a field empty to use the default wording.">
+          <Field label="Tagline" help="Shown under the logo.">
+            <input
+              name="footerTagline"
+              value={form.footerTagline}
+              onChange={handleChange}
+              placeholder={`${form.siteName || 'Sidrat'} — premium fashion crafted for the modern woman.`}
+              className="input-ui"
+            />
+          </Field>
+          <Field label="Bottom-right text" help="Defaults to “Crafted with care”.">
+            <input name="footerCopyright" value={form.footerCopyright} onChange={handleChange} placeholder="Crafted with care" className="input-ui" />
+          </Field>
+        </SettingsCard>
+      )}
+
+      {/* ── Navigation ──────────────────────────────────────────────────── */}
+      {tab === 'navigation' && (
+        <SettingsCard
+          title="Top menu"
+          description="Links in the storefront's desktop menu bar, left to right. The categories dropdown fills itself from the catalogue."
+        >
+          <ol className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {form.navItems.map((item, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:flex-nowrap">
+                <span className="w-5 shrink-0 text-center text-[13px] tabular-nums text-slate-500">{i + 1}</span>
+                <input
+                  value={item.title}
+                  onChange={(e) => setNav(i, { title: e.target.value })}
+                  placeholder="Label"
+                  aria-label={`Menu item ${i + 1} label`}
+                  className="input-ui w-full sm:w-40"
+                />
+                {item.isDropdown ? (
+                  <span className="flex min-h-[40px] flex-1 items-center rounded-md bg-slate-50 px-3 text-[13px] text-slate-500">
+                    Filled from categories
                   </span>
-                  <button
-                    onClick={() => setForm((p) => ({ ...p, navItems: p.navItems.filter((_, j) => j !== i) }))}
-                    className="text-red-400 hover:text-red-600 text-xl font-bold px-1 shrink-0"
-                    title="Remove"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() =>
-                  setForm((p) => ({ ...p, navItems: [...p.navItems, { title: '', path: '/', isDropdown: false }] }))
-                }
-                className="border border-dashed border-gray-300 text-gray-500 hover:border-gray-500 px-4 py-2 rounded-md text-sm"
-              >
-                + Add Link
-              </button>
-              {!form.navItems.some((n) => n.isDropdown) && (
-                <button
-                  onClick={() =>
-                    setForm((p) => ({
-                      ...p,
-                      navItems: [{ title: 'Categories', path: '', isDropdown: true }, ...p.navItems]
-                    }))
-                  }
-                  className="rounded-md border border-dashed border-[var(--brand-ring)] px-4 py-2 text-sm text-[var(--brand-strong)] hover:border-[var(--brand)]"
-                >
-                  + Add Categories Dropdown
-                </button>
-              )}
-            </div>
-          </Card>
-
-          {/* Page UI Options */}
-          <Card show={isBreadcrumbs} title="Page Options" subtitle="UI features that appear across the storefront">
-            <div className="space-y-4">
-              {/* Show breadcrumbs toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Show Breadcrumbs</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Display navigation path (Home / Products / …) on all pages
-                  </p>
-                </div>
+                ) : (
+                  <input
+                    value={item.path}
+                    onChange={(e) => setNav(i, { path: e.target.value })}
+                    placeholder="/path"
+                    aria-label={`Menu item ${i + 1} link`}
+                    className="input-ui ops-code min-w-0 flex-1"
+                    spellCheck={false}
+                  />
+                )}
+                <Badge tone={item.isDropdown ? 'violet' : 'neutral'}>{item.isDropdown ? 'Dropdown' : 'Link'}</Badge>
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, showBreadcrumbs: !p.showBreadcrumbs }))}
-                  className={`relative w-11 h-6 rounded-md transition-colors focus:outline-none ${form.showBreadcrumbs ? 'bg-[var(--brand)]' : 'bg-gray-300'}`}
+                  onClick={() => put('navItems', form.navItems.filter((_, j) => j !== i))}
+                  className="btn-icon btn-icon-sm btn-icon-danger shrink-0"
+                  aria-label={`Remove ${item.title || `menu item ${i + 1}`}`}
+                  title="Remove"
                 >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-md shadow transition-transform ${form.showBreadcrumbs ? 'translate-x-5' : ''}`}
-                  />
+                  <MdDelete size={17} aria-hidden />
                 </button>
-              </div>
-
-              {/* Device visibility — only when breadcrumbs are on */}
-              {form.showBreadcrumbs && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Visible on</p>
-                  <div className="flex gap-2">
-                    {[
-                      { value: 'all', label: 'All devices' },
-                      { value: 'md-up', label: 'Tablet & Desktop' },
-                      { value: 'lg-up', label: 'Desktop only' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, breadcrumbDevices: opt.value }))}
-                        className={`px-3 py-1.5 text-xs rounded-md border font-medium transition-colors ${
-                          form.breadcrumbDevices === opt.value
-                            ? 'bg-gray-800 text-white border-gray-800'
-                            : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Product Listing Mode */}
-          <Card
-            show={isProduct}
-            title="Product Listing"
-            subtitle="Choose between infinite scroll and pagination per device"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {[
-                { key: 'productListDesktop', label: 'Desktop', hint: 'Screen width ≥ 768 px' },
-                { key: 'productListMobile', label: 'Mobile', hint: 'Screen width < 768 px' }
-              ].map(({ key, label, hint }) => (
-                <div key={key}>
-                  <p className="text-sm font-medium text-gray-700 mb-0.5">{label}</p>
-                  <p className="text-xs text-gray-400 mb-3">{hint}</p>
-                  <div className="flex gap-2">
-                    {[
-                      { value: 'pagination', label: 'Pagination', desc: 'Page buttons at the bottom' },
-                      { value: 'infinite', label: 'Infinite Scroll', desc: 'Auto-loads as user scrolls' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, [key]: opt.value }))}
-                        className={`flex-1 px-3 py-3 rounded-md border text-left transition-colors ${
-                          form[key] === opt.value
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300 bg-white'
-                        }`}
-                      >
-                        <p
-                          className={`text-xs font-semibold ${form[key] === opt.value ? 'text-blue-700' : 'text-gray-700'}`}
-                        >
-                          {opt.label}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Carousel Settings */}
-          <Card
-            show={isProduct}
-            title="Product Carousel"
-            subtitle="How many product cards are visible per row at each screen size"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <CountStepper
-                label="Desktop (≥1024 px)"
-                name="carouselDesktop"
-                value={form.carouselDesktop}
-                onChange={handleChange}
-                min={1}
-                max={8}
-                hint="Large screens — typically 4–6"
-              />
-              <CountStepper
-                label="Tablet (768–1023 px)"
-                name="carouselTablet"
-                value={form.carouselTablet}
-                onChange={handleChange}
-                min={1}
-                max={5}
-                hint="iPad-size screens — typically 2–4"
-              />
-              <CountStepper
-                label="Mobile (< 768 px)"
-                name="carouselMobile"
-                value={form.carouselMobile}
-                onChange={handleChange}
-                min={1}
-                max={4}
-                hint="Phones — typically 1–2"
-              />
-            </div>
-          </Card>
-        </>
-      )}
-
-      {/* ── PRODUCT PAGE TAB ─────────────────────────────────────────────── */}
-      {isProduct && (
-        <Card
-          title="Product Page Notes"
-          subtitle="Shown below Add-to-Cart on every product — delivery info, return policy, etc. Write in Bangla."
-        >
-          <div className="space-y-2">
-            {form.productNotes.map((note, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <input
-                  value={note}
-                  onChange={(e) => {
-                    const updated = [...form.productNotes];
-                    updated[i] = e.target.value;
-                    setForm((p) => ({ ...p, productNotes: updated }));
-                  }}
-                  className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400"
-                  placeholder="Note in Bangla…"
-                />
-                <button
-                  onClick={() => setForm((p) => ({ ...p, productNotes: p.productNotes.filter((_, j) => j !== i) }))}
-                  className="text-red-400 hover:text-red-600 text-xl font-bold px-2 shrink-0"
-                >
-                  ×
-                </button>
-              </div>
+              </li>
             ))}
+            {!form.navItems.length && <li className="px-4 py-6 text-center text-[13px] text-slate-500">The menu is empty.</li>}
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => put('navItems', [...form.navItems, { title: '', path: '/', isDropdown: false }])} className="btn-ghost">
+              <MdAdd size={17} aria-hidden /> Add link
+            </button>
+            {!form.navItems.some((n) => n.isDropdown) && (
+              <button
+                type="button"
+                onClick={() => put('navItems', [{ title: 'Categories', path: '', isDropdown: true }, ...form.navItems])}
+                className="btn-ghost"
+              >
+                <MdAdd size={17} aria-hidden /> Add categories dropdown
+              </button>
+            )}
           </div>
-          <button
-            onClick={() => setForm((p) => ({ ...p, productNotes: [...p.productNotes, ''] }))}
-            className="border border-dashed border-gray-300 text-gray-500 hover:border-gray-500 px-4 py-2.5 rounded-md text-sm w-full mt-2"
-          >
-            + Add Note
-          </button>
-        </Card>
+        </SettingsCard>
       )}
 
-      {/* ── BRANCH PAGE TAB ──────────────────────────────────────────────── */}
-      {isBranch && (
-        <Card title="Branch Listing Layout" subtitle="Controls how branch cards are arranged on the Branches page">
-          <div className="max-w-sm">
-            <CountStepper
-              label="Columns per row"
-              name="branchColumns"
-              value={form.branchColumns}
-              onChange={handleChange}
-              min={1}
-              max={4}
-              hint="How many branch cards appear side-by-side on desktop"
-            />
-          </div>
+      {/* ── Breadcrumbs ─────────────────────────────────────────────────── */}
+      {tab === 'breadcrumbs' && (
+        <SettingsCard title="Breadcrumbs" description="The Home / Products / … trail at the top of storefront pages.">
+          <Toggle
+            label="Show breadcrumbs"
+            help="Display the navigation path on every page."
+            checked={form.showBreadcrumbs}
+            onChange={(on) => put('showBreadcrumbs', on)}
+          />
+          {form.showBreadcrumbs && (
+            <Field label="Show on">
+              <Segmented
+                label="Show on"
+                options={[
+                  { id: 'all', label: 'All devices' },
+                  { id: 'md-up', label: 'Tablet and desktop' },
+                  { id: 'lg-up', label: 'Desktop only' }
+                ]}
+                value={form.breadcrumbDevices}
+                onChange={(v) => put('breadcrumbDevices', v)}
+              />
+            </Field>
+          )}
+        </SettingsCard>
+      )}
 
-          {/* Preview */}
+      {/* ── Product showcase ───────────────────────────────────────────── */}
+      {tab === 'product' && (
+        <div className="space-y-6">
+          <SettingsCard title="Product listing" description="How shoppers move through long product lists.">
+            {[
+              { key: 'productListDesktop', label: 'On desktop', help: 'Screens 768 px and wider.' },
+              { key: 'productListMobile', label: 'On mobile', help: 'Screens narrower than 768 px.' }
+            ].map(({ key, label, help }) => (
+              <Field key={key} label={label} help={help}>
+                <ChoiceCards
+                  label={label}
+                  value={form[key]}
+                  onChange={(v) => put(key, v)}
+                  options={[
+                    { value: 'pagination', label: 'Pages', help: 'Numbered page buttons at the bottom.' },
+                    { value: 'infinite', label: 'Infinite scroll', help: 'More products load as the shopper scrolls.' }
+                  ]}
+                />
+              </Field>
+            ))}
+          </SettingsCard>
+
+          <SettingsCard title="Product carousel" description="How many product cards fit in a row at each screen size.">
+            <div className="grid gap-6 md:grid-cols-3">
+              <CountStepper label="Desktop" help="1024 px and wider — usually 4 to 6." value={form.carouselDesktop} onChange={(v) => put('carouselDesktop', v)} max={8} />
+              <CountStepper label="Tablet" help="768 to 1023 px — usually 2 to 4." value={form.carouselTablet} onChange={(v) => put('carouselTablet', v)} max={5} />
+              <CountStepper label="Mobile" help="Under 768 px — usually 1 or 2." value={form.carouselMobile} onChange={(v) => put('carouselMobile', v)} max={4} />
+            </div>
+          </SettingsCard>
+
+          <SettingsCard title="Product page notes" description="Shown under Add to cart on every product — delivery, returns and so on. Write them in Bangla.">
+            {form.productNotes.length ? (
+              <ol className="space-y-2">
+                {form.productNotes.map((note, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-center text-[13px] tabular-nums text-slate-500">{i + 1}</span>
+                    <input value={note} onChange={(e) => setNote(i, e.target.value)} placeholder="Note in Bangla…" aria-label={`Note ${i + 1}`} className="input-ui" />
+                    <button
+                      type="button"
+                      onClick={() => put('productNotes', form.productNotes.filter((_, j) => j !== i))}
+                      className="btn-icon btn-icon-sm btn-icon-danger shrink-0"
+                      aria-label={`Remove note ${i + 1}`}
+                      title="Remove"
+                    >
+                      <MdDelete size={17} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-[13px] text-slate-500">No notes — nothing is shown under Add to cart.</p>
+            )}
+            <button type="button" onClick={() => put('productNotes', [...form.productNotes, ''])} className="btn-ghost">
+              <MdAdd size={17} aria-hidden /> Add note
+            </button>
+          </SettingsCard>
+        </div>
+      )}
+
+      {/* ── Branch page ─────────────────────────────────────────────────── */}
+      {tab === 'branch' && (
+        <SettingsCard title="Branch listing" description="How branch cards are laid out on the storefront's Branches page.">
+          <CountStepper label="Cards per row" help="On desktop." value={form.branchColumns} onChange={(v) => put('branchColumns', v)} max={4} />
           <div>
-            <p className="text-xs text-gray-400 mb-3 font-medium uppercase tracking-wider">Preview</p>
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: `repeat(${form.branchColumns}, minmax(0, 1fr))` }}
-            >
+            <p className="mb-2 text-[13px] font-medium text-slate-800">Preview</p>
+            <div className="grid gap-2 rounded-lg bg-slate-50 p-3" style={{ gridTemplateColumns: `repeat(${form.branchColumns}, minmax(0, 1fr))` }} aria-hidden>
               {Array.from({ length: form.branchColumns * 2 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-16 bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-400"
-                >
+                <div key={i} className="flex h-14 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-500">
                   Branch {i + 1}
                 </div>
               ))}
             </div>
           </div>
-        </Card>
+        </SettingsCard>
       )}
 
-      {/* ── INVOICE TAB ──────────────────────────────────────────────────── */}
-      {isInvoice && (
+      {/* ── Invoice ─────────────────────────────────────────────────────── */}
+      {tab === 'invoice' && (
         <div className="space-y-6">
-          <Card title="Print Mode" subtitle="Controls how invoices look when printed from the order detail page">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
+          <SettingsCard title="Print mode" description="How invoices print from an order page.">
+            <ChoiceCards
+              label="Print mode"
+              value={form.invoicePrintMode}
+              onChange={(v) => put('invoicePrintMode', v)}
+              options={[
                 {
-                  key: 'full',
-                  title: 'Full Page',
-                  desc: 'The professional header and QR branch footer are printed on every page with the invoice content. Use with blank paper.',
-                  icon: '📄'
+                  value: 'full',
+                  label: 'Full page',
+                  help: 'The header and the QR branch footer print on every page with the invoice. Use blank paper.'
                 },
                 {
-                  key: 'letterhead',
-                  title: 'Letterhead',
-                  desc: 'Prints only the invoice content. Header and footer are hidden. Use this when you already have pre-printed letterhead paper.',
-                  icon: '📋'
+                  value: 'letterhead',
+                  label: 'Letterhead',
+                  help: 'Prints only the invoice content, for paper that already has the header and footer printed on it.'
                 }
-              ].map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, invoicePrintMode: opt.key }))}
-                  className={`p-5 rounded-md border-2 text-left transition-all ${
-                    form.invoicePrintMode === opt.key
-                      ? 'border-[var(--brand)] bg-[var(--brand-soft)] shadow-sm'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-xl">{opt.icon}</span>
-                    <p
-                      className={`font-semibold text-sm ${form.invoicePrintMode === opt.key ? 'text-[var(--brand-strong)]' : 'text-gray-800'}`}
-                    >
-                      {opt.title}
-                    </p>
-                    {form.invoicePrintMode === opt.key && (
-                      <span className="ml-auto rounded-md bg-[var(--brand-soft)] px-2 py-0.5 text-xs font-bold text-[var(--brand-strong)]">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 leading-relaxed">{opt.desc}</p>
-                </button>
-              ))}
-            </div>
-          </Card>
+              ]}
+            />
+          </SettingsCard>
 
-          <Card title="Letterhead Preview" subtitle="Preview and print a blank letterhead to create pre-printed paper">
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Open the letterhead preview to see how your header and footer will look. Print it on blank paper to
-                create your letterhead stock, then set Print Mode to <strong>Letterhead</strong> above.
-              </p>
-              <div className="p-4 bg-gray-50 rounded-md border border-gray-100">
-                <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">
-                  The letterhead includes:
-                </p>
-                <ul className="text-xs text-gray-500 space-y-1">
-                  <li>✦ Your logo and company name</li>
-                  <li>✦ Address, phone and email</li>
-                  <li>✦ QR code for live branch locations and directions</li>
-                  <li>✦ Your brand colour accent lines</li>
-                </ul>
-              </div>
-              <button
-                type="button"
-                onClick={() => window.open('/invoice/letterhead', '_blank')}
-                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition w-fit"
-              >
-                <FiExternalLink size={14} />
-                Open Letterhead Preview
+          <SettingsCard
+            title="Letterhead"
+            description="Print a blank letterhead to make pre-printed paper, then choose Letterhead above."
+            action={
+              <button type="button" onClick={() => window.open('/invoice/letterhead', '_blank')} className="btn-ghost btn-sm">
+                <MdOpenInNew size={16} aria-hidden /> Open preview
               </button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ── PAGES TAB ────────────────────────────────────────────────────── */}
-      {isPages && (
-        <div className="space-y-6">
-          {PAGE_CARDS.filter((card) => !page || card.key === page).map(({ key, label, hint }) => (
-            <Card key={key} title={label} subtitle={hint}>
-              <PageContentEditor value={form[key]} onChange={(html) => setForm((p) => ({ ...p, [key]: html }))} />
-            </Card>
-          ))}
-        </div>
-      )}
-      {/* ── MAINTENANCE TAB ──────────────────────────────────────────────── */}
-      {isMaintenance && (
-        <div className="space-y-6">
-          {/* Toggle card */}
-          <section className="bg-white border border-gray-100 rounded-md p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <h2 className="font-semibold text-base text-gray-800 flex items-center gap-2">
-                  <IoConstructOutline size={17} className="text-[var(--brand)]" />
-                  Maintenance Mode
-                </h2>
-                <p className="text-xs text-gray-400 mt-1">
-                  When enabled, the storefront is replaced with the maintenance page for all non-admin visitors.
-                  Logged-in admin accounts can still browse normally.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, maintenanceMode: !p.maintenanceMode }))}
-                className={`relative shrink-0 w-14 h-7 rounded-md transition-colors focus:outline-none ${
-                  form.maintenanceMode ? 'bg-red-500' : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-md shadow transition-transform ${
-                    form.maintenanceMode ? 'translate-x-7' : ''
-                  }`}
-                />
-              </button>
-            </div>
-            {form.maintenanceMode && (
-              <div className="mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-md px-4 py-3">
-                <span className="text-red-500 text-lg">⚠</span>
-                <p className="text-sm text-red-700 font-medium">
-                  Maintenance mode is <strong>ON</strong> — the storefront is hidden from regular visitors.
-                </p>
-              </div>
-            )}
-          </section>
-
-          {/* Page content */}
-          <Card title="Page Content" subtitle="What visitors see on the maintenance page">
-            <Field label="Heading">
-              <Input
-                name="maintenanceHeading"
-                value={form.maintenanceHeading}
-                onChange={handleChange}
-                placeholder="We'll be back soon!"
-              />
-            </Field>
-            <Field label="Subheading">
-              <Input
-                name="maintenanceSubheading"
-                value={form.maintenanceSubheading}
-                onChange={handleChange}
-                placeholder="Our site is currently undergoing scheduled maintenance."
-              />
-            </Field>
-            <Field
-              label="Additional Message"
-              hint="Optional — shown in a box below the subheading. Use this for extra details."
-            >
-              <textarea
-                name="maintenanceMessage"
-                value={form.maintenanceMessage}
-                onChange={handleChange}
-                rows={3}
-                placeholder="e.g. We'll be back in a few hours. Thank you for your patience!"
-                className="border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400 resize-none"
-              />
-            </Field>
-          </Card>
-
-          {/* Countdown timer */}
-          <Card
-            title="Countdown Timer"
-            subtitle="Optional — shows a live countdown on the maintenance page until the site comes back online"
+            }
           >
-            <Field
-              label="Expected Back Online Time"
-              hint="Leave blank to hide the timer. Visitors see a live countdown to this time."
-            >
-              <Input
-                name="maintenanceEndTime"
-                value={form.maintenanceEndTime}
-                onChange={handleChange}
-                type="datetime-local"
-              />
-            </Field>
-            {form.maintenanceEndTime && (
-              <p className="text-xs text-gray-400">
-                Timer will show until:{' '}
-                <strong className="text-gray-600">{fDateTime(form.maintenanceEndTime)}</strong>
-              </p>
-            )}
-          </Card>
+            <ul className="grid gap-2 text-[13px] text-slate-700 sm:grid-cols-2">
+              {['Logo and company name', 'Address, phone and email', 'QR code to branch locations and directions', 'Brand colour accent lines'].map((line) => (
+                <li key={line} className="flex items-start gap-2">
+                  <MdCheck size={16} className="mt-0.5 shrink-0 text-slate-400" aria-hidden />
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </SettingsCard>
+        </div>
+      )}
 
-          {/* Live preview */}
-          <Card title="Preview" subtitle="How the maintenance page will look to visitors">
-            <div className="rounded-md border border-gray-200 bg-gray-50 flex flex-col items-center justify-center py-12 px-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-md bg-[var(--brand-soft)] flex items-center justify-center text-3xl">🔧</div>
-              <h3 className="text-xl font-bold text-gray-900">{form.maintenanceHeading || "We'll be back soon!"}</h3>
-              <p className="text-sm text-gray-500">
-                {form.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.'}
-              </p>
+      {/* ── Additional pages ────────────────────────────────────────────── */}
+      {tab === 'pages' &&
+        PAGE_CARDS.filter((card) => !page || card.key === page).map(({ key, label, path }) => (
+          <SettingsCard
+            key={key}
+            title={label}
+            description={`Shown on ${path}`}
+            action={
+              <a href={path} target="_blank" rel="noreferrer" className="btn-ghost btn-sm" aria-label={`Open ${label} on the storefront (new tab)`}>
+                <MdOpenInNew size={16} aria-hidden /> View page
+              </a>
+            }
+          >
+            <PageContentEditor value={form[key]} onChange={(html) => put(key, html)} />
+          </SettingsCard>
+        ))}
+
+      {/* ── Maintenance ─────────────────────────────────────────────────── */}
+      {tab === 'maintenance' && (
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="min-w-0 space-y-6">
+            <SettingsCard title="Maintenance mode">
+              <Toggle
+                label="Take the storefront offline"
+                help="Visitors see the maintenance page instead. Signed-in admin accounts can still browse normally."
+                checked={form.maintenanceMode}
+                onChange={(on) => put('maintenanceMode', on)}
+              />
+              {form.maintenanceMode && (
+                <Callout tone="danger" title="The storefront is hidden from shoppers">
+                  {hasUnsavedChanges ? 'Once you save, only admin accounts can browse the site.' : 'Only admin accounts can browse the site until this is turned off.'}
+                </Callout>
+              )}
+            </SettingsCard>
+
+            <SettingsCard title="Maintenance page" description="What visitors see while the site is offline.">
+              <Field label="Heading">
+                <input name="maintenanceHeading" value={form.maintenanceHeading} onChange={handleChange} placeholder="We'll be back soon!" className="input-ui" />
+              </Field>
+              <Field label="Subheading">
+                <input
+                  name="maintenanceSubheading"
+                  value={form.maintenanceSubheading}
+                  onChange={handleChange}
+                  placeholder="Our site is currently undergoing scheduled maintenance."
+                  className="input-ui"
+                />
+              </Field>
+              <Field label="Extra message" optional help="Shown in a box under the subheading.">
+                <textarea
+                  name="maintenanceMessage"
+                  value={form.maintenanceMessage}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="e.g. We'll be back in a few hours. Thank you for your patience!"
+                  className="input-ui min-h-[80px] resize-y py-2"
+                />
+              </Field>
+              <Field
+                label="Back online at"
+                optional
+                help={form.maintenanceEndTime ? `A countdown to ${fDateTime(form.maintenanceEndTime)} is shown.` : 'Leave empty to hide the countdown.'}
+              >
+                <input name="maintenanceEndTime" value={form.maintenanceEndTime} onChange={handleChange} type="datetime-local" className="input-ui" />
+              </Field>
+            </SettingsCard>
+          </div>
+
+          <Panel title="Preview" description="The maintenance page, as visitors see it." className="xl:sticky xl:top-0">
+            <div className="flex flex-col items-center justify-center space-y-4 rounded-lg bg-slate-50 px-6 py-10 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
+                <MdBuild size={26} aria-hidden />
+              </span>
+              <h3 className="text-xl font-semibold text-slate-900">{form.maintenanceHeading || "We'll be back soon!"}</h3>
+              <p className="text-sm text-slate-500">{form.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.'}</p>
               {form.maintenanceMessage && (
-                <div className="bg-white border border-gray-200 rounded-md px-4 py-3 text-xs text-gray-600 max-w-xs text-left shadow-sm">
-                  {form.maintenanceMessage}
-                </div>
+                <div className="max-w-xs rounded-md border border-slate-200 bg-white px-4 py-3 text-left text-xs text-slate-600">{form.maintenanceMessage}</div>
               )}
               {form.maintenanceEndTime && (
-                <div className="flex gap-3 mt-2">
-                  {['00', '00', '00', '00'].map((v, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1">
-                      <div className="w-12 h-12 rounded-md bg-[var(--brand)] flex items-center justify-center text-white font-bold text-lg">
-                        {v}
-                      </div>
-                      <span className="text-xs text-gray-400">{['Days', 'Hrs', 'Min', 'Sec'][i]}</span>
+                <div className="mt-2 flex gap-3" aria-hidden>
+                  {['Days', 'Hrs', 'Min', 'Sec'].map((unit) => (
+                    <div key={unit} className="flex flex-col items-center gap-1">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-900 text-lg font-semibold text-white">00</div>
+                      <span className="text-xs text-slate-500">{unit}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          </Card>
+          </Panel>
         </div>
       )}
 
-      {isImages && (
+      {/* ── Image server ────────────────────────────────────────────────── */}
+      {tab === 'images' && (
         <div className="space-y-6">
-          <Card
-            title="Image Server Connection"
-            subtitle="All uploaded product, category, campaign, banner, logo, and favicon images are stored here"
+          <SettingsCard
+            title="Connection"
+            description="Every uploaded image — products, categories, campaigns, banners, logo and favicon — is stored on the image server."
+            action={
+              form.imageServerUrl && imageKeyConfigured ? (
+                <Badge tone="success" dot>
+                  Connected
+                </Badge>
+              ) : (
+                <Badge tone="warning" dot>
+                  Not set up
+                </Badge>
+              )
+            }
           >
-            <Field label="Image server URL" hint="For example https://img.example.com or http://localhost:3000">
-              <Input
-                name="imageServerUrl"
-                value={form.imageServerUrl}
-                onChange={handleChange}
-                placeholder="https://img.example.com"
-                type="url"
-              />
+            <Field label="Server address" help="For example https://img.example.com or http://localhost:3000">
+              <input name="imageServerUrl" value={form.imageServerUrl} onChange={handleChange} placeholder="https://img.example.com" type="url" className="input-ui ops-code" spellCheck={false} />
             </Field>
             <Field
               label="API key"
-              hint={
+              help={
                 imageKeyConfigured
-                  ? 'A key is configured. Leave empty to keep it, or enter a new key to replace it.'
-                  : 'Create a key in the image-server dashboard. It stays on the app server and is never exposed publicly.'
+                  ? 'A key is saved. Leave this empty to keep it, or enter a new one to replace it.'
+                  : 'Create a key in the image-server dashboard. It stays on the app server and is never shown publicly.'
               }
             >
-              <Input
+              <input
                 name="imageServerApiKey"
                 value={form.imageServerApiKey}
                 onChange={handleChange}
-                placeholder={imageKeyConfigured ? 'Configured — enter only to replace' : 'imgkey_...'}
+                placeholder={imageKeyConfigured ? 'Saved — enter only to replace' : 'imgkey_…'}
                 type="password"
+                autoComplete="new-password"
+                className="input-ui ops-code"
               />
             </Field>
-            <div
-              className={`rounded-md border px-4 py-3 text-sm ${
-                form.imageServerUrl && imageKeyConfigured
-                  ? 'border-green-200 bg-green-50 text-green-700'
-                  : 'border-amber-200 bg-amber-50 text-amber-700'
-              }`}
-            >
-              {form.imageServerUrl && imageKeyConfigured
-                ? 'Configured. New uploads use the image server exclusively.'
-                : 'Save both values before uploading images.'}
-            </div>
-          </Card>
-          <Card
-            title="Image processing"
-            subtitle="Compression, conversion, dimensions, and limits are managed by the image server"
-          >
-            {form.imageServerUrl ? (
-              <a
-                href={`${form.imageServerUrl.replace(/\/+$/, '')}/dashboard`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
-              >
-                Open image-server dashboard <FiExternalLink size={14} />
-              </a>
-            ) : (
-              <p className="text-sm text-gray-500">Add the image-server URL to open its dashboard.</p>
+            {!(form.imageServerUrl && imageKeyConfigured) && (
+              <Callout tone="warning">Save both the address and the key before uploading any images.</Callout>
             )}
-          </Card>
+          </SettingsCard>
+          <SettingsCard
+            title="Image processing"
+            description="Compression, conversion, sizes and limits are managed on the image server itself."
+            action={
+              form.imageServerUrl ? (
+                <a href={`${form.imageServerUrl.replace(/\/+$/, '')}/dashboard`} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+                  <MdOpenInNew size={16} aria-hidden /> Open dashboard
+                </a>
+              ) : null
+            }
+          >
+            {!form.imageServerUrl && <p className="text-[13px] text-slate-500">Add the server address to open its dashboard.</p>}
+          </SettingsCard>
         </div>
       )}
 
-      {/* Bottom save bar (not on homepage tab — homepage uses its own mutations) */}
+      {/* Unsaved changes stay in view however far down the page you are. */}
+      {hasUnsavedChanges && (
+        <div className="sticky bottom-3 z-20" role="region" aria-label="Unsaved changes">
+          <div className="card-ui flex flex-wrap items-center justify-between gap-3 px-4 py-3 shadow-lg">
+            <p className="text-[13px] font-medium text-slate-900">You have unsaved changes</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={discard} disabled={saving} className="btn-ghost">
+                Discard
+              </button>
+              <button type="button" onClick={handleSave} disabled={saving} className="btn-brand">
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

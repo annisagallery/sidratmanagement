@@ -7,7 +7,7 @@
  */
 export default function GlobalTable({ children, className = '' }) {
   return (
-    <div className="admin-global-table overflow-x-auto">
+    <div className="admin-global-table admin-sidebar-scroll overflow-x-auto">
       <table className={`w-full border-collapse text-left text-[13px] ${className}`}>{children}</table>
     </div>
   );

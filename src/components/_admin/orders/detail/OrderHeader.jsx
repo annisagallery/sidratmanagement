@@ -3,16 +3,17 @@
 /**
  * Identity and progress.
  *
- * The title row carries the three badges an order is judged by — fulfilment,
- * payment, courier — and the tracker below shows how far along the flow it is,
- * so "where is this order" is answered before anything is read.
+ * One quiet row says which order this is and how it stands (fulfilment,
+ * payment, courier); the menus on the right hold everything that is not the
+ * next step. A slim tracker underneath shows how far along the flow it is.
  */
 
 import { format } from 'date-fns';
-import { FiCheck, FiChevronLeft, FiChevronRight, FiClock, FiPrinter, FiTruck, FiX } from 'react-icons/fi';
+import { FiCheck, FiChevronLeft, FiChevronRight, FiMoreHorizontal, FiPrinter, FiX } from 'react-icons/fi';
 
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
 import { StatusBadge } from 'src/components/_admin/shared/StatusBadge';
-import { CopyButton, PROVIDER_LABEL, PaymentBadge, money } from './parts';
+import { CopyButton, PaymentBadge, money } from './parts';
 import { ShipmentStatusPill } from './ShipmentsCard';
 import { channelLabel } from './SidePanels';
 
@@ -29,78 +30,47 @@ const STEPS = [
 
 const stepIndex = (status) => STEPS.findIndex((step) => step.match.includes(status));
 
-function Tracker({ order, packing, activeShipment }) {
+function Tracker({ order }) {
   const cancelled = ['cancelled', 'canceled'].includes(order.status);
   const returned = ['returned', 'return'].includes(order.status);
-  // A returned parcel got as far as shipping; a cancelled order stops wherever
-  // it was, which the order row does not record, so it is drawn on its own.
+  if (cancelled) return null;
+
+  // A returned parcel got as far as shipping.
   const current = returned ? stepIndex('shipped') : stepIndex(order.status);
   const steps = returned ? [...STEPS.slice(0, 5), { label: 'Returned' }] : STEPS;
-
-  if (cancelled) {
-    return (
-      <div className="flex items-center gap-3 px-5 py-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-          <FiX size={14} />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-rose-700">Order cancelled</p>
-          {order.updatedAt ? (
-            <p className="text-xs text-slate-500">{format(new Date(order.updatedAt), 'dd MMM yyyy, hh:mm a')}</p>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  const detail = (index) => {
-    if (index === 0 && order.createdAt) return format(new Date(order.createdAt), 'dd MMM, hh:mm a');
-    if (index === 3 && packing?.total && current < 3) return `${packing.verified || 0}/${packing.total} scanned`;
-    if (index === 4 && activeShipment) return PROVIDER_LABEL[activeShipment.provider] || activeShipment.provider;
-    return null;
-  };
+  const last = steps.length - 1;
 
   return (
-    <ol className="flex min-w-[640px] items-start px-5 py-4">
+    <ol className="flex min-w-[560px] items-center gap-2 px-5 py-3" aria-label="Order progress">
       {steps.map((step, index) => {
-        const done = index < current || (index === current && (returned || index === steps.length - 1));
+        const done = index < current || (index === current && (returned || index === last));
         const active = index === current && !done;
-        const failed = returned && index === steps.length - 1;
-        const reached = index <= current || failed;
-        const note = detail(index);
-
+        const failed = returned && index === last;
         return (
-          <li key={step.label} className="relative flex flex-1 flex-col items-center text-center">
-            {index > 0 ? (
-              <span
-                className={`absolute top-3.5 h-0.5 -translate-y-1/2 rounded-full ${
-                  failed ? 'bg-rose-200' : reached ? 'bg-emerald-500' : 'bg-slate-200'
-                }`}
-                style={{ left: 'calc(-50% + 20px)', right: 'calc(50% + 20px)' }}
-                aria-hidden="true"
-              />
-            ) : null}
+          <li key={step.label} className="flex flex-1 items-center gap-2" aria-current={active ? 'step' : undefined}>
             <span
-              className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold ${
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                 failed
-                  ? 'bg-rose-100 text-rose-600 ring-4 ring-rose-50'
+                  ? 'bg-rose-600 text-white'
                   : done
-                    ? 'bg-emerald-500 text-white'
+                    ? 'bg-slate-900 text-white'
                     : active
-                      ? 'bg-[var(--brand)] text-white ring-4 ring-[var(--brand-soft)]'
-                      : 'border-2 border-slate-200 bg-white text-slate-500'
+                      ? 'border-2 border-slate-900 bg-white'
+                      : 'border-2 border-slate-200 bg-white'
               }`}
+              aria-hidden
             >
-              {failed ? <FiX size={13} /> : done ? <FiCheck size={13} /> : index + 1}
+              {failed ? <FiX size={11} /> : done ? <FiCheck size={11} /> : null}
             </span>
             <span
-              className={`mt-2 text-xs font-semibold ${
-                failed ? 'text-rose-600' : active ? 'text-slate-900' : reached ? 'text-slate-700' : 'text-slate-500'
+              className={`whitespace-nowrap text-xs ${
+                failed ? 'font-semibold text-rose-700' : active ? 'font-semibold text-slate-900' : done ? 'text-slate-700' : 'text-slate-400'
               }`}
             >
               {step.label}
+              {done && !failed ? <span className="sr-only"> (done)</span> : null}
             </span>
-            {note ? <span className="mt-0.5 text-[11px] text-slate-500">{note}</span> : null}
+            {index < last ? <span className={`h-px flex-1 ${index < current ? 'bg-slate-900' : 'bg-slate-200'}`} aria-hidden /> : null}
           </li>
         );
       })}
@@ -108,87 +78,47 @@ function Tracker({ order, packing, activeShipment }) {
   );
 }
 
-export default function OrderHeader({
-  order,
-  orderStatuses,
-  activeShipment,
-  paid,
-  due,
-  packing,
-  onBack,
-  onPrev,
-  onNext,
-  onPrint,
-  onPrintLabel,
-  onHistory
-}) {
+export default function OrderHeader({ order, orderStatuses, activeShipment, paid, due, onPrev, onNext, printItems, moreItems }) {
   const itemCount = (order.items || []).length;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-      <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+    <header className="card-ui">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-5 py-4">
         <div className="flex min-w-0 items-start gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to orders"
-            title="Back to orders"
-            className="btn-icon mt-0.5 shrink-0"
-          >
-            <FiChevronLeft size={18} />
-          </button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                <span className="ops-code">#{order.orderNo}</span>
-              </h1>
+              <h1 className="ops-code text-xl font-semibold tracking-tight text-slate-900">#{order.orderNo}</h1>
               <CopyButton value={order.orderNo} label="Copy order number" />
               <StatusBadge status={order.status} statuses={orderStatuses} />
               <PaymentBadge paid={paid} due={due} />
               {activeShipment ? <ShipmentStatusPill status={activeShipment.status} /> : null}
             </div>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-slate-500">
-              <span>{order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a') : '—'}</span>
-              <span className="text-slate-300">•</span>
-              <span>{channelLabel(order)}</span>
-              {order.createdBy?.name ? (
-                <>
-                  <span className="text-slate-300">•</span>
-                  <span>by {order.createdBy.name}</span>
-                </>
-              ) : null}
-              <span className="text-slate-300">•</span>
-              <span>
-                {itemCount} item{itemCount === 1 ? '' : 's'}
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="font-semibold text-slate-800">{money(order.total)}</span>
+            <p className="mt-1 text-[13px] text-slate-500">
+              {order.createdAt ? format(new Date(order.createdAt), 'd MMM yyyy, h:mm a') : '—'}
+              {' · '}
+              {channelLabel(order)}
+              {order.createdBy?.name ? ` · by ${order.createdBy.name}` : ''}
+              {' · '}
+              {itemCount} item{itemCount === 1 ? '' : 's'}
+              {' · '}
+              <span className="font-semibold tabular-nums text-slate-900">{money(order.total)}</span>
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onPrint} className="btn-ghost h-9 !text-xs">
-            <FiPrinter size={14} /> Invoice
-          </button>
-          {onPrintLabel && (
-            <button type="button" onClick={onPrintLabel} className="btn-ghost h-9 !text-xs">
-              <FiTruck size={14} /> Label
-            </button>
-          )}
-          <button type="button" onClick={onHistory} className="btn-ghost h-9 !text-xs">
-            <FiClock size={14} /> History
-          </button>
-          <span className="ml-1 inline-flex overflow-hidden rounded-md border border-slate-200">
+        <div className="flex items-center gap-2">
+          <ActionMenu label="Print" items={printItems} icon={FiPrinter} text="Print" />
+          <ActionMenu label="More order actions" items={moreItems} icon={FiMoreHorizontal} text="More" />
+          <span className="inline-flex overflow-hidden rounded-md border border-slate-200" role="group" aria-label="Browse orders">
             <button
               type="button"
               onClick={onPrev}
               disabled={!order.previousOrder}
               title="Previous order (←)"
               aria-label="Previous order"
-              className="flex h-9 w-9 items-center justify-center bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center bg-white text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
             >
-              <FiChevronLeft size={16} />
+              <FiChevronLeft size={16} aria-hidden />
             </button>
             <button
               type="button"
@@ -196,17 +126,17 @@ export default function OrderHeader({
               disabled={!order.nextOrder}
               title="Next order (→)"
               aria-label="Next order"
-              className="flex h-9 w-9 items-center justify-center border-l border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center border-l border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
             >
-              <FiChevronRight size={16} />
+              <FiChevronRight size={16} aria-hidden />
             </button>
           </span>
         </div>
       </div>
 
-      <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
-        <Tracker order={order} packing={packing} activeShipment={activeShipment} />
+      <div className="admin-sidebar-scroll overflow-x-auto border-t border-slate-100">
+        <Tracker order={order} />
       </div>
-    </div>
+    </header>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next-nprogress-bar';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import Link from 'next/link';
@@ -7,13 +8,14 @@ import { MdAdd, MdPeople, MdOpenInNew, MdAddCircle, MdRemoveCircle } from 'react
 import { alertWarning, promptText } from 'src/utils/swal';
 import CashModal from './_CashModal';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 
 const BDT = '৳';
 
 export default function CashList() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
@@ -21,7 +23,7 @@ export default function CashList() {
   const [showModal, setShowModal] = useState(false);
   const qc = useQueryClient();
 
-  const { data, isLoading, isFetching } = useQuery(
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(
     ['cash-user-list', page, activeSearch],
     () => getUserCashList(page, activeSearch),
     {
@@ -116,7 +118,7 @@ export default function CashList() {
       render: (u) => (
         <div className="flex items-center gap-3">
           <div
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-xs font-semibold"
             style={{ backgroundColor: 'var(--brand-soft)', color: 'var(--brand-strong)' }}
           >
             {u.name?.slice(0, 2)?.toUpperCase() || '?'}
@@ -128,7 +130,7 @@ export default function CashList() {
             >
               {u.name || '—'}
             </Link>
-            <p className="text-xs text-slate-400">{u.email}</p>
+            <p className="text-xs text-slate-500">{u.email}</p>
           </div>
         </div>
       )
@@ -147,7 +149,7 @@ export default function CashList() {
       label: 'Cashback Balance',
       align: 'right',
       render: (u) => (
-        <span className={`font-bold tabular-nums ${(u.cash || 0) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+        <span className={`font-semibold tabular-nums ${(u.cash || 0) > 0 ? 'text-emerald-700' : 'text-slate-500'}`}>
           {BDT}
           {(u.cash || 0).toLocaleString()}
         </span>
@@ -155,24 +157,14 @@ export default function CashList() {
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (u) => (
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => openModal(u)}
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition hover:bg-slate-50"
-            style={{ color: 'var(--brand-strong)', borderColor: 'var(--brand-ring)' }}
-          >
-            <MdAdd size={13} /> Give Cashback
+        <div className="flex items-center justify-end" onClick={stopRow}>
+          <button type="button" onClick={() => openModal(u)} className="btn-ghost btn-sm">
+            <MdAdd size={15} aria-hidden /> Adjust cashback
           </button>
-          <Link
-            href={`/users/${encodeURIComponent(u.phone)}`}
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            title="View Activity"
-          >
-            <MdOpenInNew size={15} />
-          </Link>
         </div>
       )
     }
@@ -200,13 +192,13 @@ export default function CashList() {
         }}
         searchPlaceholder="Search by name, phone, or email…"
         right={
-          <button onClick={() => openModal(null)} className="btn-brand">
-            <MdAdd size={18} /> Give Cashback
+          <button type="button" onClick={() => openModal(null)} className="btn-brand">
+            <MdAdd size={18} /> Give cashback
           </button>
         }
       />
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500">
         {isFetching && !isLoading ? 'Refreshing…' : `${total.toLocaleString()} user${total !== 1 ? 's' : ''}`}
         {activeSearch && (
           <span>
@@ -217,6 +209,10 @@ export default function CashList() {
       </p>
 
       <DataTable
+        onRowClick={(u) => router.push(`/users/${encodeURIComponent(u.phone)}`)}
+        rowLabel={(u) => `Open ${u.name}`}
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={users}
         selectionLabel="customers"

@@ -11,6 +11,41 @@
   letter-spacing: 0.02em;
 }
 
+/* ------------------------------------------------------------------------
+   Marketing design system — foundations
+
+   Colour roles
+   --brand         the site's primary colour, set at runtime from settings.
+                   Decorative only: active markers, chart marks, soft fills.
+                   A gold brand on white is ~2:1, so it never carries text or
+                   a control's only boundary.
+   --brand-strong  brand mixed toward ink — safe for text and icons on white.
+   --ink           primary actions, headings, selected states.
+
+   Spacing follows Tailwind's 4px scale: 1 2 3 4 5 6 8 10 12 16
+   (4 8 12 16 20 24 32 40 48 64 px). Radius: 6px controls, 8px surfaces.
+   ------------------------------------------------------------------------ */
+
+:root,
+.admin-root {
+  --brand: #c8a96e;
+  --brand-soft: color-mix(in srgb, var(--brand) 14%, white);
+  --brand-strong: color-mix(in srgb, var(--brand) 55%, #0f172a);
+  --brand-chart: color-mix(in srgb, var(--brand) 78%, #0f172a);
+  --brand-ring: color-mix(in srgb, var(--brand) 45%, transparent);
+  --ink: #0f172a;
+  --canvas: #f6f7f9;
+
+  /* react-toastify, aligned with the palette above */
+  --toastify-font-family: inherit;
+  --toastify-text-color-light: #0f172a;
+  --toastify-color-success: #059669;
+  --toastify-color-error: #e11d48;
+  --toastify-color-warning: #d97706;
+  --toastify-color-info: #0284c7;
+  --toastify-toast-min-height: 52px;
+}
+
 *,
 *::before,
 *::after {
@@ -24,12 +59,47 @@ html {
   width: 100%;
   height: 100%;
   -webkit-overflow-scrolling: touch;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   width: 100%;
   height: 100%;
-  background: #f8fafc;
+  background: var(--canvas);
+  color: #0f172a;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* One focus treatment for everything the keyboard can reach. Inputs get a
+   ring instead (below) because an outline fights their border. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible,
+[role='switch']:focus-visible,
+[role='tab']:focus-visible,
+tr[tabindex]:focus-visible,
+[tabindex='-1']:focus-visible {
+  /* !important: older screens put focus:outline-none on buttons, which would
+     otherwise hide where the keyboard is. */
+  outline: 2px solid var(--brand-strong) !important;
+  outline-offset: 2px;
+}
+[tabindex='-1']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Inside the admin shell the app scrolls in <main>, never the window. Scoped
+   with :has so print sheets and the scan station keep normal page scrolling. */
+body:has(#main) {
+  overflow: hidden;
+}
+
+/* Fieldsets default to min-width: min-content, so one long unwrapped line
+   (a template preview) would push the whole group wider than its card. */
+fieldset {
+  min-width: 0;
 }
 
 input[type='number']::-webkit-outer-spin-button,
@@ -42,17 +112,10 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
-/* SimpleBar custom track */
-.simplebar-scrollbar::before {
-  background-color: rgba(100, 100, 100, 0.48);
-}
-
-.simplebar-track.simplebar-vertical {
-  width: 10px;
-}
-
-.simplebar-track.simplebar-horizontal .simplebar-scrollbar {
-  height: 6px;
+/* Overlays are rendered inside pages that stack their children with
+   space-y-*; that sibling margin would push a fixed overlay down the screen. */
+.admin-root .fixed.inset-0 {
+  margin: 0 !important;
 }
 
 .admin-sidebar-scroll {
@@ -61,7 +124,8 @@ input[type='number'] {
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 .admin-sidebar-scroll::-webkit-scrollbar-track {
@@ -71,10 +135,6 @@ input[type='number'] {
 .admin-sidebar-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: #cbd5e1;
-}
-
-.unreset {
-  all: initial;
 }
 
 @media print {
@@ -94,6 +154,8 @@ input[type='number'] {
      clips everything past the first page, so a label sheet or a long report
      printed from inside the admin silently loses every page but the first.
      Unwind the shell to normal block flow for print. */
+  html,
+  body,
   .admin-root,
   .admin-root > div {
     display: block !important;
@@ -124,105 +186,145 @@ input[type='number'] {
 }
 
 @layer components {
-  .input-field {
-    @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800
-           transition placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2
-           focus:ring-blue-400;
+  /* ── Buttons ─────────────────────────────────────────────────────────────
+     brand   primary action — one per view
+     ghost   secondary action, bordered
+     quiet   tertiary action inside dense UI (rows, toolbars)
+     danger  destructive, always secondary in weight */
+  .btn-brand,
+  .btn-ghost,
+  .btn-quiet,
+  .btn-danger {
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm
+           font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
-
-  .product-form .input-field {
-    @apply min-h-11 border-slate-300 text-base text-slate-900 placeholder-slate-400 sm:text-sm;
-  }
-
-  .product-form .input-field:focus {
-    border-color: var(--brand);
-    --tw-ring-color: var(--brand-ring);
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* Admin design system — brand token + shared primitives              */
-/* --brand is set at runtime on the admin root from site primaryColor */
-/* ------------------------------------------------------------------ */
-.admin-root {
-  --brand: #c8a96e;
-  --brand-soft: color-mix(in srgb, var(--brand) 12%, white);
-  --brand-strong: color-mix(in srgb, var(--brand) 88%, black);
-  --brand-ring: color-mix(in srgb, var(--brand) 45%, transparent);
-}
-
-/* Full-screen overlays are often rendered after page content inside a
-   Tailwind space-y container. The sibling-spacing margin must never offset a
-   viewport overlay from inset-0. */
-.admin-root .fixed.inset-0 {
-  margin: 0 !important;
-}
-
-@layer components {
-  /* Buttons */
   .btn-brand {
-    @apply inline-flex h-9 items-center justify-center gap-2 rounded-md px-3.5 text-sm font-semibold
-           text-white transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed;
-    background-color: var(--brand);
+    @apply bg-slate-900 text-white shadow-sm hover:bg-slate-800 disabled:hover:bg-slate-900;
   }
   .btn-ghost {
-    @apply inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white
-           px-3.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50
-           disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900;
+  }
+  .btn-quiet {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+  .btn-danger {
+    @apply border border-rose-200 bg-white text-rose-700 shadow-sm hover:bg-rose-50;
+  }
+  .btn-sm {
+    @apply h-8 gap-1.5 px-3 text-[13px];
   }
   .btn-icon {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white
-           text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors
+           hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-icon-sm {
+    @apply h-8 w-8;
+  }
+  .btn-icon-danger {
+    @apply hover:bg-rose-50 hover:text-rose-700;
   }
 
-  /* Inputs */
-  .input-ui {
-    @apply h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800
-           transition placeholder-slate-400 focus:outline-none focus:ring-2;
+  /* ── Inputs ──────────────────────────────────────────────────────────────
+     16px on phones so iOS doesn't zoom on focus, 14px from sm up. */
+  .input-ui,
+  .select-ui {
+    @apply h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-sm
+           transition placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed
+           disabled:bg-slate-50 disabled:text-slate-500 sm:text-sm;
   }
-  .input-ui:focus {
-    --tw-ring-color: var(--brand-ring);
-    border-color: var(--brand);
+  .input-ui:focus,
+  .select-ui:focus {
+    border-color: var(--brand-strong);
+    box-shadow: 0 0 0 3px var(--brand-ring);
+  }
+  .input-ui[aria-invalid='true'] {
+    @apply border-rose-400;
+  }
+  textarea.input-ui {
+    @apply h-auto py-2 leading-relaxed;
   }
   .select-ui {
-    @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700
-           transition focus:outline-none focus:ring-2;
+    @apply w-auto appearance-none pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-repeat: no-repeat;
+    background-size: 1.1rem;
   }
-  .select-ui:focus {
-    --tw-ring-color: var(--brand-ring);
-    border-color: var(--brand);
+  select.input-ui {
+    @apply appearance-none pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-repeat: no-repeat;
+    background-size: 1.1rem;
+  }
+  .input-mono {
+    @apply font-mono text-[13px] sm:text-[13px];
   }
 
-  /* Surface */
+  /* ── Surfaces & text ────────────────────────────────────────────────── */
   .card-ui {
-    @apply rounded-md border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+    @apply rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-slate-500;
+  }
+  .help-text {
+    @apply text-[13px] leading-relaxed text-slate-500;
+  }
+  .skeleton {
+    @apply animate-pulse rounded bg-slate-200/70;
+  }
+  .code-chip {
+    @apply rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] text-slate-700;
   }
 
+  /* ── Tables ─────────────────────────────────────────────────────────── */
   .admin-global-table > table > thead {
     @apply border-b border-slate-200 bg-slate-50;
   }
   .admin-global-table > table > thead th {
-    @apply whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500;
+    @apply whitespace-nowrap px-4 py-2.5 text-xs font-semibold text-slate-600;
   }
   .admin-global-table > table > tbody {
     @apply divide-y divide-slate-100;
   }
   .admin-global-table > table > tbody > tr {
-    @apply transition-colors hover:bg-slate-50/80;
+    @apply transition-colors hover:bg-slate-50;
   }
   .admin-global-table > table > tbody > tr > td {
-    @apply px-3 py-2 text-[13px] text-slate-700;
+    @apply px-4 py-3 align-middle text-[13px] text-slate-700;
   }
 
-  /* Tab header menu (parent page nested-page nav) */
+  /* Second-level page tabs (PageTabs) — same look as the Tabs component. */
   .tab-link {
-    @apply -mb-px flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-4 py-2.5
-           text-sm font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-800;
+    @apply -mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-3 pb-3 pt-1
+           text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800;
   }
   .tab-link-active {
-    color: var(--brand-strong);
-    border-color: var(--brand);
+    @apply border-slate-900 font-semibold text-slate-900 hover:border-slate-900 hover:text-slate-900;
   }
+
+  /* Older forms (product editor) — kept as an alias of input-ui. */
+  .input-field {
+    @apply min-h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-sm
+           transition placeholder:text-slate-400 focus:outline-none sm:text-sm;
+  }
+  .input-field:focus {
+    border-color: var(--brand-strong);
+    box-shadow: 0 0 0 3px var(--brand-ring);
+  }
+  .product-form .input-field {
+    @apply min-h-10;
+  }
+}
+
+/* ── Toasts (react-toastify) ─────────────────────────────────────────────── */
+.Toastify__toast {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
 /* ── SweetAlert icons ──────────────────────────────────────────────────────

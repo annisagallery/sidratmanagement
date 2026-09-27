@@ -23,6 +23,7 @@ export {
   errorAlert,
   errorText,
   fieldClass,
+  selectClass,
   money,
   normalizeList,
   oid,
@@ -37,16 +38,17 @@ import { Pill, oid } from 'src/components/_admin/ui/primitives';
  * The order screen's surface: a white card with a plain title, the way store
  * admins lay out an order, rather than the grey banded ops section.
  */
-export function Card({ title, icon: Icon, badge, actions, footer, children, className = '' }) {
+// `icon` is accepted for older callers and not drawn: titles alone read cleaner.
+// eslint-disable-next-line no-unused-vars
+export function Card({ title, icon, badge, actions, footer, children, className = '' }) {
   return (
     <section
-      className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
+      className={`overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ${className}`}
     >
       {title ? (
-        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 pb-3 pt-4">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-3 pt-5">
           <div className="flex min-w-0 items-center gap-2">
-            {Icon ? <Icon size={16} className="shrink-0 text-slate-400" /> : null}
-            <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+            <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
             {badge}
           </div>
           {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -54,7 +56,7 @@ export function Card({ title, icon: Icon, badge, actions, footer, children, clas
       ) : null}
       {children}
       {footer ? (
-        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
           {footer}
         </footer>
       ) : null}

@@ -8,7 +8,7 @@ import { alertError, alertInfo, confirmAction } from 'src/utils/swal';
 import { FiExternalLink, FiPackage } from 'react-icons/fi';
 import { MdInbox, MdInventory } from 'react-icons/md';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
-import { StatusBadge, StatusSelect } from 'src/components/_admin/shared/StatusBadge';
+import { StatusBadge, StatusSelect, TagChips } from 'src/components/_admin/shared/StatusBadge';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable from 'src/components/_admin/ui/DataTable';
@@ -16,26 +16,6 @@ import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
 
-function TagChips({ tags = [] }) {
-  if (!tags?.length) return null;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {tags.map((tag) => (
-        <span
-          key={tag.id || tag.slug}
-          className="inline-block rounded-md px-1.5 text-[10px] font-medium leading-5"
-          style={{
-            backgroundColor: tag.color ? `${tag.color}22` : '#f3f4f6',
-            color: tag.color || '#6b7280',
-            border: `1px solid ${tag.color ? `${tag.color}55` : '#e5e7eb'}`
-          }}
-        >
-          {tag.name}
-        </span>
-      ))}
-    </div>
-  );
-}
 
 const fmtDate = (d) => (d ? fDate(d) : '—');
 
@@ -62,7 +42,7 @@ export default function OrderItemsList() {
     ...(status && { status })
   }).toString();
 
-  const { data, isLoading, isFetching } = useQuery(['admin-order-items', params], () => api.getOrderItemsByAdmin(params), {
+  const { data, isLoading, isFetching, isError, error: loadError, refetch } = useQuery(['admin-order-items', params], () => api.getOrderItemsByAdmin(params), {
     keepPreviousData: true,
     onError: (error) => alertError(error, { title: "Couldn't load order items" })
   });
@@ -129,15 +109,15 @@ export default function OrderItemsList() {
               {image ? (
                 <Image src={image} alt="" fill sizes="40px" className="object-cover" />
               ) : (
-                <span className="flex h-full w-full items-center justify-center text-slate-300">
+                <span className="flex h-full w-full items-center justify-center text-slate-400">
                   <FiPackage size={15} />
                 </span>
               )}
             </div>
             <div className="max-w-[200px]">
               <p className="truncate text-[13px] font-medium text-slate-800">{item.product?.name || 'Unknown product'}</p>
-              {attrs && <p className="truncate text-[11px] text-slate-400">{attrs}</p>}
-              {item.customizeDetails && <p className="truncate text-[11px]" style={{ color: 'var(--brand-strong)' }}>{item.customizeDetails}</p>}
+              {attrs && <p className="truncate text-xs text-slate-500">{attrs}</p>}
+              {item.customizeDetails && <p className="truncate text-xs" style={{ color: 'var(--brand-strong)' }}>{item.customizeDetails}</p>}
             </div>
           </div>
         );
@@ -153,11 +133,11 @@ export default function OrderItemsList() {
         const bound = item.packingBarcode || item.assignedUnit?.barcode;
         const inProgress = item.productionUnits?.[0];
         const code = bound || inProgress?.barcode;
-        if (!code) return <span className="text-xs text-slate-300">—</span>;
+        if (!code) return <span className="text-xs text-slate-400">—</span>;
         return (
           <span
             title={bound ? 'Piece bound to this item' : `Being made — unit is ${inProgress?.status}`}
-            className={`font-mono text-xs font-semibold tracking-wider ${bound ? 'text-slate-600' : 'text-slate-400'}`}
+            className={`font-mono text-xs font-semibold tracking-wider ${bound ? 'text-slate-600' : 'text-slate-500'}`}
           >
             {code}
           </span>
@@ -192,7 +172,7 @@ export default function OrderItemsList() {
         return (
           <>
             <p className="max-w-[130px] truncate text-[13px] text-slate-700">{addr.name || '—'}</p>
-            <p className="text-[11px] text-slate-400">{addr.phone || ''}</p>
+            <p className="text-xs text-slate-500">{addr.phone || ''}</p>
           </>
         );
       }
@@ -205,7 +185,7 @@ export default function OrderItemsList() {
       render: (item) => (
         <>
           <span className="font-semibold text-slate-800">৳{item.price}</span>
-          {item.customizePrice > 0 && <p className="text-[10px]" style={{ color: 'var(--brand-strong)' }}>+৳{item.customizePrice} custom</p>}
+          {item.customizePrice > 0 && <p className="text-xs" style={{ color: 'var(--brand-strong)' }}>+৳{item.customizePrice} custom</p>}
         </>
       )
     },
@@ -214,7 +194,7 @@ export default function OrderItemsList() {
       label: 'Delivery',
       sortable: true,
       render: (item) => (
-        <span className={`text-xs font-medium ${item.order?.estimatedDelivery ? 'text-slate-800' : 'text-slate-400'}`}>
+        <span className={`text-xs font-medium ${item.order?.estimatedDelivery ? 'text-slate-800' : 'text-slate-500'}`}>
           {fmtDate(item.order?.estimatedDelivery)}
         </span>
       )
@@ -224,7 +204,7 @@ export default function OrderItemsList() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Order Items" subtitle={`${total} item${total !== 1 ? 's' : ''} · sorted by delivery date`} />
 
       <ListToolbar
@@ -251,13 +231,16 @@ export default function OrderItemsList() {
       </ListToolbar>
 
       <DataTable
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={items}
         sort={sort}
         selectionLabel="items"
         exportFileName="order-items-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
+        isLoading={isLoading}
+        isFetching={isFetching}
         empty={<EmptyState title="No order items found" icon={MdInbox} />}
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="items" />}
       />

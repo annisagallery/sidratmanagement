@@ -22,7 +22,7 @@ export default function AttributeInventoryLimitsPage() {
           <MdInfoOutline size={23} />
         </span>
 
-        <h1 className="mt-4 text-xl font-bold text-slate-900">Presale limits are now calculated</h1>
+        <h1 className="mt-4 text-xl font-semibold text-slate-900">Presale limits are now calculated</h1>
 
         <p className="mt-3 text-sm leading-7 text-slate-600">
           Presale still works the same way for customers: a variation flagged for presale can be sold beyond the

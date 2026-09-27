@@ -7,9 +7,9 @@ import { FiBell, FiCheck, FiCreditCard, FiPackage, FiTrash2, FiUser } from 'reac
 import * as api from 'src/services';
 
 const typeStyle = {
-  order: { icon: FiPackage, className: 'bg-blue-50 text-blue-600' },
-  payment: { icon: FiCreditCard, className: 'bg-emerald-50 text-emerald-600' },
-  stock: { icon: FiPackage, className: 'bg-amber-50 text-amber-600' },
+  order: { icon: FiPackage, className: 'bg-sky-50 text-sky-700' },
+  payment: { icon: FiCreditCard, className: 'bg-emerald-50 text-emerald-700' },
+  stock: { icon: FiPackage, className: 'bg-amber-50 text-amber-700' },
   user: { icon: FiUser, className: 'bg-violet-50 text-violet-600' },
   system: { icon: FiBell, className: 'bg-slate-100 text-slate-600' }
 };
@@ -48,8 +48,13 @@ export default function NotificationInbox() {
     const close = (event) => {
       if (!panelRef.current?.contains(event.target)) setOpen(false);
     };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   const openNotification = (notification) => {
@@ -63,33 +68,38 @@ export default function NotificationInbox() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+        className="btn-icon relative"
         aria-label={unread ? `${unread} unread notifications` : 'Notifications'}
         aria-expanded={open}
+        aria-haspopup="dialog"
       >
-        <FiBell size={17} />
+        <FiBell size={17} aria-hidden />
         {unread > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-md bg-red-500 px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-xs font-semibold leading-none text-white ring-2 ring-white">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-[90] w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_22px_60px_-20px_rgba(15,23,42,0.4)]">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+        <div
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 top-12 z-[90] w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3.5">
             <div>
-              <h2 className="text-sm font-bold text-slate-950">Notifications</h2>
-              <p className="mt-0.5 text-xs text-slate-400">{unread ? `${unread} unread` : 'You are all caught up'}</p>
+              <h2 className="text-sm font-semibold text-slate-900">Notifications</h2>
+              <p className="mt-0.5 text-xs text-slate-500">{unread ? `${unread} unread` : 'You are all caught up'}</p>
             </div>
             {unread > 0 && (
               <button
                 type="button"
                 onClick={() => markAll.mutate()}
                 disabled={markAll.isLoading}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--brand-strong)] hover:underline disabled:opacity-40"
+                className="btn-quiet btn-sm"
               >
-                <FiCheck /> Mark all read
+                <FiCheck aria-hidden /> Mark all read
               </button>
             )}
           </div>
@@ -98,8 +108,15 @@ export default function NotificationInbox() {
             {query.isLoading ? (
               <div className="space-y-3 p-4">
                 {[1, 2, 3].map((item) => (
-                  <div key={item} className="h-16 animate-pulse rounded-md bg-slate-100" />
+                  <div key={item} className="skeleton h-16" />
                 ))}
+              </div>
+            ) : query.isError && !notifications.length ? (
+              <div className="px-6 py-10 text-center">
+                <p className="text-sm font-medium text-slate-900">Notifications could not be loaded</p>
+                <button type="button" onClick={() => query.refetch()} className="btn-ghost btn-sm mt-3">
+                  Try again
+                </button>
               </div>
             ) : notifications.length ? (
               notifications.map((notification) => {
@@ -108,7 +125,7 @@ export default function NotificationInbox() {
                 return (
                   <div
                     key={notification.id}
-                    className={`group relative border-b border-slate-100 last:border-0 ${notification.opened ? 'bg-white' : 'bg-blue-50/40'}`}
+                    className={`group relative border-b border-slate-100 last:border-0 ${notification.opened ? 'bg-white' : 'bg-slate-50'}`}
                   >
                     <button
                       type="button"
@@ -118,17 +135,19 @@ export default function NotificationInbox() {
                       <span
                         className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${style.className}`}
                       >
-                        <Icon size={16} />
+                        <Icon size={16} aria-hidden />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start gap-2">
                           <span
-                            className={`line-clamp-1 flex-1 text-sm ${notification.opened ? 'font-semibold text-slate-700' : 'font-bold text-slate-950'}`}
+                            className={`line-clamp-1 flex-1 text-sm ${notification.opened ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'}`}
                           >
                             {notification.title}
                           </span>
                           {!notification.opened && (
-                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-md bg-blue-500" />
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-slate-900">
+                              <span className="sr-only">Unread</span>
+                            </span>
                           )}
                         </span>
                         {notification.message && (
@@ -136,7 +155,7 @@ export default function NotificationInbox() {
                             {notification.message}
                           </span>
                         )}
-                        <span className="mt-1 block text-[11px] font-medium text-slate-400">
+                        <span className="mt-1 block text-xs font-medium text-slate-500">
                           {relativeTime(notification.createdAt)}
                         </span>
                       </span>
@@ -147,21 +166,22 @@ export default function NotificationInbox() {
                         event.stopPropagation();
                         remove.mutate(notification.id);
                       }}
-                      aria-label="Delete notification"
-                      className="absolute right-3 top-4 hidden h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 group-hover:flex focus:flex"
+                      aria-label={`Delete notification: ${notification.title}`}
+                      title="Delete"
+                      className="absolute right-3 top-3.5 flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-700"
                     >
-                      <FiTrash2 size={13} />
+                      <FiTrash2 size={14} aria-hidden />
                     </button>
                   </div>
                 );
               })
             ) : (
               <div className="px-6 py-12 text-center">
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-slate-400">
-                  <FiBell size={20} />
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-slate-100 text-slate-500">
+                  <FiBell size={20} aria-hidden />
                 </span>
-                <p className="mt-3 text-sm font-semibold text-slate-700">No notifications yet</p>
-                <p className="mt-1 text-xs text-slate-400">New orders and important activity will appear here.</p>
+                <p className="mt-3 text-sm font-medium text-slate-900">No notifications yet</p>
+                <p className="mt-1 text-xs text-slate-500">New orders and important activity will appear here.</p>
               </div>
             )}
           </div>

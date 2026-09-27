@@ -60,7 +60,7 @@ export default function LetterheadPreviewPage() {
       <div className="no-print sticky top-0 z-50 border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-3">
-            <button
+            <button type="button"
               onClick={() => window.close()}
               className="flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900"
             >
@@ -71,7 +71,7 @@ export default function LetterheadPreviewPage() {
           </div>
           <div className="flex items-center gap-3">
             <p className="hidden text-xs text-gray-400 sm:block">A4 · branch directory QR included</p>
-            <button
+            <button type="button"
               onClick={() => window.print()}
               className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ background: color }}

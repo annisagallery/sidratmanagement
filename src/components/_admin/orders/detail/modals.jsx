@@ -6,23 +6,28 @@
  *
  * Each is a modal rather than an inline form because each is a decision the
  * operator commits to — the page behind stays readable as the reference while
- * the form is filled in.
+ * the form is filled in. Problems with the input are said under the field that
+ * has them, not in a pop-up that hides the form.
  */
 
 import { useState } from 'react';
-import { useMutation, useQuery } from 'react-query';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from 'react-query';
 import Swal from 'sweetalert2';
 import { format } from 'date-fns';
-import { FiAlertTriangle, FiTruck } from 'react-icons/fi';
+import { FiAlertTriangle, FiMapPin, FiTruck } from 'react-icons/fi';
 
 import * as api from 'src/services';
 import ComplaintImagePicker from 'src/components/_admin/orders/ComplaintImagePicker';
+import { escapeHtml } from 'src/utils/swal';
 import {
   Field,
   ModalShell,
+  Notice,
   PROVIDER_LABEL,
   errorAlert,
   fieldClass,
+  selectClass,
   money,
   normalizeList,
   oid,
@@ -44,12 +49,7 @@ const COMPLAINT_CATEGORIES = [
 
 function CancelButton({ onClose, disabled }) {
   return (
-    <button
-      type="button"
-      onClick={onClose}
-      disabled={disabled}
-      className="rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-    >
+    <button type="button" onClick={onClose} disabled={disabled} className="btn-ghost">
       Cancel
     </button>
   );
@@ -57,30 +57,46 @@ function CancelButton({ onClose, disabled }) {
 
 function SubmitButton({ onClick, disabled, children }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-2 rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-40"
-    >
+    <button type="button" onClick={onClick} disabled={disabled} className="btn-brand">
       {children}
     </button>
+  );
+}
+
+/** A titled group of fields inside a modal. */
+function FieldGroup({ title, children }) {
+  return (
+    <fieldset className="space-y-4">
+      <legend className="mb-1 text-sm font-semibold text-slate-900">{title}</legend>
+      {children}
+    </fieldset>
   );
 }
 
 /* ── payment ─────────────────────────────────────────────────────────────── */
 
 export function AddPaymentModal({ orderNo, due, onClose, onSaved }) {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     method: 'cash',
     amount: due > 0 ? String(due) : '',
     trxId: '',
     note: ''
   });
-  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const [errors, setErrors] = useState({});
+  const set = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => ({ ...current, [key]: undefined }));
+  };
 
   const { data: typesData } = useQuery(['payment-types'], api.getPaymentTypesByAdmin, { staleTime: 5 * 60_000 });
-  const methods = ['cash', ...normalizeList(typesData).map((type) => type.name || type.label).filter(Boolean)];
+  const configuredMethods = normalizeList(typesData)
+    .filter((type) => type.isActive !== false)
+    .map((type) => ({ value: type.slug || type.name || type.label, label: type.name || type.label || type.slug }))
+    .filter((type) => type.value);
+  const methods = configuredMethods.some((type) => type.value === 'cash')
+    ? configuredMethods
+    : [{ value: 'cash', label: 'Cash' }, ...configuredMethods];
 
   const save = useMutation(
     () =>
@@ -93,6 +109,7 @@ export function AddPaymentModal({ orderNo, due, onClose, onSaved }) {
       }),
     {
       onSuccess: () => {
+        queryClient.invalidateQueries(['payments']);
         toast('Payment recorded');
         onSaved();
       },
@@ -101,9 +118,12 @@ export function AddPaymentModal({ orderNo, due, onClose, onSaved }) {
   );
 
   const submit = () => {
-    if (!form.method.trim()) return Swal.fire('Payment method is required', '', 'warning');
-    if (!(Number(form.amount) > 0)) return Swal.fire('Enter an amount greater than zero', '', 'warning');
-    return save.mutate();
+    const next = {};
+    if (!form.method.trim()) next.method = 'Choose or type a payment method.';
+    if (!(Number(form.amount) > 0)) next.amount = 'Enter an amount greater than zero.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    save.mutate();
   };
 
   return (
@@ -120,44 +140,51 @@ export function AddPaymentModal({ orderNo, due, onClose, onSaved }) {
         </>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Method">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Method" required error={errors.method}>
           <input
             list="order-payment-methods"
             className={fieldClass}
             value={form.method}
             onChange={(event) => set('method', event.target.value)}
+            aria-invalid={Boolean(errors.method)}
           />
           <datalist id="order-payment-methods">
             {methods.map((method) => (
-              <option key={method} value={method} />
+              <option key={method.value} value={method.value}>
+                {method.label}
+              </option>
             ))}
           </datalist>
         </Field>
-        <Field label="Amount" hint={due > 0 ? `${money(due)} still due` : 'Nothing outstanding'}>
+        <Field
+          label="Amount (৳)"
+          required
+          error={errors.amount}
+          hint={due > 0 ? `${money(due)} still due` : 'Nothing outstanding'}
+          showHint
+        >
           <input
             type="number"
+            inputMode="decimal"
             min="0"
             className={fieldClass}
             value={form.amount}
             onChange={(event) => set('amount', event.target.value)}
+            aria-invalid={Boolean(errors.amount)}
           />
         </Field>
-        <Field label="Transaction ID" className="col-span-2">
+        <Field label="Transaction ID" optional className="sm:col-span-2">
           <input
             className={`${fieldClass} ops-code`}
             value={form.trxId}
             onChange={(event) => set('trxId', event.target.value)}
-            placeholder="Optional — bKash / Nagad / bank reference"
+            placeholder="bKash / Nagad / bank reference"
+            spellCheck={false}
           />
         </Field>
-        <Field label="Note" className="col-span-2">
-          <input
-            className={fieldClass}
-            value={form.note}
-            onChange={(event) => set('note', event.target.value)}
-            placeholder="Optional"
-          />
+        <Field label="Note" optional className="sm:col-span-2">
+          <input className={fieldClass} value={form.note} onChange={(event) => set('note', event.target.value)} />
         </Field>
       </div>
     </ModalShell>
@@ -255,15 +282,19 @@ export function EditDetailsModal({ order, orderNo, onClose, onSaved }) {
         </>
       }
     >
-      <div className="space-y-5">
-        <fieldset>
-          <legend className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Delivery address</legend>
-          <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-8">
+        <FieldGroup title="Delivery address">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Recipient">
               <input className={fieldClass} value={draft.shippingAddress.name} onChange={(e) => setAddress('name', e.target.value)} />
             </Field>
             <Field label="Phone">
-              <input className={fieldClass} value={draft.shippingAddress.phone} onChange={(e) => setAddress('phone', e.target.value)} />
+              <input
+                type="tel"
+                className={fieldClass}
+                value={draft.shippingAddress.phone}
+                onChange={(e) => setAddress('phone', e.target.value)}
+              />
             </Field>
             <Field label="District">
               <input className={fieldClass} value={draft.shippingAddress.district} onChange={(e) => setAddress('district', e.target.value)} />
@@ -271,10 +302,10 @@ export function EditDetailsModal({ order, orderNo, onClose, onSaved }) {
             <Field label="Upazila">
               <input className={fieldClass} value={draft.shippingAddress.upazila} onChange={(e) => setAddress('upazila', e.target.value)} />
             </Field>
-            <Field label="Area" className="col-span-2">
+            <Field label="Area" className="sm:col-span-2">
               <input className={fieldClass} value={draft.shippingAddress.area} onChange={(e) => setAddress('area', e.target.value)} />
             </Field>
-            <Field label="Street address" className="col-span-2">
+            <Field label="Street address" className="sm:col-span-2">
               <textarea
                 rows={2}
                 className={`${fieldClass} resize-none`}
@@ -283,22 +314,35 @@ export function EditDetailsModal({ order, orderNo, onClose, onSaved }) {
               />
             </Field>
           </div>
-        </fieldset>
+        </FieldGroup>
 
-        <fieldset>
-          <legend className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Charges &amp; handling</legend>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Shipping charge">
-              <input type="number" min="0" className={fieldClass} value={draft.shipping} onChange={(e) => setField('shipping', e.target.value)} />
+        <FieldGroup title="Charges and handling">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Shipping charge (৳)">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                className={fieldClass}
+                value={draft.shipping}
+                onChange={(e) => setField('shipping', e.target.value)}
+              />
             </Field>
-            <Field label="Discount">
-              <input type="number" min="0" className={fieldClass} value={draft.discount} onChange={(e) => setField('discount', e.target.value)} />
+            <Field label="Discount (৳)">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                className={fieldClass}
+                value={draft.discount}
+                onChange={(e) => setField('discount', e.target.value)}
+              />
             </Field>
             <Field label="Payment method">
               <input className={fieldClass} value={draft.paymentMethod} onChange={(e) => setField('paymentMethod', e.target.value)} />
             </Field>
             <Field label="Delivery type">
-              <select className={fieldClass} value={draft.deliveryType} onChange={(e) => setField('deliveryType', e.target.value)}>
+              <select className={selectClass} value={draft.deliveryType} onChange={(e) => setField('deliveryType', e.target.value)}>
                 <option value="regular">Regular</option>
                 <option value="urgent">Urgent</option>
                 <option value="sameDay">Same day</option>
@@ -312,14 +356,14 @@ export function EditDetailsModal({ order, orderNo, onClose, onSaved }) {
                 onChange={(e) => setField('estimatedDelivery', e.target.value)}
               />
             </Field>
-            <Field label="Tags" hint="Separate with commas">
+            <Field label="Tags" hint="Separate with commas" showHint>
               <input className={fieldClass} value={draft.tags} onChange={(e) => setField('tags', e.target.value)} placeholder="priority, gift, fragile" />
             </Field>
-            <Field label="Customer note" className="col-span-2">
+            <Field label="Customer note" optional className="sm:col-span-2">
               <textarea rows={2} className={`${fieldClass} resize-none`} value={draft.note} onChange={(e) => setField('note', e.target.value)} />
             </Field>
           </div>
-        </fieldset>
+        </FieldGroup>
       </div>
     </ModalShell>
   );
@@ -342,6 +386,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
     deliveryType: '48',
     note: ''
   });
+  const [accountError, setAccountError] = useState('');
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   // The default account is derived rather than written into state on load, so
@@ -369,11 +414,15 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
       onError: (error) => {
         const message = error?.response?.data?.message || 'The courier rejected the request.';
         const providerError = error?.response?.data?.providerError;
+        // The courier's raw reply is shown as-is, because it is what support
+        // asks for; the operator's message leads.
         Swal.fire({
-          title: 'Could not send shipment',
-          html: `<p class="text-sm">${message}</p>${
+          title: 'Could not send the parcel',
+          html: `<p style="margin:0">${escapeHtml(message)}</p>${
             providerError
-              ? `<pre class="mt-2 max-h-40 overflow-auto rounded p-2 text-left text-xs bg-gray-100">${JSON.stringify(providerError, null, 2)}</pre>`
+              ? `<pre style="margin:12px 0 0;max-height:10rem;overflow:auto;border-radius:8px;background:#f1f5f9;padding:8px;text-align:left;font-size:12px">${escapeHtml(
+                  JSON.stringify(providerError, null, 2)
+                )}</pre>`
               : ''
           }`,
           icon: 'error'
@@ -381,6 +430,16 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
       }
     }
   );
+
+  const submit = () => {
+    if (!accountId) {
+      setAccountError('Choose the courier account to book with.');
+      return;
+    }
+    send.mutate();
+  };
+
+  const fullAddress = [address.address, address.area, address.upazila, address.district].filter(Boolean).join(', ');
 
   return (
     <ModalShell
@@ -390,49 +449,57 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
       footer={
         <>
           <CancelButton onClose={onClose} disabled={send.isLoading} />
-          <SubmitButton
-            onClick={() => (accountId ? send.mutate() : Swal.fire('Choose a courier account', '', 'warning'))}
-            disabled={send.isLoading || !options.length}
-          >
-            <FiTruck size={15} /> {send.isLoading ? 'Sending…' : isResend ? 'Re-send parcel' : 'Send parcel'}
+          <SubmitButton onClick={submit} disabled={send.isLoading || !options.length}>
+            <FiTruck size={16} aria-hidden /> {send.isLoading ? 'Sending…' : isResend ? 'Re-send parcel' : 'Send parcel'}
           </SubmitButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         {isResend ? (
-          <div className="flex items-start gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-700">
-            <FiAlertTriangle size={14} className="mt-0.5 shrink-0" />
-            The previous parcel was cancelled or returned. This creates a fresh consignment; the old one stays in the
-            shipment history.
-          </div>
+          <Notice tone="warn" icon={FiAlertTriangle} title="This creates a new consignment">
+            The previous parcel was cancelled or returned. It stays in the shipment history.
+          </Notice>
         ) : null}
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-          <p className="text-sm font-semibold text-slate-800">
-            {address.name || 'No recipient'} · {address.phone || 'No phone'}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {[address.address, address.area, address.upazila, address.district].filter(Boolean).join(', ') ||
-              'No address on this order'}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-400">Wrong address? Close this and use “Edit details” first.</p>
+        <div className="flex items-start gap-3 rounded-lg bg-slate-50 px-4 py-3">
+          <FiMapPin size={17} className="mt-0.5 shrink-0 text-slate-400" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">
+              {address.name || 'No recipient'} · {address.phone || 'No phone'}
+            </p>
+            <p className="mt-0.5 text-[13px] text-slate-600">{fullAddress || 'No address on this order'}</p>
+            <p className="mt-1 text-xs text-slate-500">Wrong address? Close this and use “Edit details & address” first.</p>
+          </div>
         </div>
 
         {loadingOptions ? (
-          <p className="text-sm text-slate-400">Loading courier accounts…</p>
+          <div className="space-y-3" aria-busy="true">
+            <div className="skeleton h-9 w-full" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="skeleton h-9" />
+              <div className="skeleton h-9" />
+            </div>
+          </div>
         ) : !options.length ? (
-          <div className="rounded-md border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-            No active courier accounts. Add one in{' '}
-            <a href="/shipping/couriers" className="font-semibold text-[var(--brand-strong)] underline">
-              Shipping → Couriers
-            </a>
-            .
+          <div className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-slate-900">No active courier accounts</p>
+            <p className="mt-1 text-[13px] text-slate-500">Add one before booking a parcel.</p>
+            <Link href="/shipping/couriers" className="btn-ghost btn-sm mt-4">
+              Open courier accounts
+            </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Courier account" className="col-span-2">
-              <select className={fieldClass} value={accountId} onChange={(e) => set('accountId', e.target.value)}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Courier account" required error={accountError} className="sm:col-span-2">
+              <select
+                className={selectClass}
+                value={accountId}
+                onChange={(e) => {
+                  set('accountId', e.target.value);
+                  setAccountError('');
+                }}
+              >
                 {options.map((option) => (
                   <option key={oid(option)} value={oid(option)}>
                     {PROVIDER_LABEL[option.provider] || option.provider} — {option.name}
@@ -441,17 +508,36 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
                 ))}
               </select>
             </Field>
-            <Field label="COD amount (৳)" hint={meta?.suggestedCod ? `Suggested ${money(meta.suggestedCod)}` : undefined}>
-              <input type="number" min="0" className={fieldClass} value={form.codAmount} onChange={(e) => set('codAmount', e.target.value)} />
+            <Field
+              label="Cash to collect (৳)"
+              hint={meta?.suggestedCod ? `Suggested ${money(meta.suggestedCod)}` : undefined}
+              showHint
+            >
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                className={fieldClass}
+                value={form.codAmount}
+                onChange={(e) => set('codAmount', e.target.value)}
+              />
             </Field>
             <Field label="Item quantity">
-              <input type="number" min="1" className={fieldClass} value={form.itemQuantity} onChange={(e) => set('itemQuantity', e.target.value)} />
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                className={fieldClass}
+                value={form.itemQuantity}
+                onChange={(e) => set('itemQuantity', e.target.value)}
+              />
             </Field>
             {selected?.provider === 'pathao' ? (
               <>
                 <Field label="Weight (kg)">
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0.5"
                     max="10"
                     step="0.5"
@@ -461,14 +547,14 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
                   />
                 </Field>
                 <Field label="Delivery speed">
-                  <select className={fieldClass} value={form.deliveryType} onChange={(e) => set('deliveryType', e.target.value)}>
+                  <select className={selectClass} value={form.deliveryType} onChange={(e) => set('deliveryType', e.target.value)}>
                     <option value="48">Normal (48h)</option>
                     <option value="12">On-demand (12h)</option>
                   </select>
                 </Field>
               </>
             ) : null}
-            <Field label="Note to courier" className="col-span-2">
+            <Field label="Note to courier" optional className="sm:col-span-2">
               <input
                 className={fieldClass}
                 value={form.note}
@@ -488,6 +574,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
 export function ComplaintModal({ item, order, onClose, onSubmitted }) {
   const [form, setForm] = useState({ category: 'other', priority: 'normal', message: '', adminNote: '' });
   const [files, setFiles] = useState([]);
+  const [messageError, setMessageError] = useState('');
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const create = useMutation(
@@ -503,7 +590,7 @@ export function ComplaintModal({ item, order, onClose, onSubmitted }) {
     },
     {
       onSuccess: () => {
-        Swal.fire('Complaint opened', 'The complaint has been recorded against this item.', 'success');
+        toast('Complaint opened for this item');
         onSubmitted();
       },
       onError: (error) => errorAlert('Could not create complaint', error)
@@ -512,31 +599,32 @@ export function ComplaintModal({ item, order, onClose, onSubmitted }) {
 
   const productName = item.pid?.name || item.productSnapshot?.name || 'order item';
 
+  const submit = () => {
+    if (!form.message.trim()) {
+      setMessageError('Describe what the customer reported.');
+      return;
+    }
+    create.mutate({ ...form, orderItemId: oid(item) });
+  };
+
   return (
     <ModalShell
-      title={`Complaint — ${productName}`}
-      subtitle={`Order #${order.orderNo}`}
+      title="Open a complaint"
+      subtitle={`Order #${order.orderNo} · ${productName}`}
       onClose={onClose}
       footer={
         <>
           <CancelButton onClose={onClose} disabled={create.isLoading} />
-          <SubmitButton
-            onClick={() =>
-              form.message.trim()
-                ? create.mutate({ ...form, orderItemId: oid(item) })
-                : Swal.fire('Add the complaint details', '', 'warning')
-            }
-            disabled={create.isLoading}
-          >
+          <SubmitButton onClick={submit} disabled={create.isLoading}>
             {create.isLoading ? 'Saving…' : 'Open complaint'}
           </SubmitButton>
         </>
       }
     >
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Category">
-            <select className={fieldClass} value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <select className={selectClass} value={form.category} onChange={(e) => set('category', e.target.value)}>
               {COMPLAINT_CATEGORIES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -545,7 +633,7 @@ export function ComplaintModal({ item, order, onClose, onSubmitted }) {
             </select>
           </Field>
           <Field label="Priority">
-            <select className={fieldClass} value={form.priority} onChange={(e) => set('priority', e.target.value)}>
+            <select className={selectClass} value={form.priority} onChange={(e) => set('priority', e.target.value)}>
               <option value="low">Low</option>
               <option value="normal">Normal</option>
               <option value="high">High</option>
@@ -553,23 +641,26 @@ export function ComplaintModal({ item, order, onClose, onSubmitted }) {
             </select>
           </Field>
         </div>
-        <Field label="What the customer reported">
+        <Field label="What the customer reported" required error={messageError}>
           <textarea
             rows={4}
             className={`${fieldClass} resize-none`}
             value={form.message}
-            onChange={(e) => set('message', e.target.value)}
+            onChange={(e) => {
+              set('message', e.target.value);
+              setMessageError('');
+            }}
             placeholder="Write the complaint in the customer's words"
+            aria-invalid={Boolean(messageError)}
           />
         </Field>
         <ComplaintImagePicker files={files} setFiles={setFiles} disabled={create.isLoading} />
-        <Field label="Internal note">
+        <Field label="Internal note" optional hint="Visible to admins only" showHint>
           <textarea
             rows={2}
             className={`${fieldClass} resize-none`}
             value={form.adminNote}
             onChange={(e) => set('adminNote', e.target.value)}
-            placeholder="Optional — visible to admins only"
           />
         </Field>
       </div>

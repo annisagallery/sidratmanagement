@@ -1,24 +1,17 @@
 'use client';
 import React, { use } from 'react';
-
-// components
-
-// api
-import * as api from 'src/services';
 import { useQuery } from 'react-query';
-import Swal from 'sweetalert2';
-import EditShippingCharge from '@/src/components/_admin/shippingcharge/editShippingCharge';
+import * as api from 'src/services';
+import EditShippingCharge from 'src/components/_admin/shippingcharge/editShippingCharge';
+import { ErrorState } from 'src/components/_admin/ui/TableStates';
 
 export default function Page({ params }) {
   const { id } = use(params);
-  const { data, isLoading } = useQuery(['admin-shipping-charge', id], () => api.getShippingChargeByAdmin(id), {
-    onError: (err) => {
-      Swal.fire(err?.response?.data?.message || err?.response?.data?.error || 'Something went wrong!', '', 'error');
-    }
-  });
-  return (
-    <div>
-      <EditShippingCharge isLoading={isLoading} data={data?.data} />
-    </div>
+  const { data, isLoading, isError, error, refetch } = useQuery(['admin-shipping-charge', id], () =>
+    api.getShippingChargeByAdmin(id)
   );
+
+  // Without a record the form is a create form — never show it for a failed load.
+  if (isError) return <ErrorState error={error} title="This shipping charge could not be loaded" onRetry={refetch} />;
+  return <EditShippingCharge isLoading={isLoading} data={data?.data} />;
 }

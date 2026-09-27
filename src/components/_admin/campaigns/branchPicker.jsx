@@ -16,7 +16,7 @@ import * as api from 'src/services';
 // rather than leaving an empty list looking like a mistake.
 
 export default function CampaignBranchPicker({ selected, onChange }) {
-  const { data, isLoading } = useQuery('admin-branches-campaign', api.adminGetBranches);
+  const { data, isLoading, isError, refetch } = useQuery('admin-branches-campaign', api.adminGetBranches);
 
   const branches = (data?.data || []).filter((b) => !b.deletedAt && b.type !== 'HQ');
   const chosen = new Set(selected);
@@ -30,35 +30,42 @@ export default function CampaignBranchPicker({ selected, onChange }) {
   };
 
   return (
-    <div className="space-y-3 rounded-md border border-gray-100 bg-white p-5 shadow-sm">
+    <section className="card-ui space-y-4 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">Applies in</h2>
+        <h2 className="text-[15px] font-semibold text-slate-900">Where it applies</h2>
         {!everywhere && (
           <button
             type="button"
             onClick={() => onChange([])}
-            className="text-xs font-medium text-gray-400 transition hover:text-gray-600"
+            className="btn-ghost btn-sm"
           >
-            Clear
+            Run everywhere
           </button>
         )}
       </div>
 
       {everywhere ? (
-        <p className="flex items-start gap-2 rounded-md bg-[var(--brand-soft)] px-3 py-2 text-xs text-[var(--brand-strong)]">
-          <FiGlobe className="mt-0.5 shrink-0" size={13} />
-          Running everywhere — every branch and the website. Tick branches below to limit it.
+        <p className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
+          <FiGlobe className="mt-0.5 shrink-0 text-slate-500" size={14} aria-hidden />
+          Runs everywhere — every branch and the website. Choose branches below to limit it.
         </p>
       ) : (
-        <p className="text-xs text-gray-400">
-          Only the ticked branches use this price. Everywhere else pays the normal price.
+        <p className="text-[13px] text-slate-500">
+          Only the chosen branches use this price. Everywhere else pays the normal price.
         </p>
       )}
 
-      {isLoading ? (
+      {isError ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800" role="alert">
+          Branches could not be loaded, so the list below is incomplete.
+          <button type="button" onClick={() => refetch()} className="btn-ghost btn-sm">
+            Try again
+          </button>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-10 animate-pulse rounded-md bg-gray-100" />
+            <div key={i} className="skeleton h-10" />
           ))}
         </div>
       ) : (
@@ -70,23 +77,25 @@ export default function CampaignBranchPicker({ selected, onChange }) {
               <button
                 key={branch.id}
                 type="button"
+                role="checkbox"
+                aria-checked={isOn}
                 onClick={() => toggle(branch.id)}
                 className={`flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-sm transition ${
                   isOn
-                    ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
                 <span
                   className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border ${
-                    isOn ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-gray-300'
+                    isOn ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300'
                   }`}
                 >
-                  {isOn && <FiCheck size={11} />}
+                  {isOn && <FiCheck size={11} aria-hidden />}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-gray-800">{branch.name}</span>
+                <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{branch.name}</span>
                 {isWeb && (
-                  <span className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  <span className="section-label shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5">
                     Website
                   </span>
                 )}
@@ -95,6 +104,6 @@ export default function CampaignBranchPicker({ selected, onChange }) {
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }

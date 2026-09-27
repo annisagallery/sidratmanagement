@@ -23,6 +23,7 @@ import * as api from 'src/services';
 import useStickyState from 'src/hooks/useStickyState';
 import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
+import SearchInput from 'src/components/_admin/ui/SearchInput';
 import {
   EmptyRow,
   PageBar,
@@ -77,7 +78,6 @@ export default function OrderPrintBuilder({
   busyKey = null,
   notice = null
 }) {
-  const [term, setTerm] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
@@ -124,10 +124,10 @@ export default function OrderPrintBuilder({
     }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar eyebrow={eyebrow} title={title} subtitle={subtitle}>
         <button type="button" onClick={() => ordersQuery.refetch()} className="btn-ghost">
-          <FiRefreshCw size={14} className={ordersQuery.isFetching ? 'animate-spin' : ''} /> Refresh
+          <FiRefreshCw size={15} aria-hidden className={ordersQuery.isFetching ? 'animate-spin' : ''} /> Refresh
         </button>
       </PageBar>
 
@@ -146,23 +146,15 @@ export default function OrderPrintBuilder({
           hint={`page ${page}`}
           actions={
             <Toolbar>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setSearch(term.trim());
+              <SearchInput
+                className="w-60"
+                placeholder="Order no, name or phone"
+                label="Search orders"
+                onSearch={(value) => {
+                  setSearch(value);
                   setPage(1);
                 }}
-                className="relative"
-              >
-                <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input
-                  value={term}
-                  onChange={(event) => setTerm(event.target.value)}
-                  placeholder="Order no, name or phone…"
-                  className="input-ui w-56 pl-8"
-                  aria-label="Search orders"
-                />
-              </form>
+              />
               <select
                 value={status}
                 onChange={(event) => {
@@ -178,16 +170,19 @@ export default function OrderPrintBuilder({
                 <option value="shipped">Shipped</option>
                 <option value="delivered">Delivered</option>
               </select>
-              <button type="button" onClick={addPage} disabled={!orders.length} className="btn-ghost h-9 !text-xs">
+              <button type="button" onClick={addPage} disabled={!orders.length} className="btn-ghost btn-sm">
                 Add page
               </button>
             </Toolbar>
           }
         >
           <GlobalTable>
+            <caption className="sr-only">Orders to choose from</caption>
             <thead>
               <tr>
-                <th className="w-10" />
+                <th className="w-10">
+                  <span className="sr-only">Selected</span>
+                </th>
                 <th>Order</th>
                 <th>Recipient</th>
                 <th>Status</th>
@@ -196,35 +191,45 @@ export default function OrderPrintBuilder({
             </thead>
             <tbody>
               {ordersQuery.isLoading ? (
-                <EmptyRow colSpan={5} title="Loading orders…" />
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`loading-${i}`} aria-hidden>
+                    <td colSpan={5}>
+                      <div className="skeleton h-4 w-full" />
+                    </td>
+                  </tr>
+                ))
               ) : orders.length ? (
                 orders.map((order) => {
                   const on = Boolean(picked[order.orderNo]);
                   return (
-                    <tr key={order.orderNo} className={on ? 'bg-sky-50/60' : ''}>
-                      <td>
+                    <tr
+                      key={order.orderNo}
+                      onClick={() => toggle(order)}
+                      className={`cursor-pointer ${on ? '!bg-slate-50' : ''}`}
+                    >
+                      <td onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={on}
                           onChange={() => toggle(order)}
                           aria-label={`Select order ${order.orderNo}`}
-                          className="h-4 w-4 rounded border-slate-300"
+                          className="h-4 w-4 rounded border-slate-300 accent-slate-900"
                         />
                       </td>
                       <td>
-                        <span className="ops-code text-[12px] font-bold text-[var(--brand-strong)]">#{order.orderNo}</span>
-                        <span className="block text-[11px] text-slate-400">
+                        <span className="ops-code text-[13px] font-semibold text-slate-900">#{order.orderNo}</span>
+                        <span className="block text-xs text-slate-500">
                           {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
                         </span>
                       </td>
                       <td>
-                        <p className="text-[13px] font-semibold text-slate-800">{orderRecipient(order)}</p>
-                        <p className="ops-code text-[11px] text-slate-500">{orderPhone(order)}</p>
+                        <p className="text-[13px] font-medium text-slate-900">{orderRecipient(order)}</p>
+                        <p className="ops-code text-xs text-slate-500">{orderPhone(order)}</p>
                       </td>
                       <td>
                         <Pill tone="neutral">{String(order.status || '').replaceAll('-', ' ')}</Pill>
                       </td>
-                      <td className="text-right tabular-nums text-[13px] font-semibold text-slate-700">
+                      <td className="text-right text-[13px] font-semibold tabular-nums text-slate-900">
                         {money(order.total)}
                       </td>
                     </tr>
@@ -235,6 +240,14 @@ export default function OrderPrintBuilder({
               )}
             </tbody>
           </GlobalTable>
+          <Pagination
+            page={page}
+            totalPages={ordersQuery.data?.count || 1}
+            onPage={setPage}
+            total={ordersQuery.data?.total || 0}
+            unit="orders"
+            pageSize={LIMIT}
+          />
         </Section>
 
         <aside className="space-y-4 xl:sticky xl:top-0">
@@ -244,8 +257,8 @@ export default function OrderPrintBuilder({
             hint={`${selected.length} order${selected.length === 1 ? '' : 's'}`}
             actions={
               selected.length ? (
-                <button type="button" onClick={() => setPicked({})} className="btn-ghost h-8 !px-2.5 !text-xs">
-                  <FiTrash2 size={12} /> Clear
+                <button type="button" onClick={() => setPicked({})} className="btn-quiet btn-sm">
+                  <FiTrash2 size={14} aria-hidden /> Clear all
                 </button>
               ) : null
             }
@@ -253,24 +266,24 @@ export default function OrderPrintBuilder({
             <SectionBody className="max-h-[420px] overflow-y-auto p-0">
               <ul className="divide-y divide-slate-100">
                 {selected.map((order) => (
-                  <li key={order.orderNo} className="flex items-center gap-2 px-3 py-2">
+                  <li key={order.orderNo} className="flex items-center gap-2 px-4 py-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="ops-code truncate text-[12px] font-bold text-slate-800">#{order.orderNo}</p>
-                      <p className="truncate text-[11px] text-slate-500">{orderRecipient(order)}</p>
+                      <p className="ops-code truncate text-[13px] font-semibold text-slate-900">#{order.orderNo}</p>
+                      <p className="truncate text-xs text-slate-500">{orderRecipient(order)}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => toggle(order)}
                       aria-label={`Remove order ${order.orderNo}`}
-                      className="rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                      className="btn-icon btn-icon-sm btn-icon-danger"
                     >
                       <FiX size={14} />
                     </button>
                   </li>
                 ))}
                 {!selected.length ? (
-                  <li className="px-6 py-12 text-center text-sm text-slate-400">
-                    Nothing selected yet. Tick orders on the left.
+                  <li className="px-6 py-12 text-center text-[13px] text-slate-500">
+                    Nothing selected yet. Select orders from the list.
                   </li>
                 ) : null}
               </ul>
@@ -293,26 +306,17 @@ export default function OrderPrintBuilder({
                   title={action.hint}
                   className={`${index === 0 ? 'btn-brand' : 'btn-ghost'} h-11 w-full`}
                 >
-                  {Icon ? <Icon size={15} /> : null}
+                  {Icon ? <Icon size={16} aria-hidden /> : null}
                   {running ? action.busyLabel || 'Working…' : `${action.label} (${selected.length})`}
                 </button>
               );
             })}
             {actions[0]?.hint ? (
-              <p className="text-center text-[11px] text-slate-400">{actions[0].hint}</p>
+              <p className="text-center text-xs text-slate-500">{actions[0].hint}</p>
             ) : null}
           </div>
         </aside>
       </div>
-
-      <Pagination
-        page={page}
-        totalPages={ordersQuery.data?.count || 1}
-        onPage={setPage}
-        total={ordersQuery.data?.total || 0}
-        unit="orders"
-        pageSize={LIMIT}
-      />
     </div>
   );
 }

@@ -58,17 +58,17 @@ export const navParents = [
       // working the queue — so it gets its own desk, like Barcode Labels does.
       // Labels and invoices share one, because a run needs both for the same
       // orders and picking them twice is how the two end up disagreeing.
-      { label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping },
+      { label: 'Labels & invoices', href: '/orders/print', icon: MdOutlineLocalShipping },
       {
         label: 'Settings',
         href: '/orders/settings',
         icon: FiSettings,
         subTabs: [
           { label: 'Tags', href: '/orders/settings/tags', icon: FiBookmark },
-          { label: 'Delivery Types', href: '/orders/settings/delivery-types', icon: MdOutlineLocalShipping },
-          { label: 'Order Statuses', href: '/orders/settings/order-statuses', icon: FiList },
-          { label: 'Order Item Statuses', href: '/orders/settings/order-item-statuses', icon: FiPackage },
-          { label: 'Branch Terminal', href: '/orders/settings/pos', icon: FiSettings }
+          { label: 'Delivery types', href: '/orders/settings/delivery-types', icon: MdOutlineLocalShipping },
+          { label: 'Order statuses', href: '/orders/settings/order-statuses', icon: FiList },
+          { label: 'Order item statuses', href: '/orders/settings/order-item-statuses', icon: FiPackage },
+          { label: 'Branch terminal', href: '/orders/settings/pos', icon: FiSettings }
         ]
       }
     ]
@@ -82,7 +82,7 @@ export const navParents = [
       { label: 'Products', href: '/products', icon: FaShirt },
       { label: 'Categories', href: '/categories', icon: TbCategory },
       { label: 'Attributes', href: '/attributes', icon: TbAdjustments },
-      { label: 'Barcode Labels', href: '/products/labels', icon: MdOutlineQrCode2 }
+      { label: 'Barcode labels', href: '/products/labels', icon: MdOutlineQrCode2 }
       // Inventory Limits removed: a presale ceiling is no longer typed in by
       // hand. It is derived from each product's bill of materials, which is
       // edited per product at /products/[slug]/bom.
@@ -122,7 +122,7 @@ export const navParents = [
         subTabs: [
           { label: 'Settings', href: '/cash-settings', icon: FiSettings },
           { label: 'Transactions', href: '/cash-settings/transactions', icon: MdSwapHoriz },
-          { label: 'User Balances', href: '/cash-settings/list', icon: MdPeople }
+          { label: 'User balances', href: '/cash-settings/list', icon: MdPeople }
         ]
       },
       { label: 'Banners', href: '/banners', icon: IoImagesOutline }
@@ -136,9 +136,9 @@ export const navParents = [
     tabs: [
       { label: 'Payments', href: '/payments', icon: FiList },
       { label: 'Verification', href: '/payments/verification', icon: FiShield },
-      { label: 'SMS Inbox', href: '/payments/sms', icon: FiMessageSquare },
+      { label: 'SMS inbox', href: '/payments/sms', icon: FiMessageSquare },
       { label: 'Devices', href: '/payments/devices', icon: FiSmartphone },
-      { label: 'Finance Review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet },
+      { label: 'Finance review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet },
       { label: 'Settings', href: '/payments/settings', icon: FiSettings }
     ]
   },
@@ -165,7 +165,7 @@ export const navParents = [
       { label: 'Site', href: '/site-settings', icon: IoSettingsOutline },
       { label: 'Homepage', href: '/homepage-settings', icon: FiHome },
       { label: 'Messages', href: '/message-settings', icon: FiMessageSquare },
-      { label: 'Fraud Check', href: '/fraud', icon: MdOutlineSecurity },
+      { label: 'Fraud check', href: '/fraud', icon: MdOutlineSecurity },
       { label: 'API', href: '/api-settings', icon: FiSliders }
     ]
   },
@@ -207,19 +207,19 @@ export const navGroups = [
         key: 'orders', label: 'Orders', href: '/orders', icon: BsCartCheck, subject: 'Order'
       },
       {
-        key: 'order-items', label: 'Order Items', href: '/orders/items', icon: FiPackage, subject: 'OrderItem'
+        key: 'order-items', label: 'Order items', href: '/orders/items', icon: FiPackage, subject: 'OrderItem'
       },
       {
-        key: 'order-print', label: 'Labels & Invoices', href: '/orders/print', icon: MdOutlineLocalShipping, subject: 'Order'
+        key: 'order-print', label: 'Labels & invoices', href: '/orders/print', icon: MdOutlineLocalShipping, subject: 'Order'
       },
       {
-        key: 'sales-settings', label: 'Sales Settings', href: '/orders/settings/delivery-types', icon: FiSettings, subject: 'OrderSettings',
+        key: 'sales-settings', label: 'Sales settings', href: '/orders/settings/delivery-types', icon: FiSettings, subject: 'OrderSettings',
         children: [
           { label: 'Tags', href: '/orders/settings/tags' },
-          { label: 'Delivery Types', href: '/orders/settings/delivery-types' },
-          { label: 'Order Statuses', href: '/orders/settings/order-statuses' },
-          { label: 'Order Item Statuses', href: '/orders/settings/order-item-statuses' },
-          { label: 'Branch Terminal Settings', href: '/orders/settings/pos' }
+          { label: 'Delivery types', href: '/orders/settings/delivery-types' },
+          { label: 'Order statuses', href: '/orders/settings/order-statuses' },
+          { label: 'Order item statuses', href: '/orders/settings/order-item-statuses' },
+          { label: 'Branch terminal settings', href: '/orders/settings/pos' }
         ]
       }
     ]
@@ -231,7 +231,7 @@ export const navGroups = [
       { key: 'products', label: 'Products', href: '/products', icon: FaShirt, subject: 'Product' },
       { key: 'categories', label: 'Categories', href: '/categories', icon: TbCategory, subject: 'Category' },
       { key: 'attributes', label: 'Attributes', href: '/attributes', icon: TbAdjustments, subject: 'Attribute' },
-      { key: 'product-labels', label: 'Barcode Labels', href: '/products/labels', icon: MdOutlineQrCode2, subject: 'Product' }
+      { key: 'product-labels', label: 'Barcode labels', href: '/products/labels', icon: MdOutlineQrCode2, subject: 'Product' }
       // Presale Settings removed — see the note in the Products tab list above.
     ]
   },
@@ -290,7 +290,7 @@ export const navGroups = [
   {
     key: 'customers',
     label: 'Customers',
-    items: [{ key: 'customers', label: 'Customer List', href: '/users', icon: LuUsers, subject: 'Customer' }]
+    items: [{ key: 'customers', label: 'Customers', href: '/users', icon: LuUsers, subject: 'Customer' }]
   },
   {
     key: 'marketing',
@@ -299,7 +299,7 @@ export const navGroups = [
       { key: 'reviews', label: 'Reviews', href: '/reviews', icon: FiStar, subject: 'Banner' },
       { key: 'campaigns', label: 'Campaigns', href: '/campaigns', icon: HiOutlineSpeakerphone, subject: 'Campaign' },
       { key: 'coupons', label: 'Coupons', href: '/coupon-codes', icon: FiTag, subject: 'Coupon' },
-      { key: 'cashback', label: 'Cashback', href: '/cash-settings/transactions', icon: BsCash, subject: 'Cashback', children: [{ label: 'Transactions', href: '/cash-settings/transactions' }, { label: 'User Balance', href: '/cash-settings/list' }, { label: 'Cashback Settings', href: '/cash-settings' }] },
+      { key: 'cashback', label: 'Cashback', href: '/cash-settings/transactions', icon: BsCash, subject: 'Cashback', children: [{ label: 'Transactions', href: '/cash-settings/transactions' }, { label: 'User balances', href: '/cash-settings/list' }, { label: 'Cashback settings', href: '/cash-settings' }] },
     ]
   },
   {
@@ -308,10 +308,10 @@ export const navGroups = [
     items: [
       { key: 'transactions', label: 'Transactions', href: '/payments', icon: BsCreditCard2Front, subject: 'Payment' },
       { key: 'verification', label: 'Verification', href: '/payments/verification', icon: FiShield, subject: 'Payment' },
-      { key: 'sms-inbox', label: 'SMS Inbox', href: '/payments/sms', icon: FiMessageSquare, subject: 'Payment' },
+      { key: 'sms-inbox', label: 'SMS inbox', href: '/payments/sms', icon: FiMessageSquare, subject: 'Payment' },
       { key: 'collector-devices', label: 'Devices', href: '/payments/devices', icon: FiSmartphone, subject: 'Payment' },
-      { key: 'finance-review', label: 'Finance Review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet, subject: 'Order' },
-      { key: 'payment-settings', label: 'Payment Settings', href: '/payments/settings', icon: FiSettings, subject: 'Payment' }
+      { key: 'finance-review', label: 'Finance review', href: '/finance-review', icon: MdOutlineAccountBalanceWallet, subject: 'Order' },
+      { key: 'payment-settings', label: 'Payment settings', href: '/payments/settings', icon: FiSettings, subject: 'Payment' }
     ]
   },
   {
@@ -319,9 +319,9 @@ export const navGroups = [
     label: 'Shipping',
     items: [
       { key: 'charges', label: 'Charges', href: '/shippingcharge', icon: MdOutlineLocalShipping, subject: 'Shipping' },
-      { key: 'shipments', label: 'Shipments', href: '/shipping/shipments', icon: FiShare2, subject: 'Shipping', children: [{ label: 'All Shipments', href: '/shipping/shipments' }] },
-      { key: 'cod-remittance', label: 'COD Payouts', href: '/shipping/cod-remittance', icon: BsCash, subject: 'Order' },
-      { key: 'couriers', label: 'Couriers', href: '/shipping/couriers', icon: MdOutlineLocalShipping, subject: 'Shipping', children: [{ label: 'Courier Accounts', href: '/shipping/couriers' }] }
+      { key: 'shipments', label: 'Shipments', href: '/shipping/shipments', icon: FiShare2, subject: 'Shipping', children: [{ label: 'All shipments', href: '/shipping/shipments' }] },
+      { key: 'cod-remittance', label: 'COD payouts', href: '/shipping/cod-remittance', icon: BsCash, subject: 'Order' },
+      { key: 'couriers', label: 'Couriers', href: '/shipping/couriers', icon: MdOutlineLocalShipping, subject: 'Shipping', children: [{ label: 'Courier accounts', href: '/shipping/couriers' }] }
     ]
   },
   {
@@ -329,15 +329,15 @@ export const navGroups = [
     label: 'Settings',
     items: [
       {
-        key: 'global-settings', label: 'Global Settings', href: '/site-settings/global/brand', icon: IoSettingsOutline, subject: 'SiteSettings',
+        key: 'global-settings', label: 'Global settings', href: '/site-settings/global/brand', icon: IoSettingsOutline, subject: 'SiteSettings',
         children: [
-          { label: 'Brand Settings', href: '/site-settings/global/brand' },
+          { label: 'Brand', href: '/site-settings/global/brand' },
           { label: 'Contact', href: '/site-settings/global/contact' },
           { label: 'SEO', href: '/site-settings/global/seo' },
           { label: 'Footer', href: '/site-settings/global/footer' },
-          { label: 'Breadcrumb Settings', href: '/site-settings/global/breadcrumbs' },
-          { label: 'Product Showcase', href: '/site-settings/global/product-showcase' },
-          { label: 'Branch Page', href: '/site-settings/global/branch-page' },
+          { label: 'Breadcrumbs', href: '/site-settings/global/breadcrumbs' },
+          { label: 'Product showcase', href: '/site-settings/global/product-showcase' },
+          { label: 'Branch page', href: '/site-settings/global/branch-page' },
           { label: 'Invoice', href: '/site-settings/global/invoice' }
         ]
       },
@@ -346,27 +346,27 @@ export const navGroups = [
         subject: ['Banner', 'SiteSettings'],
         children: [
           { label: 'Banners', href: '/homepage-settings/banners', subject: 'Banner' },
-          { label: 'Customer Reviews', href: '/homepage-settings/reviews', subject: 'Banner' },
-          { label: 'Notice Bar', href: '/homepage-settings/notice-bar', subject: 'Banner' },
+          { label: 'Customer reviews', href: '/homepage-settings/reviews', subject: 'Banner' },
+          { label: 'Notice bar', href: '/homepage-settings/notice-bar', subject: 'Banner' },
           { label: 'Navigation', href: '/homepage-settings/navigation', subject: 'SiteSettings' }
         ]
       },
       {
-        key: 'additional-pages', label: 'Additional Pages', href: '/site-settings/pages/about', icon: IoDocumentTextOutline, subject: 'SiteSettings',
+        key: 'additional-pages', label: 'Additional pages', href: '/site-settings/pages/about', icon: IoDocumentTextOutline, subject: 'SiteSettings',
         children: [
-          { label: 'About Us', href: '/site-settings/pages/about' },
-          { label: 'Privacy Policy', href: '/site-settings/pages/privacy-policy' },
-          { label: 'Refund & Return Policy', href: '/site-settings/pages/refund-return-policy' },
-          { label: 'Terms & Conditions', href: '/site-settings/pages/terms-and-conditions' }
+          { label: 'About us', href: '/site-settings/pages/about' },
+          { label: 'Privacy policy', href: '/site-settings/pages/privacy-policy' },
+          { label: 'Refund & return policy', href: '/site-settings/pages/refund-return-policy' },
+          { label: 'Terms & conditions', href: '/site-settings/pages/terms-and-conditions' }
         ]
       },
       { key: 'maintenance', label: 'Maintenance', href: '/site-settings/maintenance', icon: FiSliders, subject: 'SiteSettings' },
       // TEMPORARY: the bridge to the old POS, gated on a subject only `manage
       // all` roles hold. Removed with the rest of it — see
       // postgressserver/src/legacy-pos/README.md.
-      { key: 'legacy-pos', label: 'Catalog Migration', href: '/legacy-pos', icon: MdSwapHoriz, subject: 'LegacyPos' },
-      { key: 'message-settings', label: 'Message Settings', href: '/message-settings/api', icon: FiMessageSquare, subject: 'MessageSettings', children: [{ label: 'API', href: '/message-settings/api' }, { label: 'Message Format Settings', href: '/message-settings/formats' }] },
-      { key: 'image-server', label: 'Image Server', href: '/site-settings/image-server', icon: IoImagesOutline, subject: 'ApiSettings', children: [{ label: 'API Settings', href: '/site-settings/image-server' }] }
+      { key: 'legacy-pos', label: 'Catalog migration', href: '/legacy-pos', icon: MdSwapHoriz, subject: 'LegacyPos' },
+      { key: 'message-settings', label: 'Message settings', href: '/message-settings/api', icon: FiMessageSquare, subject: 'MessageSettings', children: [{ label: 'API', href: '/message-settings/api' }, { label: 'Message formats', href: '/message-settings/formats' }] },
+      { key: 'image-server', label: 'Image server', href: '/site-settings/image-server', icon: IoImagesOutline, subject: 'ApiSettings', children: [{ label: 'API settings', href: '/site-settings/image-server' }] }
     ]
   },
   {
@@ -404,4 +404,33 @@ export function activeParent(pathname) {
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.len - a.len);
   return candidates[0].parent;
+}
+
+/**
+ * The sidebar item (and its group label) for a pathname — the most specific
+ * match across items and their tabs wins. Feeds page titles, the top bar
+ * breadcrumb and the browser tab title.
+ */
+export function navItemFor(pathname = '/') {
+  let winner = null;
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      const candidates = [item, ...(item.children || [])];
+      for (const candidate of candidates) {
+        const path = candidate.href.split(/[?#]/)[0];
+        if (hrefMatches(pathname, path) && (!winner || path.length > winner.length)) {
+          winner = {
+            length: path.length,
+            key: item.key,
+            title: item.label,
+            tab: candidate === item ? null : candidate.label,
+            group: group.label,
+            // A nav destination itself, rather than a record or form under it.
+            exact: [item, ...(item.children || [])].some((entry) => entry.href.split(/[?#]/)[0] === pathname)
+          };
+        }
+      }
+    }
+  }
+  return winner;
 }

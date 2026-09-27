@@ -22,52 +22,28 @@ import * as api from 'src/services';
 import { alertError, alertWarning, confirmDelete, promptSelect } from 'src/utils/swal';
 import { useSiteSettings } from 'src/context/SiteSettingsContext';
 import { printInvoices, printShippingLabels } from 'src/components/_admin/dispatch/openDocuments';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Badge from 'src/components/_admin/ui/Badge';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import Pagination from 'src/components/_admin/ui/Pagination';
-import { EmptyState } from 'src/components/_admin/ui/TableStates';
-import { StatusBadge, StatusSelect } from 'src/components/_admin/shared/StatusBadge';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
+import { StatusBadge, StatusSelect, TagChips } from 'src/components/_admin/shared/StatusBadge';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
 import { fDate, fDateTime } from 'src/utils/formatTime';
 import CompactOrdersTable from './CompactOrdersTable';
 
-const PAYMENT_STYLE = {
-  paid: 'bg-emerald-100 text-emerald-700',
-  unpaid: 'bg-slate-100 text-slate-500',
-  refunded: 'bg-amber-100 text-amber-700'
-};
+const PAYMENT_TONE = { paid: 'success', unpaid: 'neutral', refunded: 'warning' };
 
 function PaymentBadge({ status }) {
   return (
-    <span
-      className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${PAYMENT_STYLE[status] || 'bg-slate-100 text-slate-500'}`}
-    >
-      {status || '—'}
-    </span>
+    <Badge tone={PAYMENT_TONE[status] || (String(status).startsWith('pending') ? 'warning' : 'neutral')} dot>
+      {status ? String(status).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : '—'}
+    </Badge>
   );
 }
 
-function TagChips({ tags = [] }) {
-  if (!tags?.length) return null;
-  return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {tags.map((tag) => (
-        <span
-          key={tag.id || tag.slug}
-          className="inline-block rounded-md px-1.5 text-[10px] font-medium leading-5"
-          style={{
-            backgroundColor: tag.color ? `${tag.color}22` : '#f3f4f6',
-            color: tag.color || '#6b7280',
-            border: `1px solid ${tag.color ? `${tag.color}55` : '#e5e7eb'}`
-          }}
-        >
-          {tag.name}
-        </span>
-      ))}
-    </div>
-  );
-}
 
 const fmtDate = (date) => (date ? fDate(date) : '—');
 
@@ -126,10 +102,12 @@ export default function OrderList() {
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
-  const { data, isLoading, isFetching } = useQuery(['admin-orders', params], () => api.getOrdersByAdmin(params), {
-    keepPreviousData: true,
-    onError: (error) => alertError(error, { title: "Couldn't load orders" })
-  });
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery(
+    ['admin-orders', params],
+    () => api.getOrdersByAdmin(params),
+    { keepPreviousData: true }
+  );
+  const filtered = Boolean(search || status || view !== 'active');
 
   const orders = data?.data || [];
   const total = data?.total || 0;
@@ -261,12 +239,10 @@ export default function OrderList() {
       render: (order) => (
         <div className="min-w-[145px]">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[13px] font-bold text-slate-900">#{order.orderNo}</span>
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
-              {sourceLabel(order)}
-            </span>
+            <span className="font-mono text-[13px] font-semibold text-slate-900">#{order.orderNo}</span>
+            <Badge>{sourceLabel(order)}</Badge>
           </div>
-          <div className="mt-1 text-[11px] text-slate-400">
+          <div className="mt-1 text-xs text-slate-500">
             {order.createdAt ? fDateTime(order.createdAt) : '—'}
           </div>
         </div>
@@ -279,18 +255,19 @@ export default function OrderList() {
         const phone = order.shippingAddress?.phone || order.user?.phone;
         return (
           <div className="min-w-[160px]">
-            <div className="font-semibold text-slate-800">
+            <div className="font-medium text-slate-900">
               {order.shippingAddress?.name || order.user?.name || 'Guest customer'}
             </div>
             {phone ? (
               <Link
                 href={`/users/${encodeURIComponent(phone)}`}
+                onClick={stopRow}
                 className="mt-0.5 inline-block text-xs text-slate-500 transition hover:text-slate-800 hover:underline"
               >
                 {phone}
               </Link>
             ) : (
-              <span className="mt-0.5 block text-xs text-slate-400">No phone</span>
+              <span className="mt-0.5 block text-xs text-slate-500">No phone</span>
             )}
           </div>
         );
@@ -300,17 +277,19 @@ export default function OrderList() {
       key: 'items',
       label: 'Items',
       align: 'center',
-      render: (order) => <span className="font-semibold text-slate-700">{order.items?.length || 0}</span>
+      hideBelow: 'lg',
+      render: (order) => <span className="font-medium tabular-nums text-slate-700">{order.items?.length || 0}</span>
     },
     {
       key: 'createdBy',
       label: 'Created by',
+      hideBelow: 'xl',
       render: (order) => (
         <div className="min-w-[130px]">
-          <div className="font-semibold text-slate-700">
+          <div className="font-medium text-slate-700">
             {order.createdBy?.name || (order.source === 'online' ? 'Customer' : 'Unknown')}
           </div>
-          <div className="mt-0.5 text-[11px] text-slate-400">
+          <div className="mt-0.5 text-xs text-slate-500">
             {order.branch?.name || (order.source === 'admin' ? 'Contact center' : 'Online store')}
           </div>
         </div>
@@ -323,23 +302,25 @@ export default function OrderList() {
       render: (order) => (
         <div className="min-w-[135px]">
           <StatusBadge status={order.status} statuses={statuses} />
-          <div className="mt-1.5 text-[11px] text-slate-400">Due {fmtDate(order.estimatedDelivery)}</div>
+          <div className="mt-1.5 text-xs text-slate-500">Due {fmtDate(order.estimatedDelivery)}</div>
         </div>
       )
     },
     {
       key: 'tags',
       label: 'Tags',
+      hideBelow: 'xl',
       render: (order) =>
-        order.tags?.length ? <TagChips tags={order.tags} /> : <span className="text-slate-300">—</span>
+        order.tags?.length ? <TagChips tags={order.tags} /> : <span className="text-slate-400">—</span>
     },
     {
       key: 'payment',
       label: 'Payment',
+      hideBelow: 'md',
       render: (order) => (
         <div>
           <PaymentBadge status={order.paymentStatus} />
-          <div className="mt-1.5 text-[11px] uppercase text-slate-400">{order.paymentMethod || 'Not set'}</div>
+          <div className="mt-1.5 text-xs uppercase text-slate-500">{order.paymentMethod || 'Not set'}</div>
         </div>
       )
     },
@@ -348,31 +329,22 @@ export default function OrderList() {
       label: 'Amount',
       sortable: true,
       align: 'right',
-      render: (order) => <span className="whitespace-nowrap font-bold text-slate-900">{fmtMoney(order.total)}</span>
+      render: (order) => <span className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{fmtMoney(order.total)}</span>
     },
     {
       key: 'actions',
       label: '',
+      srLabel: 'Open',
       align: 'right',
-      render: (order) => (
-        <button
-          type="button"
-          onClick={() => router.push(`/orders/${order.orderNo}`)}
-          className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
-          title="Open order"
-          aria-label={`Open order ${order.orderNo}`}
-        >
-          <MdChevronRight size={20} />
-        </button>
-      )
+      render: () => <MdChevronRight size={20} className="text-slate-300" aria-hidden />
     }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Orders" subtitle={`${total} order${total !== 1 ? 's' : ''} in this view`}>
-        <Link href="/orders/create" className="btn-brand">
-          <BsCartPlus size={16} /> Create order
+        <Link href="/orders/create" target="_blank" rel="noopener" title="Opens the order desk in a new tab" className="btn-brand">
+          <BsCartPlus size={16} aria-hidden /> Create order
         </Link>
       </PageHeader>
 
@@ -390,34 +362,18 @@ export default function OrderList() {
           setPage(1);
         }}
         right={
-          <div className="inline-flex h-9 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Order table view">
-            <button
-              type="button"
-              onClick={() => {
-                setTableView('summary');
-                setPage(1);
-              }}
-              className={`inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
-                tableView === 'summary' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-              aria-pressed={tableView === 'summary'}
-            >
-              <MdViewList size={17} /> Summary
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTableView('compact');
-                setPage(1);
-              }}
-              className={`inline-flex items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] ${
-                tableView === 'compact' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              }`}
-              aria-pressed={tableView === 'compact'}
-            >
-              <MdTableRows size={16} /> Compact details
-            </button>
-          </div>
+          <Segmented
+            label="Order table view"
+            options={[
+              { id: 'summary', label: 'Summary', icon: MdViewList },
+              { id: 'compact', label: 'Compact details', icon: MdTableRows }
+            ]}
+            value={tableView}
+            onChange={(id) => {
+              setTableView(id);
+              setPage(1);
+            }}
+          />
         }
       >
         <select
@@ -427,7 +383,7 @@ export default function OrderList() {
             setStatus('');
             setPage(1);
           }}
-          className="select-ui min-w-[140px] font-semibold"
+          className="select-ui min-w-[140px]"
           aria-label="Order visibility"
         >
           <option value="active">Open orders</option>
@@ -442,10 +398,13 @@ export default function OrderList() {
           statuses={statuses}
           placeholder={view === 'active' ? 'All open statuses' : 'All statuses'}
           className="select-ui min-w-[155px]"
+          aria-label="Fulfillment status"
         />
       </ListToolbar>
 
-      {tableView === 'compact' ? (
+      {isError && !data ? (
+        <ErrorState error={error} title="Orders could not be loaded" onRetry={refetch} />
+      ) : tableView === 'compact' ? (
         <CompactOrdersTable
           orders={orders}
           statuses={statuses}
@@ -472,8 +431,24 @@ export default function OrderList() {
           selectionLabel="orders"
           exportFileName="orders-selection.csv"
           bulkActions={bulkActions}
-          isLoading={isLoading || isFetching}
-          empty={<EmptyState title="No orders found" icon={MdInbox} />}
+          isLoading={isLoading}
+          isFetching={isFetching}
+          caption="Orders"
+          onRowClick={(order) => router.push(`/orders/${order.orderNo}`)}
+          rowLabel={(order) => `Open order ${order.orderNo}`}
+          empty={
+            <EmptyState
+              title={filtered ? 'No orders match these filters' : 'No open orders'}
+              icon={MdInbox}
+              action={
+                filtered ? null : (
+                  <Link href="/orders/create" target="_blank" rel="noopener" title="Opens the order desk in a new tab" className="btn-brand">
+                    <BsCartPlus size={16} aria-hidden /> Create order
+                  </Link>
+                )
+              }
+            />
+          }
           footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="orders" />}
         />
       )}

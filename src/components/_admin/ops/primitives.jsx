@@ -1,5 +1,7 @@
 'use client';
 
+import { ColorChip } from 'src/components/_admin/shared/StatusBadge';
+
 /**
  * Shared bits for the production and fulfilment screens.
  *
@@ -55,12 +57,7 @@ export function readState(item = {}) {
 export function StateChip({ state = 'waiting', label }) {
   const color = STATE_COLOR[state] || STATE_COLOR.waiting;
   return (
-    <span
-      className="inline-block whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: `${color}22`, color, border: `1px solid ${color}55` }}
-    >
-      {label}
-    </span>
+    <ColorChip color={color}>{label}</ColorChip>
   );
 }
 
@@ -76,7 +73,7 @@ export function Empty({ title, hint, Icon = null }) {
     <div className="px-6 py-10 text-center">
       {Icon ? <Icon className="mx-auto mb-2 text-2xl text-slate-300" /> : null}
       <p className="text-sm font-semibold text-slate-600">{title}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   );
 }

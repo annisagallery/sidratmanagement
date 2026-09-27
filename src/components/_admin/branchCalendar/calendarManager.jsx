@@ -1,9 +1,16 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import { FiCheck, FiX, FiAlertTriangle, FiPlus, FiTrash2, FiCalendar, FiClock } from 'react-icons/fi';
+import { MdAdd, MdCalendarMonth, MdCheck, MdClose, MdDelete, MdSchedule } from 'react-icons/md';
 import * as api from 'src/services';
+import { alertError, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import Panel from 'src/components/_admin/ui/Panel';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Badge from 'src/components/_admin/ui/Badge';
+import { Field } from 'src/components/_admin/ui/fields';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import WeeklyHoursEditor, { seedWeek } from 'src/components/_admin/branches/weeklyHoursEditor';
 
 // Branch calendar entries awaiting a decision, and the record of the ones
@@ -24,10 +31,10 @@ import WeeklyHoursEditor, { seedWeek } from 'src/components/_admin/branches/week
 // anybody to do anything.
 
 const STATUS_TABS = [
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: '', label: 'All' }
+  { id: 'PENDING', label: 'Pending' },
+  { id: 'APPROVED', label: 'Approved' },
+  { id: 'REJECTED', label: 'Rejected' },
+  { id: '', label: 'All' }
 ];
 
 const KIND_TABS = [
@@ -37,14 +44,14 @@ const KIND_TABS = [
 ];
 
 const STATUS_BADGE = {
-  PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  REJECTED: 'bg-slate-100 text-slate-500 border-slate-200'
+  PENDING: { label: 'Pending', tone: 'warning' },
+  APPROVED: { label: 'Approved', tone: 'success' },
+  REJECTED: { label: 'Rejected', tone: 'neutral' }
 };
 
 const KIND_BADGE = {
-  CLOSED: { label: 'Closed', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-  OPEN: { label: 'Open', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  CLOSED: { label: 'Closed', tone: 'danger' },
+  OPEN: { label: 'Open', tone: 'success' }
 };
 
 const formatDate = (isoDate) =>
@@ -56,21 +63,104 @@ const formatDate = (isoDate) =>
     year: 'numeric'
   }).format(new Date(`${isoDate}T00:00:00Z`));
 
-function Toast({ toast }) {
-  if (!toast) return null;
-  const isErr = toast.type === 'error';
+const EMPTY_FORM = { branch: '', date: '', kind: 'CLOSED', openTime: '', closeTime: '', reason: '' };
+
+/** Admin-added dates skip the queue — creating one here is the approval. */
+function AddEntryDrawer({ branchList, onClose, onAdded }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const put = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined }));
+  };
+
+  const add = async (e) => {
+    e.preventDefault();
+    const next = {};
+    if (!form.branch) next.branch = 'Choose the branch.';
+    if (!form.date) next.date = 'Choose the date.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    setSaving(true);
+    try {
+      await api.createBranchCalendarEntry(form);
+      toastSuccess('Date added and approved');
+      onAdded();
+      onClose();
+    } catch (err) {
+      alertError(err, { title: 'The date was not added' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div
-      className={`fixed right-5 top-5 z-[100] flex items-center gap-2.5 rounded-md border px-4 py-3 text-sm font-medium shadow-lg
-      ${isErr ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}
+    <Drawer
+      title="Add a calendar date"
+      eyebrow="Branch calendar"
+      onClose={onClose}
+      onSubmit={add}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-brand" disabled={saving}>
+            {saving ? 'Adding…' : 'Add and approve'}
+          </button>
+        </>
+      }
     >
-      {isErr ? <FiAlertTriangle className="shrink-0" /> : <FiCheck className="shrink-0" />}
-      {toast.msg}
-    </div>
+      <div className="space-y-5">
+        <p className="text-[13px] text-slate-600">Dates added here are approved straight away and change the storefront immediately.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Branch" required error={errors.branch}>
+            <select value={form.branch} onChange={(e) => put('branch', e.target.value)} className="select-ui w-full">
+              <option value="">Choose a branch…</option>
+              {branchList.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Date" required error={errors.date}>
+            <input type="date" value={form.date} onChange={(e) => put('date', e.target.value)} className="input-ui" />
+          </Field>
+        </div>
+        <Field label="That day the branch is">
+          <Segmented
+            label="That day the branch is"
+            options={[
+              { id: 'CLOSED', label: 'Closed' },
+              { id: 'OPEN', label: 'Open' }
+            ]}
+            value={form.kind}
+            onChange={(v) => put('kind', v)}
+          />
+        </Field>
+        {/* Hours only mean something on a day the branch will be open. */}
+        {form.kind === 'OPEN' && (
+          <div className="space-y-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Opens" optional>
+                <input type="time" value={form.openTime} onChange={(e) => put('openTime', e.target.value)} className="input-ui" />
+              </Field>
+              <Field label="Closes" optional>
+                <input type="time" value={form.closeTime} onChange={(e) => put('closeTime', e.target.value)} className="input-ui" />
+              </Field>
+            </div>
+            <p className="text-[13px] text-slate-500">Leave blank to use the branch&apos;s regular hours.</p>
+          </div>
+        )}
+        <Field label="Reason" optional>
+          <input value={form.reason} onChange={(e) => put('reason', e.target.value)} placeholder="e.g. Eid holiday" className="input-ui" />
+        </Field>
+      </div>
+    </Drawer>
   );
 }
-
-const EMPTY_FORM = { branch: '', date: '', kind: 'CLOSED', openTime: '', closeTime: '', reason: '' };
 
 export default function BranchCalendarManager() {
   const qc = useQueryClient();
@@ -78,25 +168,16 @@ export default function BranchCalendarManager() {
   const [kind, setKind] = useState('');
   const [branchId, setBranchId] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const [toast, setToast] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
   const [scheduleFor, setScheduleFor] = useState('');
   const [draftWeek, setDraftWeek] = useState(null);
   const [savingWeek, setSavingWeek] = useState(false);
-  const toastTimer = useRef(null);
-
-  const showToast = (msg, type = 'success') => {
-    clearTimeout(toastTimer.current);
-    setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3200);
-  };
 
   const query = [status ? `status=${status}` : '', kind ? `kind=${kind}` : '', branchId ? `branch=${branchId}` : '']
     .filter(Boolean)
     .join('&');
 
-  const { data, isLoading } = useQuery(['admin-branch-calendar', status, kind, branchId], () =>
+  const { data, isLoading, isError, error, refetch } = useQuery(['admin-branch-calendar', status, kind, branchId], () =>
     api.getBranchCalendar(query ? `?${query}` : '')
   );
   const { data: branches } = useQuery('admin-branches-calendar', api.adminGetBranches);
@@ -115,23 +196,31 @@ export default function BranchCalendarManager() {
     setBusyId(id);
     try {
       await api.reviewBranchCalendarEntry(id, { status: nextStatus });
-      showToast(nextStatus === 'APPROVED' ? 'Approved' : 'Rejected');
+      toastSuccess(nextStatus === 'APPROVED' ? 'Approved' : 'Rejected');
       refresh();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Could not save that decision', 'error');
+      alertError(err, { title: 'That decision was not saved' });
     } finally {
       setBusyId(null);
     }
   };
 
-  const remove = async (id) => {
-    setBusyId(id);
+  const remove = async (row) => {
+    const confirmed = await confirmDelete({
+      title: 'Remove this date?',
+      subject: `${row.branch?.name || 'Branch'} · ${formatDate(row.date)}`,
+      text: 'The branch goes back to its weekly schedule for that day.',
+      confirmText: 'Remove date',
+      recoverable: false
+    });
+    if (!confirmed) return;
+    setBusyId(row.id);
     try {
-      await api.deleteBranchCalendarEntry(id);
-      showToast('Removed from the calendar');
+      await api.deleteBranchCalendarEntry(row.id);
+      toastSuccess('Removed from the calendar');
       refresh();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Could not remove that date', 'error');
+      alertError(err, { title: 'That date was not removed' });
     } finally {
       setBusyId(null);
     }
@@ -145,296 +234,198 @@ export default function BranchCalendarManager() {
         id: scheduleBranch.id,
         weeklyHours: seedWeek(draftWeek, scheduleBranch)
       });
-      showToast(`${scheduleBranch.name} schedule saved`);
+      toastSuccess(`${scheduleBranch.name} schedule saved`);
       setDraftWeek(null);
       qc.invalidateQueries('admin-branches-calendar');
       // Entries are read against the schedule, so the queue restates itself.
       refresh();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Could not save the schedule', 'error');
+      alertError(err, { title: 'The schedule was not saved' });
     } finally {
       setSavingWeek(false);
     }
   };
 
-  const add = async () => {
-    if (!form.branch || !form.date) return showToast('Pick a branch and a date', 'error');
-    try {
-      await api.createBranchCalendarEntry(form);
-      showToast('Added and approved');
-      setAdding(false);
-      setForm(EMPTY_FORM);
-      refresh();
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Could not add that date', 'error');
-    }
-  };
+  let list;
+  if (isLoading) {
+    list = (
+      <ul className="divide-y divide-slate-100" aria-busy="true">
+        {[1, 2, 3].map((i) => (
+          <li key={i} className="space-y-2 px-5 py-4">
+            <div className="skeleton h-4 w-48" />
+            <div className="skeleton h-3 w-72 max-w-full" />
+          </li>
+        ))}
+      </ul>
+    );
+  } else if (isError) {
+    list = (
+      <div className="p-5">
+        <ErrorState error={error} title="The calendar could not be loaded" onRetry={refetch} />
+      </div>
+    );
+  } else if (!rows.length) {
+    list = (
+      <EmptyState
+        icon={MdCalendarMonth}
+        title={status === 'PENDING' ? 'Nothing waiting for approval' : 'No dates here'}
+        hint={status === 'PENDING' ? 'Dates a branch marks in the branch app show up here.' : 'Try another status, kind or branch.'}
+      />
+    );
+  } else {
+    list = (
+      <ul className="divide-y divide-slate-100">
+        {rows.map((row) => {
+          const kindBadge = KIND_BADGE[row.kind] || KIND_BADGE.CLOSED;
+          const statusBadge = STATUS_BADGE[row.status] || { label: row.status, tone: 'neutral' };
+          const busy = busyId === row.id;
+          return (
+            <li key={row.id} className="flex flex-wrap items-start gap-x-4 gap-y-3 px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={kindBadge.tone}>{kindBadge.label}</Badge>
+                  <p className="text-[13px] font-semibold text-slate-900">{formatDate(row.date)}</p>
+                  <span className="text-[13px] text-slate-600">· {row.branch?.name}</span>
+                  <Badge tone={statusBadge.tone} dot>
+                    {statusBadge.label}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-[13px] text-slate-700">{row.reason || <span className="text-slate-500">No reason given</span>}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                  {row.kind === 'OPEN' && (row.openTime || row.closeTime) && (
+                    <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                      <MdSchedule size={14} aria-hidden />
+                      {row.openTime || '—'}–{row.closeTime || '—'}
+                    </span>
+                  )}
+                  <span>
+                    {row.requestedBy?.name ? `Requested by ${row.requestedBy.name}` : 'Requested from the branch app'}
+                    {row.reviewedBy?.name ? ` · Reviewed by ${row.reviewedBy.name}` : ''}
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {row.status !== 'APPROVED' && (
+                  <button type="button" onClick={() => review(row.id, 'APPROVED')} disabled={busy} className="btn-brand btn-sm">
+                    <MdCheck size={16} aria-hidden /> Approve
+                  </button>
+                )}
+                {row.status !== 'REJECTED' && (
+                  <button type="button" onClick={() => review(row.id, 'REJECTED')} disabled={busy} className="btn-ghost btn-sm">
+                    <MdClose size={16} aria-hidden /> Reject
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remove(row)}
+                  disabled={busy}
+                  title="Remove date"
+                  aria-label={`Remove ${formatDate(row.date)} for ${row.branch?.name || 'this branch'}`}
+                  className="btn-icon btn-icon-sm btn-icon-danger"
+                >
+                  <MdDelete size={17} aria-hidden />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Toast toast={toast} />
-
       <PageHeader
-        title="Branch Calendar"
+        title="Branch calendar"
         subtitle="Closures, trading on a weekly off day, and the hours for a date. A branch's request only changes the storefront once it is approved here."
       >
-        <button onClick={() => setAdding((v) => !v)} className="btn-brand active:scale-95">
-          <FiPlus className="text-base" /> Add Entry
+        <button type="button" onClick={() => setAdding(true)} className="btn-brand">
+          <MdAdd size={18} aria-hidden /> Add date
         </button>
       </PageHeader>
 
-      {/* Admin-added dates skip the queue — creating one here is the approval. */}
-      {adding && (
-        <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <select
-              value={form.branch}
-              onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
-              className="select-ui w-full"
-            >
-              <option value="">Select branch…</option>
-              {branchList.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
-            />
-            <select
-              value={form.kind}
-              onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
-              className="select-ui w-full"
-            >
-              <option value="CLOSED">Closed that day</option>
-              <option value="OPEN">Open that day</option>
-            </select>
-            <input
-              value={form.reason}
-              onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-              placeholder="Reason"
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
-            {/* Hours only mean something on a day the branch will be open. */}
-            {form.kind === 'OPEN' && (
-              <>
-                <label className="text-xs font-semibold text-gray-600">
-                  Opens
-                  <input
-                    type="time"
-                    value={form.openTime}
-                    onChange={(e) => setForm((f) => ({ ...f, openTime: e.target.value }))}
-                    className="mt-1 block rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
-                  />
-                </label>
-                <label className="text-xs font-semibold text-gray-600">
-                  Closes
-                  <input
-                    type="time"
-                    value={form.closeTime}
-                    onChange={(e) => setForm((f) => ({ ...f, closeTime: e.target.value }))}
-                    className="mt-1 block rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
-                  />
-                </label>
-                <p className="pb-2.5 text-[11px] text-gray-400">Leave blank to use the branch&apos;s regular hours.</p>
-              </>
-            )}
-            <button onClick={add} className="btn-brand ml-auto">
-              Add &amp; approve
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Weekly schedule — the baseline every entry below is an exception to */}
-      <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-gray-800">Weekly schedule</p>
-            <p className="text-xs text-gray-400">
-              The default week. Everything below is an exception to it.
-            </p>
-          </div>
-          <select
-            value={branchId || scheduleFor}
-            onChange={(e) => {
-              setScheduleFor(e.target.value);
-              setDraftWeek(null);
-            }}
-            className="select-ui"
-          >
-            <option value="">Pick a branch…</option>
-            {branchList.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {scheduleBranch && (
-          <>
-            <WeeklyHoursEditor
-              key={scheduleBranch.id}
-              value={draftWeek ?? scheduleBranch.weeklyHours}
-              legacy={scheduleBranch}
-              onChange={setDraftWeek}
-            />
-            <div className="flex items-center justify-end gap-2">
-              {draftWeek && (
-                <button onClick={() => setDraftWeek(null)} className="btn-ghost text-sm">
-                  Discard
-                </button>
-              )}
-              <button onClick={saveWeek} disabled={!draftWeek || savingWeek} className="btn-brand">
-                {savingWeek ? 'Saving…' : 'Save schedule'}
-              </button>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
+        <section className="card-ui min-w-0 overflow-hidden" aria-labelledby="calendar-queue-title">
+          <header className="space-y-3 border-b border-slate-200 px-5 py-4">
+            <h2 id="calendar-queue-title" className="text-[15px] font-semibold text-slate-900">
+              Requests
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmented label="Status" options={STATUS_TABS} value={status} onChange={setStatus} />
+              <select value={kind} onChange={(e) => setKind(e.target.value)} className="select-ui" aria-label="Kind">
+                {KIND_TABS.map((t) => (
+                  <option key={t.value || 'all'} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="select-ui" aria-label="Branch">
+                <option value="">All branches</option>
+                {branchList.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </>
-        )}
-      </div>
+          </header>
+          {list}
+        </section>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-md border border-gray-200 bg-white p-1">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value || 'all'}
-              onClick={() => setStatus(tab.value)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                status === tab.value
-                  ? 'bg-[var(--brand)] text-white'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <select value={kind} onChange={(e) => setKind(e.target.value)} className="select-ui">
-          {KIND_TABS.map((t) => (
-            <option key={t.value || 'all'} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-
-        <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="select-ui">
-          <option value="">All branches</option>
-          {branchList.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* List */}
-      {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-md bg-gray-100" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-md border-2 border-dashed border-gray-200 bg-gray-50/50 py-16 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-md bg-gray-100">
-            <FiCalendar className="text-2xl text-gray-300" />
-          </div>
-          <p className="font-semibold text-gray-600">
-            {status === 'PENDING' ? 'Nothing waiting for approval' : 'No entries here'}
-          </p>
-          <p className="mt-1 text-sm text-gray-400">
-            {status === 'PENDING'
-              ? 'Dates a branch marks in the branch app show up here.'
-              : 'Try another status, kind or branch.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((row) => {
-            const kindBadge = KIND_BADGE[row.kind] || KIND_BADGE.CLOSED;
-            return (
-              <div
-                key={row.id}
-                className="flex flex-wrap items-center gap-4 rounded-md border border-gray-200 bg-white px-4 py-3"
+        {/* Weekly schedule — the baseline every entry is an exception to */}
+        <Panel
+          title="Weekly schedule"
+          description="The default week. Every date on the left is an exception to it."
+          className="xl:sticky xl:top-0"
+        >
+          <div className="space-y-4">
+            <Field label="Branch">
+              <select
+                value={branchId || scheduleFor}
+                onChange={(e) => {
+                  setScheduleFor(e.target.value);
+                  setDraftWeek(null);
+                }}
+                disabled={Boolean(branchId)}
+                className="select-ui w-full"
               >
-                <span
-                  className={`w-[70px] shrink-0 rounded-md border px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider ${kindBadge.className}`}
-                >
-                  {kindBadge.label}
-                </span>
+                <option value="">Choose a branch…</option>
+                {branchList.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-                <div className="min-w-[180px]">
-                  <p className="text-sm font-bold text-gray-800">{formatDate(row.date)}</p>
-                  <p className="text-xs text-gray-500">{row.branch?.name}</p>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-gray-600">
-                    {row.reason || <span className="italic text-gray-300">No reason given</span>}
-                  </p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
-                    {row.kind === 'OPEN' && (row.openTime || row.closeTime) && (
-                      <span className="flex items-center gap-1 font-semibold text-gray-500">
-                        <FiClock className="text-[10px]" />
-                        {row.openTime || '—'}–{row.closeTime || '—'}
-                      </span>
-                    )}
-                    <span>
-                      {row.requestedBy?.name ? `Requested by ${row.requestedBy.name}` : 'Requested from the branch app'}
-                      {row.reviewedBy?.name ? ` · Reviewed by ${row.reviewedBy.name}` : ''}
-                    </span>
-                  </p>
-                </div>
-
-                <span
-                  className={`rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${STATUS_BADGE[row.status]}`}
-                >
-                  {row.status}
-                </span>
-
-                <div className="flex items-center gap-1">
-                  {row.status !== 'APPROVED' && (
-                    <button
-                      onClick={() => review(row.id, 'APPROVED')}
-                      disabled={busyId === row.id}
-                      className="flex items-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
-                    >
-                      <FiCheck /> Approve
+            {scheduleBranch ? (
+              <>
+                <WeeklyHoursEditor
+                  key={scheduleBranch.id}
+                  value={draftWeek ?? scheduleBranch.weeklyHours}
+                  legacy={scheduleBranch}
+                  onChange={setDraftWeek}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  {draftWeek && (
+                    <button type="button" onClick={() => setDraftWeek(null)} className="btn-ghost">
+                      Discard changes
                     </button>
                   )}
-                  {row.status !== 'REJECTED' && (
-                    <button
-                      onClick={() => review(row.id, 'REJECTED')}
-                      disabled={busyId === row.id}
-                      className="flex items-center gap-1 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <FiX /> Reject
-                    </button>
-                  )}
-                  <button
-                    onClick={() => remove(row.id)}
-                    disabled={busyId === row.id}
-                    title="Delete"
-                    className="rounded-md p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                  >
-                    <FiTrash2 className="text-sm" />
+                  <button type="button" onClick={saveWeek} disabled={!draftWeek || savingWeek} className="btn-brand">
+                    {savingWeek ? 'Saving…' : 'Save schedule'}
                   </button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              </>
+            ) : (
+              <p className="text-[13px] text-slate-500">Choose a branch to see or change its week.</p>
+            )}
+          </div>
+        </Panel>
+      </div>
+
+      {adding && <AddEntryDrawer branchList={branchList} onClose={() => setAdding(false)} onAdded={refresh} />}
     </div>
   );
 }

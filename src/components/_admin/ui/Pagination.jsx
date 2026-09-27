@@ -1,39 +1,89 @@
 'use client';
+import { MdChevronLeft, MdChevronRight } from 'react-icons/md';
+
+/** Page numbers to show: always the first and last, a window around the current one, gaps as null. */
+function pageList(page, totalPages) {
+  const wanted = new Set([1, totalPages, page - 1, page, page + 1]);
+  if (page <= 3) [2, 3, 4].forEach((p) => wanted.add(p));
+  if (page >= totalPages - 2) [totalPages - 3, totalPages - 2, totalPages - 1].forEach((p) => wanted.add(p));
+  const sorted = [...wanted].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const out = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) out.push(null);
+    out.push(p);
+  });
+  return out;
+}
 
 export default function Pagination({ page, totalPages, onPage, total, unit = 'items', pageSize = 20 }) {
   if (!totalPages || totalPages <= 0) return null;
 
-  const windowSize = 7;
-  const start = Math.max(1, Math.min(page - 3, totalPages - windowSize + 1));
-  const pages = Array.from({ length: Math.min(totalPages, windowSize) }, (_, index) => start + index).filter(
-    (value) => value >= 1 && value <= totalPages
-  );
   const from = total ? (page - 1) * pageSize + 1 : 0;
   const to = typeof total === 'number' ? Math.min(page * pageSize, total) : null;
+  const pages = pageList(page, totalPages);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3 py-2">
-      <p className="text-xs tabular-nums text-slate-500">
-        {typeof total === 'number' ? `${from}–${to} of ${total} ${unit}` : `Page ${page} of ${totalPages}`}
+    <nav
+      aria-label="Pagination"
+      className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3"
+    >
+      <p className="text-[13px] tabular-nums text-slate-500">
+        {typeof total === 'number' ? (
+          <>
+            <span className="font-medium text-slate-700">{from.toLocaleString()}–{to.toLocaleString()}</span> of{' '}
+            <span className="font-medium text-slate-700">{total.toLocaleString()}</span> {unit}
+          </>
+        ) : (
+          `Page ${page} of ${totalPages}`
+        )}
       </p>
       {totalPages > 1 && (
-        <div className="flex gap-1">
-          <button type="button" onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-            Prev
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+            className="btn-icon btn-icon-sm"
+            aria-label="Previous page"
+          >
+            <MdChevronLeft size={20} />
           </button>
-          {pages.map((value) => {
-            const active = value === page;
-            return (
-              <button key={value} type="button" onClick={() => onPage(value)} className={`min-w-8 rounded-md border px-2 py-1.5 text-xs tabular-nums transition ${active ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`} style={active ? { backgroundColor: 'var(--brand)' } : undefined} aria-current={active ? 'page' : undefined}>
-                {value}
-              </button>
-            );
-          })}
-          <button type="button" onClick={() => onPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-            Next
+          <div className="hidden items-center gap-1 sm:flex">
+            {pages.map((value, index) =>
+              value === null ? (
+                <span key={`gap-${index}`} className="w-6 text-center text-slate-400" aria-hidden>
+                  …
+                </span>
+              ) : (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onPage(value)}
+                  aria-current={value === page ? 'page' : undefined}
+                  aria-label={`Page ${value}`}
+                  className={`h-8 min-w-8 rounded-md px-2 text-[13px] font-medium tabular-nums transition-colors ${
+                    value === page ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  {value}
+                </button>
+              ),
+            )}
+          </div>
+          <span className="px-2 text-[13px] tabular-nums text-slate-600 sm:hidden">
+            {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => onPage(Math.min(totalPages, page + 1))}
+            disabled={page === totalPages}
+            className="btn-icon btn-icon-sm"
+            aria-label="Next page"
+          >
+            <MdChevronRight size={20} />
           </button>
         </div>
       )}
-    </div>
+    </nav>
   );
 }

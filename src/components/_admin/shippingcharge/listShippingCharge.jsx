@@ -7,9 +7,10 @@ import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/util
 import { MdAdd, MdEdit, MdDelete, MdLocalShipping, MdInbox, MdBlock, MdCheckCircle } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { RecordStatus } from 'src/components/_admin/ui/Badge';
 
 const STATUS_OPTS = [
   { label: 'All Status', value: '' },
@@ -17,16 +18,7 @@ const STATUS_OPTS = [
   { label: 'Inactive', value: 'inactive' }
 ];
 
-function StatusBadge({ status }) {
-  const map = { active: 'bg-emerald-100 text-emerald-700', inactive: 'bg-red-100 text-red-700' };
-  return (
-    <span
-      className={`inline-block rounded-md px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] || 'bg-slate-100 text-slate-600'}`}
-    >
-      {status}
-    </span>
-  );
-}
+const StatusBadge = ({ status }) => <RecordStatus status={status} />;
 
 export default function ShippingChargeList() {
   const router = useRouter();
@@ -54,7 +46,7 @@ export default function ShippingChargeList() {
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
-  const { data, isLoading, isFetching, refetch } = useQuery(
+  const { data, isLoading, isFetching, refetch, isError, error: loadError } = useQuery(
     ['admin-shipping', params],
     () => api.getAllShippingCharges(params),
     {
@@ -189,24 +181,22 @@ export default function ShippingChargeList() {
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (c) => (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => router.push(`/shippingcharge/${c.id}`)}
-            className="rounded-md p-2 transition hover:bg-slate-100"
-            style={{ color: 'var(--brand-strong)' }}
-            title="Edit"
-          >
-            <MdEdit size={17} />
+        <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+          <button type="button" onClick={() => router.push(`/shippingcharge/${c.id}`)} className="btn-ghost btn-sm">
+            Edit
           </button>
           <button
+            type="button"
             onClick={() => handleDelete(c)}
-            className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
+            className="btn-icon btn-icon-sm btn-icon-danger"
+            aria-label="Delete this shipping charge"
             title="Delete"
           >
-            <MdDelete size={17} />
+            <MdDelete size={18} />
           </button>
         </div>
       )
@@ -217,7 +207,7 @@ export default function ShippingChargeList() {
     <div className="space-y-4">
       {isFree && (
         <div className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-          <MdLocalShipping size={20} className="flex-shrink-0 text-amber-600" />
+          <MdLocalShipping size={20} className="flex-shrink-0 text-amber-700" />
           <p className="text-sm font-semibold text-amber-800">
             Free Shipping is currently enabled. Saved rules are preserved and can still be managed.
           </p>
@@ -225,15 +215,15 @@ export default function ShippingChargeList() {
       )}
 
       <PageHeader title="Shipping Charges" subtitle={`${total} charge${total !== 1 ? 's' : ''} total`}>
-        <button
+        <button type="button"
           onClick={() => toggleFree()}
           disabled={toggling}
-          className={`inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-sm font-semibold text-white transition hover:brightness-95 ${isFree ? 'bg-red-600' : 'bg-emerald-600'}`}
+          className={`inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-sm font-semibold text-white transition hover:brightness-95 ${isFree ? 'bg-rose-600' : 'bg-emerald-600'}`}
         >
           <MdLocalShipping size={16} /> {isFree ? 'Disable Free Shipping' : 'Enable Free Shipping'}
         </button>
-        <button onClick={() => router.push('/shippingcharge/add')} className="btn-brand">
-          <MdAdd size={18} /> Add Charge
+        <button type="button" onClick={() => router.push('/shippingcharge/add')} className="btn-brand">
+          <MdAdd size={18} /> Add charge
         </button>
       </PageHeader>
 
@@ -266,13 +256,18 @@ export default function ShippingChargeList() {
       </ListToolbar>
 
       <DataTable
+        onRowClick={(c) => router.push(`/shippingcharge/${c.id}`)}
+        rowLabel={() => 'Edit shipping charge'}
+        error={isError ? loadError : null}
+        onRetry={refetch}
         columns={columns}
         data={charges}
         sort={sort}
         selectionLabel="charges"
         exportFileName="shipping-charges-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
+        isLoading={isLoading}
+        isFetching={isFetching}
         empty={
           <EmptyState
             title="No shipping charges found"

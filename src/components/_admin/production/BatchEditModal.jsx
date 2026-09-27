@@ -23,11 +23,10 @@ import {
   ModalShell,
   Notice,
   Pill,
-  errorAlert,
   fieldClass,
-  oid,
-  toast
+  oid
 } from 'src/components/_admin/ui/primitives';
+import { alertError, toastSuccess } from 'src/utils/swal';
 import { variationLabel } from 'src/components/_admin/inventory/shared';
 
 export default function BatchEditModal({ batch, onClose, onSaved }) {
@@ -71,10 +70,10 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
       }),
     {
       onSuccess: () => {
-        toast('Batch updated');
+        toastSuccess('Batch saved');
         onSaved();
       },
-      onError: (error) => errorAlert('The batch could not be updated', error)
+      onError: (error) => alertError(error, { title: 'The batch was not saved' })
     }
   );
 
@@ -133,9 +132,11 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
               <tr>
                 <th>Product</th>
                 <th>For</th>
-                <th className="w-24 text-center">Qty</th>
+                <th className="w-24 text-center">Quantity</th>
                 <th>Production note</th>
-                <th className="w-12" />
+                <th className="w-12">
+                  <span className="sr-only">Remove</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -146,7 +147,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                     <tr key={item.key}>
                       <td>
                         <p className="text-[13px] font-semibold text-slate-800">{item.productName}</p>
-                        <p className="text-[11px] text-slate-400">{item.variationName}</p>
+                        <p className="text-xs text-slate-500">{item.variationName}</p>
                       </td>
                       <td>
                         {item.orderNo ? (
@@ -162,6 +163,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                           disabled={locked}
                           value={item.quantity}
                           onChange={(event) => setItem(item.key, { quantity: Number(event.target.value) })}
+                          aria-label={`Quantity of ${item.productName}`}
                           className="input-ui text-center tabular-nums disabled:bg-slate-100"
                         />
                       </td>
@@ -170,6 +172,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                           disabled={locked}
                           value={item.note}
                           onChange={(event) => setItem(item.key, { note: event.target.value })}
+                          aria-label={`Production note for ${item.productName}`}
                           className="input-ui disabled:bg-slate-100"
                         />
                       </td>
@@ -179,9 +182,9 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                           disabled={frozen}
                           onClick={() => setItems((current) => current.filter((entry) => entry.key !== item.key))}
                           aria-label={`Remove ${item.productName}`}
-                          className="rounded-md p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
+                          className="btn-icon btn-icon-sm btn-icon-danger disabled:opacity-30"
                         >
-                          <FiTrash2 size={14} />
+                          <FiTrash2 size={14} aria-hidden />
                         </button>
                       </td>
                     </tr>
@@ -196,7 +199,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
 
         {!frozen ? (
           <section className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Add a stock line</p>
+            <p className="section-label mb-2">Add a stock line</p>
             <div className="grid gap-2 md:grid-cols-[1fr_1fr_90px_auto]">
               <input
                 value={search}
@@ -209,6 +212,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                 className={fieldClass}
                 value={manual.product}
                 onChange={(event) => setManual({ ...manual, product: event.target.value, variation: '' })}
+                aria-label="Product to add"
               >
                 <option value="">Choose product…</option>
                 {products.map((product) => (
@@ -223,9 +227,10 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                 className={fieldClass}
                 value={manual.quantity}
                 onChange={(event) => setManual({ ...manual, quantity: Number(event.target.value) })}
+                aria-label="Quantity to add"
               />
-              <button type="button" onClick={addManual} disabled={!manual.product} className="btn-ghost h-[38px]">
-                <FiPlus size={14} /> Add
+              <button type="button" onClick={addManual} disabled={!manual.product} className="btn-ghost">
+                <FiPlus size={14} aria-hidden /> Add line
               </button>
             </div>
             {chosen?.variations?.length ? (
@@ -233,6 +238,7 @@ export default function BatchEditModal({ batch, onClose, onSaved }) {
                 className={`${fieldClass} mt-2`}
                 value={manual.variation}
                 onChange={(event) => setManual({ ...manual, variation: event.target.value })}
+                aria-label="Variation to add"
               >
                 <option value="">Base product</option>
                 {chosen.variations.map((variation) => (

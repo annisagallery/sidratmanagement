@@ -11,41 +11,63 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next-nprogress-bar';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import { format } from 'date-fns';
-import Swal from 'sweetalert2';
-import { FiPlay, FiPlus, FiPrinter, FiRefreshCw, FiSearch, FiXCircle } from 'react-icons/fi';
+import { MdAdd, MdCancel, MdOpenInNew, MdPlayArrow, MdPrint } from 'react-icons/md';
 import { LuFactory } from 'react-icons/lu';
 
-import {
-  cancelProductionBatch,
-  getProductionBatchUnits,
-  getProductionBatches,
-  startProductionBatch
-} from 'src/services';
+import { cancelProductionBatch, getProductionBatchUnits, getProductionBatches, startProductionBatch } from 'src/services';
+import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
 import { openLabelSheet, productionStickerLabels } from 'src/components/_admin/labels/openLabelSheet';
-import GlobalTable from 'src/components/_admin/ui/GlobalTable';
+import PageHeader from 'src/components/_admin/ui/PageHeader';
+import ListToolbar from 'src/components/_admin/ui/ListToolbar';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
-import {
-  EmptyRow,
-  PageBar,
-  Section,
-  StatTile,
-  Toolbar,
-  errorAlert,
-  oid,
-  qty,
-  toast
-} from 'src/components/_admin/ui/primitives';
-import { BATCH_STATUS, BatchStatusPill } from 'src/components/_admin/inventory/shared';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import { oid, qty } from 'src/components/_admin/ui/primitives';
+import { BatchStatusPill } from 'src/components/_admin/inventory/shared';
 
 const planned = (batch) => (batch.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 const made = (batch) => (batch.items || []).reduce((sum, item) => sum + Number(item.completedQuantity || 0), 0);
 
+const STATUS_FILTERS = [
+  { id: '', label: 'All' },
+  { id: 'DRAFT', label: 'Drafts' },
+  { id: 'IN_PRODUCTION', label: 'On the floor' },
+  { id: 'COMPLETED', label: 'Completed' },
+  { id: 'CANCELLED', label: 'Cancelled' }
+];
+
+function Progress({ done, total }) {
+  const percent = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={done}
+        aria-label={`${done} of ${total} pieces made`}
+      >
+        <span className={`block h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : 'bg-slate-900'}`} style={{ width: `${percent}%` }} />
+      </span>
+      <span className="text-[13px] tabular-nums text-slate-700">
+        <span className="font-semibold text-slate-900">{qty(done)}</span> / {qty(total)}
+      </span>
+    </div>
+  );
+}
+
 export default function BatchList() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const limit = 20;
 
@@ -63,30 +85,30 @@ export default function BatchList() {
 
   const start = useMutation(startProductionBatch, {
     onSuccess: () => {
-      toast('Batch started — barcodes are now generated');
+      toastSuccess('Batch started', 'Barcodes are now generated.');
       refresh();
     },
-    onError: (error) => errorAlert('The batch could not be started', error)
+    onError: (error) => alertError(error, { title: 'The batch could not be started' })
   });
 
   const cancel = useMutation(cancelProductionBatch, {
     onSuccess: () => {
-      toast('Batch cancelled');
+      toastSuccess('Batch cancelled');
       refresh();
     },
-    onError: (error) => errorAlert('The batch could not be cancelled', error)
+    onError: (error) => alertError(error, { title: 'The batch could not be cancelled' })
   });
 
   const confirmCancel = async (batch) => {
-    const result = await Swal.fire({
+    const confirmed = await confirmAction({
+      tone: 'danger',
+      glyph: 'danger',
       title: `Cancel ${batch.batchNo}?`,
       text: 'Every line is withdrawn and any piece still on the floor is voided. Order items go back to the queue.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Cancel batch',
-      confirmButtonColor: '#e11d48'
+      confirmText: 'Cancel batch',
+      cancelText: 'Keep batch'
     });
-    if (result.isConfirmed) cancel.mutate({ id: oid(batch) });
+    if (confirmed) cancel.mutate({ id: oid(batch) });
   };
 
   // Stickers go straight to a PDF rather than through a rendered page: the
@@ -101,212 +123,177 @@ export default function BatchList() {
         title: `${batch.batchNo} stickers`
       });
     } catch (error) {
-      errorAlert('The sticker sheet could not be built', error);
+      alertError(error, { title: 'The sticker sheet could not be built' });
     } finally {
       setStickersFor(null);
     }
   };
 
   // Counts for every status from the server — counting the rows on this page
-  // made every tile but the filtered one read 0.
+  // made every filter but the chosen one read 0.
   const counts = batchesQuery.data?.statusCounts || {};
-  const filterBy = (value) => {
-    setStatus((current) => (current === value ? '' : value));
-    setPage(1);
-  };
+  const allCount = Object.values(counts).reduce((sum, n) => sum + Number(n || 0), 0);
+  const filterOptions = STATUS_FILTERS.map((f) => {
+    const n = f.id ? counts[f.id] || 0 : allCount;
+    return { id: f.id, label: `${f.label} ${qty(n)}` };
+  });
+
+  const open = (batch) => router.push(`/production/batches/${batch.batchNo}`);
+
+  const columns = [
+    {
+      key: 'batchNo',
+      label: 'Batch',
+      render: (batch) => (
+        <div>
+          <Link href={`/production/batches/${batch.batchNo}`} onClick={stopRow} className="ops-code text-[13px] font-semibold text-slate-900 hover:underline">
+            {batch.batchNo}
+          </Link>
+          <p className="text-xs text-slate-500">Version {batch.version || 1}</p>
+        </div>
+      )
+    },
+    {
+      key: 'progress',
+      label: 'Made',
+      render: (batch) => <Progress done={made(batch)} total={planned(batch)} />
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (batch) => <BatchStatusPill status={batch.status} />
+    },
+    {
+      key: 'createdAt',
+      label: 'Created',
+      hideBelow: 'md',
+      render: (batch) => (
+        <div className="whitespace-nowrap">
+          <p className="text-[13px] text-slate-700">{batch.createdAt ? format(new Date(batch.createdAt), 'dd MMM yyyy') : '—'}</p>
+          {batch.createdBy?.name && <p className="text-xs text-slate-500">{batch.createdBy.name}</p>}
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      label: '',
+      srLabel: 'Actions',
+      align: 'right',
+      render: (batch) => {
+        const id = oid(batch);
+        return (
+          <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+            {batch.status === 'DRAFT' ? (
+              <button type="button" onClick={() => start.mutate(id)} disabled={start.isLoading} className="btn-brand btn-sm">
+                <MdPlayArrow size={16} aria-hidden /> Start
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => printStickers(batch)}
+                disabled={stickersFor === id}
+                title="A print-ready PDF with one barcode label per piece"
+                className="btn-ghost btn-sm"
+              >
+                <MdPrint size={16} aria-hidden /> {stickersFor === id ? 'Building…' : 'Stickers'}
+              </button>
+            )}
+            <ActionMenu
+              label={`More actions for ${batch.batchNo}`}
+              items={[
+                { label: 'Open batch', icon: MdOpenInNew, onClick: () => open(batch) },
+                {
+                  label: 'Cancel batch',
+                  icon: MdCancel,
+                  tone: 'danger',
+                  onClick: () => confirmCancel(batch),
+                  hidden: !['DRAFT', 'IN_PRODUCTION'].includes(batch.status)
+                }
+              ]}
+            />
+          </div>
+        );
+      }
+    }
+  ];
 
   return (
-    <div className="space-y-4">
-      <PageBar eyebrow="Production" title="Batches" subtitle="Every production run, newest first.">
-        <button type="button" onClick={refresh} className="btn-ghost">
-          <FiRefreshCw size={14} className={batchesQuery.isFetching ? 'animate-spin' : ''} /> Refresh
-        </button>
+    <div className="space-y-6">
+      <PageHeader title="Batches" subtitle="Every production run, newest first.">
         <Link href="/production/create" className="btn-brand">
-          <FiPlus size={15} /> New batch
+          <MdAdd size={18} aria-hidden /> New batch
         </Link>
-      </PageBar>
+      </PageHeader>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="Drafts"
-          value={qty(counts.DRAFT || 0)}
-          note="Planned, not started"
-          onClick={() => filterBy('DRAFT')}
-          active={status === 'DRAFT'}
-        />
-        <StatTile
-          label="On the floor"
-          value={qty(counts.IN_PRODUCTION || 0)}
-          note="Barcodes issued, being made"
-          tone="warn"
-          onClick={() => filterBy('IN_PRODUCTION')}
-          active={status === 'IN_PRODUCTION'}
-        />
-        <StatTile
-          label="Completed"
-          value={qty(counts.COMPLETED || 0)}
-          note="Every piece received"
-          tone="good"
-          onClick={() => filterBy('COMPLETED')}
-          active={status === 'COMPLETED'}
-        />
-        <StatTile
-          label="Cancelled"
-          value={qty(counts.CANCELLED || 0)}
-          note="Withdrawn"
-          tone="muted"
-          onClick={() => filterBy('CANCELLED')}
-          active={status === 'CANCELLED'}
-        />
-      </div>
-
-      <Section
-        title="Batch register"
-        icon={LuFactory}
-        hint={`${batchesQuery.data?.total || 0} total`}
-        actions={
-          <Toolbar>
-            <div className="relative">
-              <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search batch no…"
-                className="input-ui w-48 pl-8"
-                aria-label="Search batches"
-              />
-            </div>
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
+      <ListToolbar
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onSubmit={() => {
+          setSearch(searchInput.trim());
+          setPage(1);
+        }}
+        searchPlaceholder="Search by batch number…"
+        onRefresh={refresh}
+        refreshing={batchesQuery.isFetching}
+        onReset={
+          status || search
+            ? () => {
+                setStatus('');
+                setSearch('');
+                setSearchInput('');
                 setPage(1);
-              }}
-              className="select-ui"
-              aria-label="Filter by status"
-            >
-              <option value="">Every status</option>
-              {Object.entries(BATCH_STATUS).map(([value, meta]) => (
-                <option key={value} value={value}>
-                  {meta.label}
-                </option>
-              ))}
-            </select>
-          </Toolbar>
+              }
+            : undefined
         }
       >
-        <GlobalTable>
-          <thead>
-            <tr>
-              <th>Batch</th>
-              <th>Progress</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {batchesQuery.isLoading ? (
-              <EmptyRow colSpan={5} title="Loading batches…" />
-            ) : batches.length ? (
-              batches.map((batch) => {
-                const total = planned(batch);
-                const done = made(batch);
-                const percent = total ? Math.round((done / total) * 100) : 0;
-                return (
-                  <tr key={oid(batch)}>
-                    <td>
-                      <Link href={`/production/batches/${batch.batchNo}`} className="block">
-                        <span className="ops-code text-[13px] font-bold text-[var(--brand-strong)] hover:underline">
-                          {batch.batchNo}
-                        </span>
-                        <span className="block text-[11px] text-slate-400">v{batch.version || 1}</span>
-                      </Link>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
-                          <span
-                            className="block h-full rounded-full bg-emerald-500 transition-all"
-                            style={{ width: `${percent}%` }}
-                          />
-                        </span>
-                        <span className="ops-code text-[12px] font-bold text-slate-700">
-                          {done}/{total}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <BatchStatusPill status={batch.status} />
-                    </td>
-                    <td className="whitespace-nowrap text-[11px] text-slate-500">
-                      {batch.createdAt ? format(new Date(batch.createdAt), 'dd MMM yyyy') : '—'}
-                      <span className="block text-slate-400">{batch.createdBy?.name}</span>
-                    </td>
-                    <td>
-                      <div className="flex justify-end gap-1.5">
-                        {batch.status === 'DRAFT' ? (
-                          <button
-                            type="button"
-                            onClick={() => start.mutate(oid(batch))}
-                            disabled={start.isLoading}
-                            className="btn-brand h-8 !text-xs"
-                          >
-                            <FiPlay size={12} /> Start
-                          </button>
-                        ) : null}
-                        {batch.status !== 'DRAFT' ? (
-                          <button
-                            type="button"
-                            onClick={() => printStickers(batch)}
-                            disabled={stickersFor === oid(batch)}
-                            title="Opens a print-ready PDF with one barcode label per piece in this batch"
-                            className="btn-ghost h-8 !px-2.5 !text-xs"
-                          >
-                            <FiPrinter size={12} /> {stickersFor === oid(batch) ? 'Building…' : 'Stickers'}
-                          </button>
-                        ) : null}
-                        {['DRAFT', 'IN_PRODUCTION'].includes(batch.status) ? (
-                          <button
-                            type="button"
-                            onClick={() => confirmCancel(batch)}
-                            title="Withdraw this batch and return its orders to the queue"
-                            aria-label={`Cancel ${batch.batchNo}`}
-                            className="btn-ghost h-8 !px-2 !text-xs !border-rose-200 !text-rose-600 hover:!bg-rose-50"
-                          >
-                            <FiXCircle size={13} />
-                          </button>
-                        ) : null}
-                        <Link href={`/production/batches/${batch.batchNo}`} className="btn-ghost h-8 !px-2.5 !text-xs">
-                          Open
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <EmptyRow
-                colSpan={5}
-                icon={LuFactory}
-                title="No batches"
-                hint="Plan one from the queue to start making pieces."
-              />
-            )}
-          </tbody>
-        </GlobalTable>
-      </Section>
+        <Segmented
+          label="Filter by status"
+          options={filterOptions}
+          value={status}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+          className="max-w-full overflow-x-auto"
+        />
+      </ListToolbar>
 
-      <Pagination
-        page={page}
-        totalPages={batchesQuery.data?.count || 1}
-        onPage={setPage}
-        total={batchesQuery.data?.total || 0}
-        unit="batches"
-        pageSize={limit}
+      <DataTable
+        caption="Production batches"
+        columns={columns}
+        data={batches}
+        rowKey={(batch) => oid(batch)}
+        onRowClick={open}
+        rowLabel={(batch) => `Open ${batch.batchNo}`}
+        selectable={false}
+        isLoading={batchesQuery.isLoading}
+        isFetching={batchesQuery.isFetching}
+        error={batchesQuery.isError ? batchesQuery.error : null}
+        onRetry={batchesQuery.refetch}
+        empty={
+          <EmptyState
+            icon={LuFactory}
+            title={status || search ? 'No batches match' : 'No batches yet'}
+            hint={status || search ? 'Try another status or clear the search.' : 'Plan one from the queue to start making pieces.'}
+            action={
+              status || search ? null : (
+                <Link href="/production/queue" className="btn-ghost">
+                  Open the queue
+                </Link>
+              )
+            }
+          />
+        }
+        footer={
+          <Pagination
+            page={page}
+            totalPages={batchesQuery.data?.count || 1}
+            onPage={setPage}
+            total={batchesQuery.data?.total || 0}
+            unit="batches"
+            pageSize={limit}
+          />
+        }
       />
     </div>
   );

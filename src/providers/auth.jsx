@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useRouter } from 'next-nprogress-bar';
 import { useQuery } from 'react-query';
-import Swal from 'sweetalert2';
+import { alertError } from 'src/utils/swal';
 
 import useAdminUserStore from 'src/stores/userStore';
 import Loading from 'src/components/loading';
@@ -40,7 +40,7 @@ export default function AuthProvider({ children }) {
       setLoading(false);
     } else if (isError) {
       logout();
-      Swal.fire("You're not allowed to access the dashboard", '', 'error');
+      alertError(null, { title: 'No access to Management', text: 'Your account does not have permission to use this dashboard.' });
       router.push('/auth/login');
     }
   }, [isAuthenticated, isSuccess, isError, _hasHydrated, logout, router]);

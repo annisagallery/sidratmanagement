@@ -18,32 +18,32 @@ import * as api from 'src/services';
 import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
-import DataTable from 'src/components/_admin/ui/DataTable';
+import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
-import { EmptyState } from 'src/components/_admin/ui/TableStates';
+import Badge from 'src/components/_admin/ui/Badge';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
 
 const STATUS_OPTS = [
-  { label: 'All Status', value: '' },
+  { label: 'All statuses', value: '' },
   { label: 'Active', value: 'active' },
   { label: 'Inactive', value: 'inactive' },
   { label: 'Draft', value: 'draft' }
 ];
 
+const STATUS_TONE = { active: 'success', inactive: 'neutral', draft: 'warning' };
+const STATUS_LABEL = { active: 'Published', inactive: 'Unpublished', draft: 'Draft' };
+
 function StatusBadge({ status }) {
-  const map = {
-    active: 'bg-emerald-100 text-emerald-700',
-    inactive: 'bg-red-100 text-red-700',
-    draft: 'bg-amber-100 text-amber-700'
-  };
   return (
-    <span
-      className={`inline-block rounded-md px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] || 'bg-slate-100 text-slate-600'}`}
-    >
-      {status}
-    </span>
+    <Badge tone={STATUS_TONE[status] || 'neutral'} dot>
+      {STATUS_LABEL[status] || status || '—'}
+    </Badge>
   );
 }
+
+const storefrontUrl = (slug) => `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/product/${slug}`;
 
 export default function ProductList() {
   const router = useRouter();
@@ -75,9 +75,12 @@ export default function ProductList() {
     ...(sortBy && { sortBy, sortOrder })
   }).toString();
 
-  const { data, isLoading, isFetching } = useQuery(['admin-products', params], () => api.getProductsByAdmin(params), {
-    keepPreviousData: true
-  });
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery(
+    ['admin-products', params],
+    () => api.getProductsByAdmin(params),
+    { keepPreviousData: true }
+  );
+  const filtered = Boolean(search || status || category);
 
   const { data: catData } = useQuery('admin-all-categories', api.getAllCategoriesByAdmin);
   const categories = catData?.data || [];
@@ -172,17 +175,17 @@ export default function ProductList() {
             {p.featuredImage?.path ? (
               <Image src={p.featuredImage.path} alt={p.name} fill className="object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-slate-300">
+              <div className="flex h-full w-full items-center justify-center text-slate-400">
                 <MdImage size={18} />
               </div>
             )}
           </div>
           <div className="min-w-0">
-            <p className="line-clamp-1 text-[13px] font-semibold text-slate-800">
-              {p.name}
-              {p.isFeatured && <span className="ml-1.5 text-xs text-amber-500">⭐</span>}
+            <p className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+              <span className="line-clamp-1">{p.name}</span>
+              {p.isFeatured && <Badge tone="warning">Featured</Badge>}
             </p>
-            <p className="mt-0.5 font-mono text-xs text-slate-400">
+            <p className="mt-0.5 font-mono text-xs text-slate-500">
               {p.code ? `#${String(p.code).padStart(4, '0')} · ` : ''}{p.slug}
             </p>
           </div>
@@ -192,24 +195,25 @@ export default function ProductList() {
     {
       key: 'category',
       label: 'Category',
+      hideBelow: 'md',
       render: (p) => <span className="text-slate-600">{p.category?.name || '—'}</span>
     },
     {
       key: 'price',
-      label: 'Lowest Price',
+      label: 'Lowest price',
       sortable: true,
       align: 'right',
       render: (p) => {
         const init = p.priceInitiator;
         return (
           <>
-            <p className="font-semibold text-slate-800">৳{p.lowestPrice ?? p.price}</p>
+            <p className="font-semibold tabular-nums text-slate-900">৳{p.lowestPrice ?? p.price}</p>
             {(() => {
-              if (!init || init === 'regular') return <p className="mt-0.5 text-xs text-slate-400">Regular</p>;
-              if (init === 'sale') return <p className="mt-0.5 text-xs text-emerald-600">↘ Variation sale</p>;
+              if (!init || init === 'regular') return <p className="mt-0.5 text-xs text-slate-500">Regular</p>;
+              if (init === 'sale') return <p className="mt-0.5 text-xs text-emerald-700">↘ Variation sale</p>;
               const campName = init.startsWith('campaign:') ? init.slice(9) : '';
               return (
-                <p className="mt-0.5 text-xs text-orange-500" title={campName || 'Campaign discount'}>
+                <p className="mt-0.5 text-xs text-amber-700" title={campName || 'Campaign discount'}>
                   ↘ Campaign{campName ? `: ${campName}` : ''}
                 </p>
               );
@@ -222,6 +226,7 @@ export default function ProductList() {
       key: 'createdAt',
       label: 'Added',
       sortable: true,
+      hideBelow: 'lg',
       render: (p) => (
         <span className="text-xs text-slate-500">
           {p.createdAt ? fDate(p.createdAt) : '—'}
@@ -232,60 +237,36 @@ export default function ProductList() {
       key: 'status',
       label: 'Status',
       sortable: true,
-      align: 'center',
       render: (p) => <StatusBadge status={p.status} />
     },
     {
       key: 'actions',
-      label: 'Actions',
+      label: '',
+      srLabel: 'Actions',
       align: 'right',
       render: (p) => (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => router.push(`/products/${p.slug}/view`)}
-            className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100"
-            title="View details"
-          >
-            <MdVisibility size={17} />
+        <div className="flex items-center justify-end gap-1" onClick={stopRow}>
+          <button type="button" onClick={() => router.push(`/products/${p.slug}`)} className="btn-ghost btn-sm">
+            Edit
           </button>
-          <button
-            onClick={() => router.push(`/products/${p.slug}`)}
-            className="rounded-md p-2 transition hover:bg-slate-100"
-            style={{ color: 'var(--brand-strong)' }}
-            title="Edit"
-          >
-            <MdEdit size={17} />
-          </button>
-          <button
-            onClick={() =>
-              window.open(
-                `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/product/${p.slug}`,
-                '_blank',
-                'noopener'
-              )
-            }
-            className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100"
-            title="View on site"
-          >
-            <MdOpenInNew size={17} />
-          </button>
-          <button
-            onClick={() => handleDelete(p)}
-            className="rounded-md p-2 text-red-400 transition hover:bg-red-50"
-            title="Delete"
-          >
-            <MdDelete size={17} />
-          </button>
+          <ActionMenu
+            label={`More actions for ${p.name}`}
+            items={[
+              { label: 'View details', icon: MdVisibility, onClick: () => router.push(`/products/${p.slug}/view`) },
+              { label: 'View on storefront', icon: MdOpenInNew, onClick: () => window.open(storefrontUrl(p.slug), '_blank', 'noopener') },
+              { label: 'Delete', icon: MdDelete, tone: 'danger', onClick: () => handleDelete(p) }
+            ]}
+          />
         </div>
       )
     }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Products" subtitle={`${total} product${total !== 1 ? 's' : ''} total`}>
-        <button onClick={() => router.push('/products/add')} className="btn-brand">
-          <MdAdd size={18} /> Add Product
+        <button type="button" onClick={() => router.push('/products/add')} className="btn-brand">
+          <MdAdd size={18} /> Add product
         </button>
       </PageHeader>
 
@@ -309,6 +290,7 @@ export default function ProductList() {
             setPage(1);
           }}
           className="select-ui min-w-[140px]"
+          aria-label="Status"
         >
           {STATUS_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -323,8 +305,9 @@ export default function ProductList() {
             setPage(1);
           }}
           className="select-ui min-w-[160px]"
+          aria-label="Category"
         >
-          <option value="">All Categories</option>
+          <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c.id} value={c.slug}>
               {c.name}
@@ -333,7 +316,13 @@ export default function ProductList() {
         </select>
       </ListToolbar>
 
+      {isError && !data ? (
+        <ErrorState error={error} title="Products could not be loaded" onRetry={refetch} />
+      ) : (
       <DataTable
+        caption="Products"
+        onRowClick={(p) => router.push(`/products/${p.slug}/view`)}
+        rowLabel={(p) => `View ${p.name}`}
         columns={columns}
         data={products}
         sort={sort}
@@ -341,10 +330,25 @@ export default function ProductList() {
         selectionLabel="products"
         exportFileName="products-selection.csv"
         bulkActions={bulkActions}
-        isLoading={isLoading || isFetching}
-        empty={<EmptyState title="No products found" hint="Try changing your search or filters" icon={MdInbox} />}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        empty={
+          <EmptyState
+            title={filtered ? 'No products match these filters' : 'No products yet'}
+            hint={filtered ? 'Try changing your search or filters.' : undefined}
+            icon={MdInbox}
+            action={
+              filtered ? null : (
+                <button type="button" onClick={() => router.push('/products/add')} className="btn-brand">
+                  <MdAdd size={18} aria-hidden /> Add product
+                </button>
+              )
+            }
+          />
+        }
         footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="products" />}
       />
+      )}
     </div>
   );
 }

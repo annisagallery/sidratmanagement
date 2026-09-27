@@ -29,7 +29,7 @@ const asList = (res) => (Array.isArray(res?.data) ? res.data : Array.isArray(res
 
 function Thumb({ product, size = 36 }) {
   const path = product?.featuredImage?.path || product?.images?.[0]?.path;
-  if (!path) return <div className="shrink-0 rounded-md bg-gray-100" style={{ width: size, height: size }} />;
+  if (!path) return <div className="shrink-0 rounded-md bg-slate-100" style={{ width: size, height: size }} />;
   return (
     <Image
       src={path}
@@ -172,27 +172,29 @@ export default function CampaignProductPicker({ products, onChange }) {
   };
 
   return (
-    <div className="space-y-3 rounded-md border border-gray-100 bg-white p-5 shadow-sm">
+    <section className="card-ui space-y-4 p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">Products ({products.length})</h2>
+        <h2 className="text-[15px] font-semibold text-slate-900">
+          Products <span className="font-normal tabular-nums text-slate-500">{products.length}</span>
+        </h2>
 
         {products.length > 0 &&
           (confirmClear ? (
             <span className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500">
+              <span className="text-slate-500">
                 Remove {visible.length === products.length ? 'all' : 'these'} {visible.length}?
               </span>
               <button
                 type="button"
                 onClick={clearShown}
-                className="rounded-md bg-red-500 px-2 py-1 font-semibold text-white transition hover:bg-red-600"
+                className="btn-danger btn-sm"
               >
                 Remove
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmClear(false)}
-                className="rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-600 transition hover:bg-gray-200"
+                className="btn-ghost btn-sm"
               >
                 Cancel
               </button>
@@ -201,7 +203,7 @@ export default function CampaignProductPicker({ products, onChange }) {
             <button
               type="button"
               onClick={() => setConfirmClear(true)}
-              className="flex shrink-0 items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-red-500"
+              className="btn-ghost btn-sm shrink-0 hover:text-rose-700"
             >
               <FiTrash2 size={12} />
               {visible.length === products.length ? 'Remove all' : `Remove these ${visible.length}`}
@@ -211,18 +213,19 @@ export default function CampaignProductPicker({ products, onChange }) {
 
       {/* Search — always visible, the way the order panel does it */}
       <div ref={wrapRef} className="relative">
-        <FiSearch className="pointer-events-none absolute left-3 top-3 text-gray-300" size={14} />
+        <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} aria-hidden />
         <input
           value={query}
           onChange={handleQuery}
           placeholder="Search products by name…"
-          className="w-full rounded-md border border-gray-200 py-2.5 pl-9 pr-24 text-sm placeholder-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+          aria-label="Search products to add"
+          className="input-ui w-full pl-9 pr-24"
           autoComplete="off"
         />
-        {searching && <span className="absolute right-3 top-3 animate-pulse text-xs text-gray-400">Searching…</span>}
+        {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 animate-pulse text-xs text-slate-500">Searching…</span>}
 
         {results.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-72 overflow-auto rounded-md border border-gray-200 bg-white shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-72 overflow-auto rounded-md border border-slate-200 bg-white shadow-xl">
             {results.map((p) => {
               const already = chosenIds.has(p.id);
               return (
@@ -235,14 +238,14 @@ export default function CampaignProductPicker({ products, onChange }) {
                     setQuery('');
                     setResults([]);
                   }}
-                  className="flex w-full items-center gap-3 border-b border-gray-50 px-3 py-2.5 text-left last:border-0 hover:bg-[var(--brand-soft)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-white"
+                  className="flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-0 hover:bg-slate-50 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-white"
                 >
                   <Thumb product={p} size={32} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-gray-800">{p.name}</span>
-                    <span className="text-[11px] text-gray-400">{money(p.price)}</span>
+                    <span className="block truncate text-sm font-medium text-slate-800">{p.name}</span>
+                    <span className="text-xs text-slate-500">{money(p.price)}</span>
                   </span>
-                  {already && <span className="shrink-0 text-[11px] font-medium text-gray-400">Added</span>}
+                  {already && <span className="shrink-0 text-xs font-medium text-slate-500">Added</span>}
                 </button>
               );
             })}
@@ -251,15 +254,16 @@ export default function CampaignProductPicker({ products, onChange }) {
       </div>
 
       {/* Add a whole category */}
-      <div className="flex flex-wrap items-center gap-2 rounded-md bg-gray-50 p-2.5">
-        <FiLayers className="shrink-0 text-gray-400" size={14} />
+      <div className="flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-2.5">
+        <FiLayers className="shrink-0 text-slate-500" size={14} aria-hidden />
         <select
+          aria-label="Category to add"
           value={categoryId}
           onChange={(e) => {
             setCategoryId(e.target.value);
             setNote('');
           }}
-          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+          className="select-ui min-w-0 flex-1"
         >
           <option value="">Add a whole category…</option>
           {categories.map((c) => (
@@ -272,14 +276,14 @@ export default function CampaignProductPicker({ products, onChange }) {
           type="button"
           onClick={addCategory}
           disabled={!categoryId || addingCategory}
-          className="btn-brand px-3 py-1.5 text-xs disabled:opacity-40"
+          className="btn-ghost btn-sm"
         >
           {addingCategory ? 'Adding…' : 'Add all'}
         </button>
       </div>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-      {note && <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{note}</p>}
+      {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700" role="alert">{error}</p>}
+      {note && <p className="rounded-md bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800" role="status">{note}</p>}
 
       {/* Filter only earns its place once the list is long enough to need it */}
       {products.length > 5 && (
@@ -287,34 +291,35 @@ export default function CampaignProductPicker({ products, onChange }) {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={`Filter these ${products.length} products…`}
-          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm placeholder-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+          className="input-ui w-full"
+          aria-label="Filter added products"
         />
       )}
 
       {products.length === 0 ? (
-        <p className="rounded-md border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400">
+        <p className="rounded-md border border-dashed border-slate-200 py-6 text-center text-sm text-slate-500">
           No products added yet
         </p>
       ) : visible.length === 0 ? (
-        <p className="rounded-md border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400">
+        <p className="rounded-md border border-dashed border-slate-200 py-6 text-center text-sm text-slate-500">
           Nothing matches “{filter}”
         </p>
       ) : (
-        <div className="max-h-72 space-y-2 overflow-y-auto">
+        <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200">
           {visible.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 rounded-md border border-gray-100 p-2">
+            <div key={p.id} className="flex items-center gap-3 px-3 py-2">
               <Thumb product={p} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-800">{p.name}</p>
-                <p className="text-xs text-gray-400">{money(p.price ?? p.priceSale)}</p>
+                <p className="truncate text-sm font-medium text-slate-800">{p.name}</p>
+                <p className="text-xs text-slate-500">{money(p.price ?? p.priceSale)}</p>
               </div>
               <button
                 type="button"
                 onClick={() => remove(p.id)}
-                className="shrink-0 text-gray-300 transition hover:text-red-500"
+                className="btn-icon btn-icon-sm btn-icon-danger shrink-0"
                 aria-label={`Remove ${p.name}`}
               >
-                <FiX size={16} />
+                <FiX size={16} aria-hidden />
               </button>
             </div>
           ))}
@@ -322,10 +327,10 @@ export default function CampaignProductPicker({ products, onChange }) {
       )}
 
       {filter && visible.length > 0 && (
-        <p className="text-[11px] text-gray-400">
+        <p className="text-xs text-slate-500">
           Showing {visible.length} of {products.length}.
         </p>
       )}
-    </div>
+    </section>
   );
 }

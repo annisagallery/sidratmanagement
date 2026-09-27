@@ -1,8 +1,10 @@
 'use client';
 import { useQuery } from 'react-query';
 import * as api from 'src/services';
-import { FiClock, FiX, FiEdit, FiPlusCircle, FiMinusCircle, FiCreditCard, FiAlertCircle } from 'react-icons/fi';
+import { FiClock, FiEdit, FiPlusCircle, FiMinusCircle, FiCreditCard, FiAlertCircle } from 'react-icons/fi';
 import { fDate, fDateTime } from 'src/utils/formatTime';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 function timeAgo(date) {
   const diff = Date.now() - new Date(date).getTime();
@@ -18,79 +20,56 @@ function timeAgo(date) {
 
 function actionIcon(description) {
   const d = description?.toLowerCase() || '';
-  if (d.startsWith('added')) return <FiPlusCircle className="text-green-500" size={15} />;
-  if (d.startsWith('removed') || d.startsWith('deleted')) return <FiMinusCircle className="text-red-500" size={15} />;
-  if (d.startsWith('linked payment') || d.startsWith('payment'))
-    return <FiCreditCard className="text-[var(--brand-strong)]" size={15} />;
-  if (d.includes('status')) return <FiAlertCircle className="text-amber-500" size={15} />;
-  return <FiEdit className="text-blue-400" size={15} />;
+  if (d.startsWith('added')) return <FiPlusCircle className="text-emerald-700" size={15} aria-hidden />;
+  if (d.startsWith('removed') || d.startsWith('deleted')) return <FiMinusCircle className="text-rose-700" size={15} aria-hidden />;
+  if (d.startsWith('linked payment') || d.startsWith('payment')) return <FiCreditCard className="text-sky-700" size={15} aria-hidden />;
+  if (d.includes('status')) return <FiAlertCircle className="text-amber-600" size={15} aria-hidden />;
+  return <FiEdit className="text-slate-400" size={15} aria-hidden />;
 }
 
 export default function HistoryModal({ title, model, docId, onClose }) {
-  const { data, isLoading } = useQuery(['edit-history', model, docId], () => api.getEditHistory({ model, docId }), {
-    staleTime: 10_000,
-    enabled: !!docId
-  });
+  const { data, isLoading, isError, error, refetch } = useQuery(
+    ['edit-history', model, docId],
+    () => api.getEditHistory({ model, docId }),
+    { staleTime: 10_000, enabled: !!docId }
+  );
 
   const entries = data?.data || [];
 
   return (
-    <div className="fixed inset-0 z-50 !m-0 flex items-start justify-end bg-black/30" onClick={onClose}>
-      <div className="bg-white h-full w-full max-w-sm shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-2 text-gray-800">
-            <FiClock size={16} />
-            <span className="font-semibold text-sm">{title || 'Edit History'}</span>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
-            <FiX size={18} />
-          </button>
+    <Drawer title={title || 'Change history'} eyebrow="History" size="md" onClose={onClose}>
+      {isLoading ? (
+        <div className="space-y-3" aria-busy="true">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-12" />
+          ))}
         </div>
-
-        {/* Timeline */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-12 bg-gray-100 rounded-md animate-pulse" />
-              ))}
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <FiClock size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No history yet</p>
-            </div>
-          ) : (
-            <div className="relative">
-              {/* vertical line */}
-              <div className="absolute left-[18px] top-2 bottom-2 w-px bg-gray-100" />
-              <div className="space-y-4">
-                {entries.map((e) => (
-                  <div key={e.id} className="flex gap-3 relative">
-                    <div className="w-9 h-9 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0 z-10">
-                      {actionIcon(e.description)}
-                    </div>
-                    <div className="pt-1.5 min-w-0">
-                      <p className="text-sm text-gray-700 leading-snug">{e.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs font-medium text-[var(--brand-strong)]">{e.performedByName}</span>
-                        <span className="text-xs text-gray-400">·</span>
-                        <span
-                          className="text-xs text-gray-400"
-                          title={fDateTime(e.createdAt)}
-                        >
-                          {timeAgo(e.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+      ) : isError ? (
+        <ErrorState error={error} title="History could not be loaded" onRetry={refetch} />
+      ) : entries.length === 0 ? (
+        <EmptyState compact icon={FiClock} title="No changes recorded yet" />
+      ) : (
+        <ol className="relative space-y-5">
+          <span className="absolute bottom-2 left-[17px] top-2 w-px bg-slate-200" aria-hidden />
+          {entries.map((e) => (
+            <li key={e.id} className="relative flex gap-3">
+              <span className="z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white">
+                {actionIcon(e.description)}
+              </span>
+              <div className="min-w-0 pt-1">
+                <p className="text-[13px] leading-snug text-slate-900">{e.description}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">{e.performedByName || 'System'}</span>
+                  {' · '}
+                  <time dateTime={e.createdAt} title={fDateTime(e.createdAt)}>
+                    {timeAgo(e.createdAt)}
+                  </time>
+                </p>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Drawer>
   );
 }

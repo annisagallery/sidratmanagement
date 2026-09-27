@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { confirmAction } from 'src/utils/swal';
 import {
   FiAlertCircle,
   FiAlertTriangle,
@@ -66,7 +66,7 @@ const ACTION_META = {
   },
   FINANCIAL_RECONCILIATION: {
     label: 'Reconciliation',
-    className: 'border-indigo-200 bg-indigo-50 text-indigo-800'
+    className: 'border-violet-200 bg-violet-50 text-violet-800'
   },
   OTHER: {
     label: 'Other',
@@ -260,7 +260,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 p-4"
+      className="fixed inset-0 z-[90] !m-0 flex items-center justify-center bg-slate-900/40 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isSubmitting) onClose();
       }}
@@ -271,12 +271,12 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
         aria-modal="true"
         aria-labelledby="finance-outcome-title"
         aria-describedby="finance-outcome-description finance-outcome-warning"
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-md border border-slate-200 bg-white shadow-2xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-lg bg-white shadow-2xl"
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order #{target.orderNo}</p>
-            <h2 id="finance-outcome-title" className="mt-1 text-lg font-bold text-slate-900">
+            <p className="section-label">Order #{target.orderNo}</p>
+            <h2 id="finance-outcome-title" className="mt-1 text-lg font-semibold text-slate-900">
               {config.title}
             </h2>
             <p id="finance-outcome-description" className="mt-1 text-sm leading-6 text-slate-600">
@@ -288,7 +288,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
             onClick={onClose}
             disabled={isSubmitting}
             aria-label="Close finance action dialog"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FiX aria-hidden="true" size={20} />
           </button>
@@ -298,7 +298,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
           <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
             <div>
               <p className="text-xs font-medium text-slate-500">Suggested amount</p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+              <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
                 {formatAmount(target.suggestedAmount, target.currency)}
               </p>
             </div>
@@ -325,7 +325,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
 
           {target.reason && (
             <div className="rounded-md border border-slate-200 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reason</p>
+              <p className="section-label">Reason</p>
               <p className="mt-1 text-sm leading-6 text-slate-700">{target.reason}</p>
             </div>
           )}
@@ -337,7 +337,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
           >
             <FiAlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={20} />
             <div>
-              <p className="text-sm font-bold">This does not send or refund money.</p>
+              <p className="text-sm font-semibold">This does not send or refund money.</p>
               <p className="mt-1 text-sm leading-6">
                 It only records the review outcome in Sidrat. Complete the external transfer first, then record its
                 reference here.
@@ -348,7 +348,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
           {isCompletion && (
             <>
               <div>
-                <label htmlFor="finance-settled-amount" className="mb-1.5 block text-sm font-semibold text-slate-800">
+                <label htmlFor="finance-settled-amount" className="block mb-1.5 text-[13px] font-medium text-slate-800">
                   Actual amount settled <span className="text-rose-700">*</span>
                 </label>
                 <input
@@ -377,7 +377,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
               </div>
 
               <div>
-                <label htmlFor="finance-manual-reference" className="mb-1.5 block text-sm font-semibold text-slate-800">
+                <label htmlFor="finance-manual-reference" className="block mb-1.5 text-[13px] font-medium text-slate-800">
                   External/manual transaction reference {Number(settledAmount) > 0 && <span className="text-rose-700">*</span>}
                 </label>
                 <input
@@ -410,7 +410,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
               </div>
 
               <div>
-                <label htmlFor="finance-payment-method" className="mb-1.5 block text-sm font-semibold text-slate-800">
+                <label htmlFor="finance-payment-method" className="block mb-1.5 text-[13px] font-medium text-slate-800">
                   Settlement method <span className="font-normal text-slate-500">(optional)</span>
                 </label>
                 <input
@@ -427,7 +427,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
           )}
 
           <div>
-            <label htmlFor="finance-admin-note" className="mb-1.5 block text-sm font-semibold text-slate-800">
+            <label htmlFor="finance-admin-note" className="block mb-1.5 text-[13px] font-medium text-slate-800">
               Admin note <span className="font-normal text-slate-500">(optional)</span>
             </label>
             <textarea
@@ -438,7 +438,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
               rows={4}
               maxLength={4000}
               placeholder="Record evidence, reasoning, or follow-up context for other admins."
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-800 transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]"
+              className="input-ui w-full"
             />
           </div>
 
@@ -457,7 +457,7 @@ function OutcomeDialog({ target, status, onClose, onSubmit }) {
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-ghost inline-flex min-h-11"
             >
               Keep open
             </button>
@@ -555,15 +555,13 @@ export default function FinanceReviewList() {
       return false;
     }
 
-    const confirmation = await Swal.fire({
-      icon: 'question',
+    const confirmed = await confirmAction({
       title: `Start ${pendingRows.length} review${pendingRows.length === 1 ? '' : 's'}?`,
-      text: `Pending actions will be updated one at a time. This changes workflow status only and does not send money.${skipped ? ` ${skipped} non-pending selection${skipped === 1 ? '' : 's'} will be skipped.` : ''}`,
-      showCancelButton: true,
-      confirmButtonText: `Start ${pendingRows.length} review${pendingRows.length === 1 ? '' : 's'}`,
-      cancelButtonText: 'Keep selection'
+      text: `Pending actions are updated one at a time. This changes workflow status only and does not send money.${skipped ? ` ${skipped} non-pending selection${skipped === 1 ? '' : 's'} will be skipped.` : ''}`,
+      confirmText: `Start ${pendingRows.length} review${pendingRows.length === 1 ? '' : 's'}`,
+      cancelText: 'Keep selection'
     });
-    if (!confirmation.isConfirmed) return false;
+    if (!confirmed) return false;
 
     setActionNotice(null);
     setBulkSummary(null);
@@ -598,7 +596,7 @@ export default function FinanceReviewList() {
         <div className="min-w-[220px] max-w-[320px]">
           <Link
             href={`/orders/${row.orderNo}`}
-            className="inline-flex min-h-11 items-center gap-1 rounded-md font-semibold text-[var(--brand-strong)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center gap-1 rounded-md font-semibold text-slate-900 hover:underline"
           >
             #{row.orderNo}
             <FiExternalLink aria-hidden="true" size={13} />
@@ -625,7 +623,7 @@ export default function FinanceReviewList() {
       exportValue: (row) => `${row.currency || 'BDT'} ${Number(row.suggestedAmount) || 0}`,
       render: (row) => (
         <div className="min-w-[130px] text-right">
-          <p className="whitespace-nowrap font-bold tabular-nums text-slate-900">
+          <p className="whitespace-nowrap font-semibold tabular-nums text-slate-900">
             {formatAmount(row.suggestedAmount, row.currency)}
           </p>
           <p className="mt-1 text-xs text-slate-500">{sentenceCase(row.paymentContext?.paymentStatus)}</p>
@@ -674,7 +672,7 @@ export default function FinanceReviewList() {
               {row.paymentMethod && <p className="mt-1 text-xs text-slate-500">Method: {row.paymentMethod}</p>}
             </>
           ) : (
-            <span className="text-xs text-slate-400">Awaiting review outcome</span>
+            <span className="text-xs text-slate-500">Awaiting review outcome</span>
           )}
         </div>
       )
@@ -685,7 +683,7 @@ export default function FinanceReviewList() {
       align: 'right',
       exportable: false,
       render: (row) => {
-        if (!canManage) return <span className="text-xs text-slate-400">View only</span>;
+        if (!canManage) return <span className="text-xs text-slate-500">View only</span>;
         const busy = Boolean(rowBusyId || bulkProgress);
 
         if (row.status === 'PENDING') {
@@ -708,7 +706,7 @@ export default function FinanceReviewList() {
                 type="button"
                 onClick={() => setDialog({ row, status: 'CANCELLED' })}
                 disabled={busy}
-                className="inline-flex min-h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-ghost btn-sm inline-flex min-h-11"
               >
                 Cancel
               </button>
@@ -731,7 +729,7 @@ export default function FinanceReviewList() {
                 type="button"
                 onClick={() => setDialog({ row, status: 'DECLINED' })}
                 disabled={busy}
-                className="inline-flex min-h-11 items-center rounded-md border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-danger btn-sm inline-flex min-h-11"
               >
                 Decline
               </button>
@@ -739,7 +737,7 @@ export default function FinanceReviewList() {
                 type="button"
                 onClick={() => setDialog({ row, status: 'CANCELLED' })}
                 disabled={busy}
-                className="inline-flex min-h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-ghost btn-sm inline-flex min-h-11"
               >
                 Cancel
               </button>
@@ -747,13 +745,13 @@ export default function FinanceReviewList() {
           );
         }
 
-        return <span className="text-xs font-medium text-slate-400">Closed</span>;
+        return <span className="text-xs font-medium text-slate-500">Closed</span>;
       }
     }
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader
         title="Finance Review"
         subtitle={`${total} manual finance action${total === 1 ? '' : 's'} requiring an auditable outcome`}
@@ -767,7 +765,7 @@ export default function FinanceReviewList() {
       >
         <FiAlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={22} />
         <div>
-          <p className="font-bold">Recording completion does not send money.</p>
+          <p className="font-semibold">Recording completion does not send money.</p>
           <p className="mt-1 text-sm leading-6">
             This screen is an audit ledger for finance work completed outside Sidrat. Verify the external transfer or
             refund first, then record its reference.
@@ -784,11 +782,11 @@ export default function FinanceReviewList() {
         className="card-ui grid gap-3 p-3 md:grid-cols-[minmax(240px,1fr)_200px_auto] md:items-end"
       >
         <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Search</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Search</span>
           <span className="relative block">
             <FiSearch
               aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
               size={18}
             />
             <input
@@ -802,7 +800,7 @@ export default function FinanceReviewList() {
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Status</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Status</span>
           <select
             value={status}
             onChange={(event) => {
@@ -823,7 +821,7 @@ export default function FinanceReviewList() {
         <div className="flex flex-wrap gap-2">
           <button
             type="submit"
-            className="btn-brand !h-11 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2"
+            className="btn-brand !h-11 px-4"
           >
             Search
           </button>
@@ -835,7 +833,7 @@ export default function FinanceReviewList() {
               setStatus('');
               setPage(1);
             }}
-            className="btn-ghost !h-11 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2"
+            className="btn-ghost !h-11 px-4"
           >
             Reset
           </button>
@@ -843,7 +841,7 @@ export default function FinanceReviewList() {
             type="button"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="btn-ghost !h-11 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2"
+            className="btn-ghost !h-11 px-4"
           >
             <FiRefreshCw aria-hidden="true" className={isFetching ? 'animate-spin' : ''} size={16} />
             Refresh
@@ -882,7 +880,7 @@ export default function FinanceReviewList() {
         <div
           role="status"
           aria-live="polite"
-          className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-violet-950"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-slate-900"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
             <span>
@@ -893,7 +891,7 @@ export default function FinanceReviewList() {
             )}
           </div>
           <progress
-            className="mt-2 h-2 w-full overflow-hidden rounded-md accent-violet-600"
+            className="mt-2 h-2 w-full overflow-hidden rounded-md accent-slate-900"
             max={bulkProgress.total}
             value={bulkProgress.processed}
             aria-label="Bulk review progress"
@@ -912,7 +910,7 @@ export default function FinanceReviewList() {
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-bold">{bulkSummary.message || 'Bulk review update finished.'}</p>
+              <p className="font-semibold">{bulkSummary.message || 'Bulk review update finished.'}</p>
               <p className="mt-1">
                 {bulkSummary.succeeded} started · {bulkSummary.failures.length} failed · {bulkSummary.skipped} skipped
               </p>
@@ -947,7 +945,7 @@ export default function FinanceReviewList() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-rose-300 bg-white px-4 font-semibold text-rose-800 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
+            className="btn-danger inline-flex min-h-11"
           >
             <FiRefreshCw aria-hidden="true" size={16} /> Retry
           </button>
@@ -959,6 +957,8 @@ export default function FinanceReviewList() {
         className="[&_button]:!min-h-11 [&_button]:!min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-violet-500 [&_button]:focus-visible:ring-offset-2"
       >
         <DataTable
+        error={isError ? error : null}
+        onRetry={refetch}
           key={`${status}:${search}:${selectionRevision}`}
           columns={columns}
           data={rows}
@@ -979,7 +979,8 @@ export default function FinanceReviewList() {
                 ]
               : []
           }
-          isLoading={isLoading || isFetching}
+          isLoading={isLoading}
+          isFetching={isFetching}
           empty={
             <EmptyState
               title="No finance actions found"

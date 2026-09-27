@@ -65,13 +65,13 @@ function ScopeTile({ active, primary, title, subtitle, count, dirty, onClick }) 
       aria-pressed={active}
       className={`flex items-start gap-2.5 rounded-md border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] ${
         active
-          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+          ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900'
           : 'border-slate-200 bg-white hover:bg-slate-50'
       }`}
     >
       <span
         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
-          active ? 'bg-[var(--brand)] text-white' : 'bg-slate-100 text-slate-500'
+          active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
         }`}
       >
         {primary ? <MdLayers size={15} /> : <MdTune size={15} />}
@@ -82,7 +82,7 @@ function ScopeTile({ active, primary, title, subtitle, count, dirty, onClick }) 
           <span className="truncate text-[13px] font-semibold text-slate-800">{title}</span>
           {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title="Unsaved changes" />}
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+        <span className="mt-0.5 block truncate text-xs text-slate-500">
           {subtitle ?? `${count} material${count === 1 ? '' : 's'}`}
         </span>
       </span>
@@ -99,9 +99,9 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
     <div className="rounded-md border border-slate-200 bg-white p-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_96px_84px_auto_36px] lg:items-end">
         <label className="min-w-0">
-          <span className="section-label mb-1 block">Material</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Material</span>
           <select
-            className="select-ui w-full font-semibold"
+            className="select-ui w-full"
             value={row.accessoryId}
             onChange={(event) => onChange(index, { accessoryId: event.target.value })}
           >
@@ -114,7 +114,7 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
         </label>
 
         <label>
-          <span className="section-label mb-1 block">Per unit</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Per unit</span>
           <input
             type="number"
             min="0.001"
@@ -126,7 +126,7 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
         </label>
 
         <label>
-          <span className="section-label mb-1 block">Waste %</span>
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Waste %</span>
           <input
             type="number"
             min="0"
@@ -140,14 +140,14 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
 
         <div className="rounded-md bg-slate-50 px-3 py-2">
           <span className="section-label block">Consumes</span>
-          <span className="text-sm font-bold tabular-nums text-slate-800">
+          <span className="text-sm font-semibold tabular-nums text-slate-800">
             {perUnit} {unitLabel(material)}
           </span>
         </div>
 
         <button
           type="button"
-          className="btn-icon justify-self-end text-red-600"
+          className="btn-icon justify-self-end text-rose-700"
           aria-label={`Remove ${material?.name || 'material'}`}
           onClick={() => onRemove(index)}
         >
@@ -157,7 +157,7 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
             material?.isRepurchasable ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'
           }`}
         >
@@ -170,8 +170,8 @@ function MaterialCard({ row, index, materials, usedIds, alsoInBase, onChange, on
             role="switch"
             aria-checked={row.overridesBase}
             onClick={() => onChange(index, { overridesBase: !row.overridesBase })}
-            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold transition ${
-              row.overridesBase ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold transition ${
+              row.overridesBase ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
             }`}
           >
             {row.overridesBase && <MdCheck size={12} />}
@@ -293,8 +293,8 @@ export default function ProductBom({ slug, embedded = false }) {
   if (bomQuery.isError) {
     return (
       <div className="card-ui p-10 text-center">
-        <p className="font-semibold text-red-700">The product material sheet could not be loaded.</p>
-        <button className="btn-ghost mt-4" onClick={() => router.push(`/products/${slug}`)}>
+        <p className="font-semibold text-rose-700">The product material sheet could not be loaded.</p>
+        <button type="button" className="btn-ghost mt-4" onClick={() => router.push(`/products/${slug}`)}>
           <MdArrowBack /> Back to product
         </button>
       </div>
@@ -313,7 +313,7 @@ export default function ProductBom({ slug, embedded = false }) {
           subtitle="What one finished unit consumes"
           icon={MdReceiptLong}
         >
-          <button className="btn-ghost min-h-11" onClick={() => router.push(`/products/${slug}`)}>
+          <button type="button" className="btn-ghost min-h-11" onClick={() => router.push(`/products/${slug}`)}>
             <MdArrowBack size={18} /> Product details
           </button>
         </PageHeader>
@@ -348,9 +348,9 @@ export default function ProductBom({ slug, embedded = false }) {
 
       {/* Configurator for the selected tile. */}
       <section className="card-ui overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-slate-900">
+            <p className="truncate text-sm font-semibold text-slate-900">
               {isBase ? 'Base materials' : `${activeVariation?.label} — extras`}
             </p>
             <p className="text-[12px] text-slate-500">
@@ -359,7 +359,7 @@ export default function ProductBom({ slug, embedded = false }) {
                 : 'Added on top of the base for this option only.'}
             </p>
           </div>
-          <button type="button" className="btn-brand !min-h-9" onClick={save} disabled={saveMutation.isLoading || !dirty}>
+          <button type="button" className="btn-brand" onClick={save} disabled={saveMutation.isLoading || !dirty}>
             <MdSave size={16} /> {saveMutation.isLoading ? 'Saving…' : dirty ? 'Save' : 'Saved'}
           </button>
         </div>
@@ -370,10 +370,10 @@ export default function ProductBom({ slug, embedded = false }) {
             {inherited.map((line) => (
               <span
                 key={line.accessoryId}
-                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600"
               >
                 {line.accessory?.name} · {qty(line.perUnitQuantity)} {unitLabel(line.accessory)}
-                {line.overridesBase && <span className="ml-1 text-indigo-600">replaced</span>}
+                {line.overridesBase && <span className="ml-1 text-slate-600">replaced</span>}
               </span>
             ))}
           </div>
@@ -409,7 +409,7 @@ export default function ProductBom({ slug, embedded = false }) {
 
       {blockedBy.length > 0 && (
         <div className="card-ui border-l-4 border-l-red-500 p-4">
-          <p className="flex items-center gap-1.5 text-[13px] font-bold text-red-800">
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold text-rose-800">
             <MdWarningAmber size={16} /> Short on material
           </p>
           <p className="mt-1 text-[12px] text-slate-600">

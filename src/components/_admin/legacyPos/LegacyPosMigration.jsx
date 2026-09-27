@@ -20,7 +20,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { confirmAction } from 'src/utils/swal';
 import {
   FiAlertTriangle,
   FiCheckCircle,
@@ -156,7 +156,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
               <button
                 type="button"
                 onClick={() => onChange(defaultIds)}
-                className="btn-ghost h-11 !text-xs"
+                className="btn-ghost h-11"
                 disabled={disabled || !defaultIds.length}
               >
                 Use default
@@ -164,7 +164,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
               <button
                 type="button"
                 onClick={() => onChange(rows.map((row) => row.id))}
-                className="btn-ghost h-11 !text-xs"
+                className="btn-ghost h-11"
                 disabled={disabled || !rows.length || selectedIds.length === rows.length}
               >
                 Select all
@@ -172,7 +172,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="btn-ghost h-11 !text-xs"
+                className="btn-ghost h-11"
                 disabled={disabled || !selectedIds.length}
               >
                 Clear
@@ -182,7 +182,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
-            className="btn-ghost h-11 !text-xs"
+            className="btn-ghost h-11"
             aria-expanded={!collapsed}
             aria-controls="legacy-pos-scope-panel"
           >
@@ -198,7 +198,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
     >
       {collapsed ? (
         <SectionBody id="legacy-pos-scope-panel" className="p-4">
-          {isLoading ? <p className="text-xs text-slate-400">Reading showrooms…</p> : null}
+          {isLoading ? <p className="text-xs text-slate-500">Reading showrooms…</p> : null}
           {error ? <Notice tone="bad" title="Showrooms could not be loaded">{errorText(error)}</Notice> : null}
           {!isLoading && !error ? (
             <p className="text-xs leading-relaxed text-slate-500">
@@ -214,7 +214,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
           Unselected branches are never read or changed.
         </p>
 
-        {isLoading ? <p className="text-sm text-slate-400">Reading showrooms…</p> : null}
+        {isLoading ? <p className="text-sm text-slate-500">Reading showrooms…</p> : null}
         {error ? <Notice tone="bad" title="Showrooms could not be loaded">{errorText(error)}</Notice> : null}
         {missingDefaults.length ? (
           <Notice tone="warn" title="Some default showrooms were not found">
@@ -246,7 +246,7 @@ function ScopeSelector({ rows, selectedIds, onChange, isLoading, error, disabled
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-slate-800">{row.name}</span>
-                    <span className="block text-[11px] text-slate-400">
+                    <span className="block text-xs text-slate-500">
                       {row.code || 'No code'} · {qty(row.stockQuantity)} pcs
                       {row.branch ? ` · ${row.branch.name}` : ' · branch will be created by catalog import'}
                     </span>
@@ -333,13 +333,13 @@ function CatalogReport({ report }) {
       {report.branches?.length ? (
         <Section title="Showrooms" hint={`${report.branches.length} in scope`}>
           <div className="max-h-72 overflow-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Old warehouse</th>
-                  <th className="px-3 py-2 font-semibold">Branch here</th>
-                  <th className="px-3 py-2 text-right font-semibold">Stock there</th>
-                  <th className="px-3 py-2 font-semibold">Action</th>
+                  <th className="px-3 py-2 font-medium">Old warehouse</th>
+                  <th className="px-3 py-2 font-medium">Branch here</th>
+                  <th className="px-3 py-2 text-right font-medium">Stock there</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,30 +362,30 @@ function CatalogReport({ report }) {
       {report.products?.length ? (
         <Section title="Products" hint={`${report.products.length} after the name convention is applied`}>
           <div className="max-h-96 overflow-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Product</th>
-                  <th className="px-3 py-2 font-semibold">Category</th>
-                  <th className="px-3 py-2 font-semibold">Slug</th>
-                  <th className="px-3 py-2 text-right font-semibold">Variations</th>
-                  <th className="px-3 py-2 font-semibold">Action</th>
+                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 font-medium">Category</th>
+                  <th className="px-3 py-2 font-medium">Slug</th>
+                  <th className="px-3 py-2 text-right font-medium">Variations</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {report.products.map((row) => (
                   <tr key={row.code} className="border-b border-slate-100">
                     <td className="px-3 py-1.5 font-semibold text-slate-800">
-                      {row.name} <span className="ops-code text-[11px] text-slate-400">#{row.code}</span>
+                      {row.name} <span className="ops-code text-xs text-slate-500">#{row.code}</span>
                     </td>
                     <td className="px-3 py-1.5 text-slate-500">
                       {row.category} {row.newCategory ? <Pill tone="good">new</Pill> : null}
                     </td>
-                    <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.slug}</td>
+                    <td className="ops-code px-3 py-1.5 text-xs text-slate-500">{row.slug}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
                       {row.variationsToCreate ? <span className="font-semibold text-emerald-700">+{row.variationsToCreate}</span> : null}
                       {row.variationsToCreate && row.variationsMatched ? ' / ' : null}
-                      {row.variationsMatched ? <span className="text-slate-400">{row.variationsMatched} here</span> : null}
+                      {row.variationsMatched ? <span className="text-slate-500">{row.variationsMatched} here</span> : null}
                       {!row.variationsToCreate && !row.variationsMatched ? '—' : null}
                     </td>
                     <td className="px-3 py-1.5">
@@ -438,12 +438,12 @@ function StockReport({ report }) {
       {applied && report.shortfalls?.length ? (
         <Section title="Could not be reduced in full" hint="Retried on the next sync">
           <div className="max-h-60 overflow-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Branch</th>
-                  <th className="px-3 py-2 font-semibold">Product</th>
-                  <th className="px-3 py-2 text-right font-semibold">Still to remove</th>
+                  <th className="px-3 py-2 font-medium">Branch</th>
+                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 text-right font-medium">Still to remove</th>
                 </tr>
               </thead>
               <tbody>
@@ -451,7 +451,7 @@ function StockReport({ report }) {
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="px-3 py-1.5 text-slate-600">{row.branchName}</td>
                     <td className="px-3 py-1.5 font-semibold text-slate-800">{row.productName}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-600">{qty(row.shortfall)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-700">{qty(row.shortfall)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -466,15 +466,15 @@ function StockReport({ report }) {
           hint={report.changesTruncated ? `first 500 of ${report.changes.length + report.changesTruncated}` : `${report.changes.length} lines`}
         >
           <div className="max-h-96 overflow-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Branch</th>
-                  <th className="px-3 py-2 font-semibold">Product</th>
-                  <th className="px-3 py-2 font-semibold">Old barcode</th>
-                  <th className="px-3 py-2 text-right font-semibold">Old POS</th>
-                  <th className="px-3 py-2 text-right font-semibold">Pulled so far</th>
-                  <th className="px-3 py-2 text-right font-semibold">Change</th>
+                  <th className="px-3 py-2 font-medium">Branch</th>
+                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 font-medium">Old barcode</th>
+                  <th className="px-3 py-2 text-right font-medium">Old POS</th>
+                  <th className="px-3 py-2 text-right font-medium">Pulled so far</th>
+                  <th className="px-3 py-2 text-right font-medium">Change</th>
                 </tr>
               </thead>
               <tbody>
@@ -482,9 +482,9 @@ function StockReport({ report }) {
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="px-3 py-1.5 text-slate-600">{row.branch}</td>
                     <td className="px-3 py-1.5 font-semibold text-slate-800">{row.product}</td>
-                    <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.legacyBarcode || '—'}</td>
+                    <td className="ops-code px-3 py-1.5 text-xs text-slate-500">{row.legacyBarcode || '—'}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{qty(row.legacyQuantity)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{qty(row.pulledSoFar)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{qty(row.pulledSoFar)}</td>
                     <td className="px-3 py-1.5 text-right">
                       <Pill tone={deltaTone(row.delta)}>{signed(row.delta)}</Pill>
                     </td>
@@ -559,14 +559,14 @@ function WebsiteReport({ report }) {
       {report.products?.length ? (
         <Section title="Products" hint={`${qty(report.products.length)} on the website`}>
           <div className="max-h-96 overflow-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Product</th>
-                  <th className="px-3 py-2 font-semibold">Category</th>
-                  <th className="px-3 py-2 font-semibold">Slug</th>
-                  <th className="px-3 py-2 text-right font-semibold">Variations</th>
-                  <th className="px-3 py-2 font-semibold">Action</th>
+                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 font-medium">Category</th>
+                  <th className="px-3 py-2 font-medium">Slug</th>
+                  <th className="px-3 py-2 text-right font-medium">Variations</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -574,18 +574,18 @@ function WebsiteReport({ report }) {
                   <tr key={`${row.slug}-${row.code}`} className="border-b border-slate-100">
                     <td className="px-3 py-1.5">
                       <span className="font-semibold text-slate-800">{row.name}</span>{' '}
-                      <span className="ops-code text-[11px] text-slate-400">#{row.code}</span>
-                      {row.replaces ? <span className="block text-[11px] text-slate-400">here as “{row.replaces}”</span> : null}
+                      <span className="ops-code text-xs text-slate-500">#{row.code}</span>
+                      {row.replaces ? <span className="block text-xs text-slate-500">here as “{row.replaces}”</span> : null}
                     </td>
                     <td className="px-3 py-1.5 text-slate-500">
                       {row.category} {row.newCategory ? <Pill tone="good">new</Pill> : null}
                     </td>
-                    <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.slug}</td>
+                    <td className="ops-code px-3 py-1.5 text-xs text-slate-500">{row.slug}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
                       {row.variationsToCreate ? <span className="font-semibold text-emerald-700">+{row.variationsToCreate}</span> : null}
                       {row.variationsToCreate && (row.variationsMatched || row.variationsToLink) ? ' / ' : null}
                       {row.variationsMatched || row.variationsToLink ? (
-                        <span className="text-slate-400">{row.variationsMatched + row.variationsToLink} here</span>
+                        <span className="text-slate-500">{row.variationsMatched + row.variationsToLink} here</span>
                       ) : null}
                       {!row.variationsToCreate && !row.variationsMatched && !row.variationsToLink ? '—' : null}
                     </td>
@@ -627,12 +627,12 @@ function ResetReport({ report }) {
         <div className="grid gap-4 lg:grid-cols-2">
           <Section title={applied ? 'Deleted' : 'Will be deleted'} hint="table by table">
             <div className="max-h-80 overflow-auto">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full border-collapse text-left text-[13px]">
                 <tbody>
                   {report.deleted.map((row) => (
                     <tr key={row.table} className="border-b border-slate-100">
                       <td className="ops-code px-3 py-1.5 text-slate-700">{row.table}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-600">{qty(row.rows)}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-700">{qty(row.rows)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -641,14 +641,14 @@ function ResetReport({ report }) {
           </Section>
           <Section title={applied ? 'Kept and unlinked' : 'Will be kept, unlinked'} hint="the link is cleared, the row stays">
             <div className="max-h-80 overflow-auto">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full border-collapse text-left text-[13px]">
                 <tbody>
                   {report.detached?.length ? (
                     report.detached.map((row) => (
                       <tr key={`${row.table}.${row.column}`} className="border-b border-slate-100">
                         <td className="px-3 py-1.5 text-slate-700">
                           <span className="ops-code">{row.table}</span>
-                          <span className="text-slate-400"> · {row.column} → {row.pointsAt}</span>
+                          <span className="text-slate-500"> · {row.column} → {row.pointsAt}</span>
                         </td>
                         <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-amber-700">{qty(row.rows)}</td>
                       </tr>
@@ -720,14 +720,14 @@ function RunPanel({ run }) {
 function BranchesTab({ rows, isLoading, error }) {
   return (
     <div className="max-h-[32rem] overflow-auto">
-      <table className="w-full border-collapse text-left text-xs">
-        <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+      <table className="w-full border-collapse text-left text-[13px]">
+        <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
           <tr>
-            <th className="px-3 py-2 font-semibold">Old warehouse</th>
-            <th className="px-3 py-2 font-semibold">Code</th>
-            <th className="px-3 py-2 font-semibold">Branch here</th>
-            <th className="px-3 py-2 text-right font-semibold">Stock lines</th>
-            <th className="px-3 py-2 text-right font-semibold">Stock</th>
+            <th className="px-3 py-2 font-medium">Old warehouse</th>
+            <th className="px-3 py-2 font-medium">Code</th>
+            <th className="px-3 py-2 font-medium">Branch here</th>
+            <th className="px-3 py-2 text-right font-medium">Stock lines</th>
+            <th className="px-3 py-2 text-right font-medium">Stock</th>
           </tr>
         </thead>
         <tbody>
@@ -737,7 +737,7 @@ function BranchesTab({ rows, isLoading, error }) {
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-slate-100">
               <td className="px-3 py-1.5 font-semibold text-slate-800">{row.name}</td>
-              <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.code || '—'}</td>
+              <td className="ops-code px-3 py-1.5 text-xs text-slate-500">{row.code || '—'}</td>
               <td className="px-3 py-1.5">
                 {row.branch ? (
                   <span className="text-slate-600">{row.branch.name}</span>
@@ -767,21 +767,21 @@ function ProductsTab({ search, warehouseIds }) {
   return (
     <>
       {meta.total ? (
-        <p className="px-4 pt-3 text-[11px] text-slate-400">
+        <p className="px-4 pt-3 text-xs text-slate-500">
           Showing {rows.length} of {qty(meta.total)} · {qty(meta.linked)} already linked
           {meta.needsReview ? ` · ${qty(meta.needsReview)} need a material added to the mapping` : ''}
         </p>
       ) : null}
       <div className="max-h-[32rem] overflow-auto">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+        <table className="w-full border-collapse text-left text-[13px]">
+          <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
             <tr>
-              <th className="px-3 py-2 font-semibold">Name in the old POS</th>
-              <th className="px-3 py-2 font-semibold">Reads as</th>
-              <th className="px-3 py-2 font-semibold">Material / size</th>
-              <th className="px-3 py-2 text-right font-semibold">Colours</th>
-              <th className="px-3 py-2 text-right font-semibold">Stock</th>
-              <th className="px-3 py-2 font-semibold">Here</th>
+              <th className="px-3 py-2 font-medium">Name in the old POS</th>
+              <th className="px-3 py-2 font-medium">Reads as</th>
+              <th className="px-3 py-2 font-medium">Material / size</th>
+              <th className="px-3 py-2 text-right font-medium">Colours</th>
+              <th className="px-3 py-2 text-right font-medium">Stock</th>
+              <th className="px-3 py-2 font-medium">Here</th>
             </tr>
           </thead>
           <tbody>
@@ -831,21 +831,21 @@ function StockTab({ search, warehouseIds }) {
   return (
     <>
       {meta.total ? (
-        <p className="px-4 pt-3 text-[11px] text-slate-400">
+        <p className="px-4 pt-3 text-xs text-slate-500">
           Showing {rows.length} of {qty(meta.total)} lines · {qty(meta.legacyQuantity)} pcs in the old POS
           {meta.unmapped ? ` · ${qty(meta.unmapped)} not matched here` : ''}
         </p>
       ) : null}
       <div className="max-h-[32rem] overflow-auto">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+        <table className="w-full border-collapse text-left text-[13px]">
+          <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
             <tr>
-              <th className="px-3 py-2 font-semibold">Warehouse</th>
-              <th className="px-3 py-2 font-semibold">Item</th>
-              <th className="px-3 py-2 font-semibold">Old barcode</th>
-              <th className="px-3 py-2 text-right font-semibold">Old POS</th>
-              <th className="px-3 py-2 text-right font-semibold">Pulled</th>
-              <th className="px-3 py-2 text-right font-semibold">On hand here</th>
+              <th className="px-3 py-2 font-medium">Warehouse</th>
+              <th className="px-3 py-2 font-medium">Item</th>
+              <th className="px-3 py-2 font-medium">Old barcode</th>
+              <th className="px-3 py-2 text-right font-medium">Old POS</th>
+              <th className="px-3 py-2 text-right font-medium">Pulled</th>
+              <th className="px-3 py-2 text-right font-medium">On hand here</th>
             </tr>
           </thead>
           <tbody>
@@ -859,11 +859,11 @@ function StockTab({ search, warehouseIds }) {
                 <td className="px-3 py-1.5 text-slate-500">{row.branch?.name || row.warehouse}</td>
                 <td className="px-3 py-1.5">
                   <span className="font-semibold text-slate-800">{row.product?.name || row.name}</span>
-                  <span className="text-slate-400"> {[row.color, row.material, row.size].filter(Boolean).join(' · ')}</span>
+                  <span className="text-slate-500"> {[row.color, row.material, row.size].filter(Boolean).join(' · ')}</span>
                 </td>
-                <td className="ops-code px-3 py-1.5 text-[11px] text-slate-400">{row.legacyBarcode || '—'}</td>
+                <td className="ops-code px-3 py-1.5 text-xs text-slate-500">{row.legacyBarcode || '—'}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-slate-800">{qty(row.legacyQuantity)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">
+                <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
                   {row.pulledSoFar === null ? '—' : qty(row.pulledSoFar)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
@@ -902,8 +902,8 @@ function SourceCard({ icon: Icon, title, state, detail, children }) {
   return (
     <div className="card-ui flex min-w-0 flex-col gap-2 px-4 py-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-2 text-[13px] font-bold text-slate-700">
-          <Icon size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+        <p className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-slate-700">
+          <Icon size={14} className="shrink-0 text-slate-500" aria-hidden="true" />
           <span className="truncate">{title}</span>
         </p>
         <Pill tone={tone}>{state.connected ? 'connected' : state.configured ? 'unreachable' : 'not set up'}</Pill>
@@ -923,35 +923,35 @@ function Step({ job, state, sourceReady, blockedReason, orderHint, scopeNote, bu
   const definition = JOBS[job];
   const node =
     state.key === 'applied'
-      ? 'border-[var(--brand)] bg-[var(--brand)] text-white'
+      ? 'border-slate-900 bg-slate-900 text-white'
       : state.key === 'running'
-        ? 'border-[var(--brand)] bg-white text-[var(--brand-strong)] motion-safe:animate-pulse'
+        ? 'border-slate-900 bg-white text-[var(--brand-strong)] motion-safe:animate-pulse'
         : state.key === 'failed'
-          ? 'border-rose-400 bg-rose-50 text-rose-600'
+          ? 'border-rose-400 bg-rose-50 text-rose-700'
           : 'border-slate-300 bg-white text-slate-500';
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
       {/* The line itself: from this stop down to the next. */}
       {last ? null : <span aria-hidden="true" className="absolute left-[17px] top-9 bottom-0 w-px bg-slate-200" />}
       <span
-        className={`relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black tabular-nums ${node}`}
+        className={`relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold tabular-nums ${node}`}
         aria-hidden="true"
       >
         {state.key === 'applied' ? <FiCheckCircle size={16} /> : definition.step}
       </span>
       <div className="min-w-0 flex-1 pt-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h3 className="text-[15px] font-black tracking-tight text-slate-900">
+          <h3 className="text-[15px] font-semibold tracking-tight text-slate-900">
             <span className="sr-only">Step {definition.step}: </span>
             {definition.label}
           </h3>
           <Pill tone={state.tone}>{state.label}</Pill>
-          {definition.repeatable ? <span className="text-[11px] text-slate-400">run as often as needed</span> : null}
+          {definition.repeatable ? <span className="text-xs text-slate-500">run as often as needed</span> : null}
         </div>
         <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-500">{definition.blurb}</p>
-        {scopeNote ? <p className="mt-1 text-[11px] text-slate-400">{scopeNote}</p> : null}
+        {scopeNote ? <p className="mt-1 text-xs text-slate-500">{scopeNote}</p> : null}
         {orderHint ? (
-          <p className="mt-2 flex items-start gap-1.5 text-[11px] font-semibold text-amber-700">
+          <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-amber-700">
             <FiAlertTriangle size={12} className="mt-px shrink-0" aria-hidden="true" /> {orderHint}
           </p>
         ) : null}
@@ -959,7 +959,7 @@ function Step({ job, state, sourceReady, blockedReason, orderHint, scopeNote, bu
           <button
             type="button"
             onClick={() => onRun(job, 'preview')}
-            className="btn-ghost h-9 !text-xs"
+            className="btn-ghost btn-sm"
             disabled={!sourceReady || busy}
           >
             <FiEye size={13} aria-hidden="true" /> Preview
@@ -967,12 +967,12 @@ function Step({ job, state, sourceReady, blockedReason, orderHint, scopeNote, bu
           <button
             type="button"
             onClick={() => onRun(job, 'apply')}
-            className="btn-brand h-9 !text-xs"
+            className="btn-brand btn-sm"
             disabled={!sourceReady || busy}
           >
             <FiPlay size={13} aria-hidden="true" /> {definition.runLabel}
           </button>
-          {!sourceReady && blockedReason ? <span className="text-[11px] text-slate-400">{blockedReason}</span> : null}
+          {!sourceReady && blockedReason ? <span className="text-xs text-slate-500">{blockedReason}</span> : null}
         </div>
       </div>
     </li>
@@ -993,14 +993,14 @@ function StartOver({ runs, busy, onPreview, onApply }) {
     <section className="card-ui overflow-hidden !border-rose-200">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100 bg-rose-50/60 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <FiTrash2 size={15} className="shrink-0 text-rose-500" aria-hidden="true" />
-          <h2 className="text-[13px] font-bold uppercase tracking-wide text-rose-700">Start over</h2>
-          <span className="truncate text-xs font-medium text-rose-500/80">before launch only</span>
+          <FiTrash2 size={15} className="shrink-0 text-rose-700" aria-hidden="true" />
+          <h2 className="text-[15px] font-semibold text-rose-700">Start over</h2>
+          <span className="truncate text-xs font-medium text-rose-700/80">before launch only</span>
         </div>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="btn-ghost h-9 !text-xs"
+          className="btn-ghost btn-sm"
           aria-expanded={open}
           aria-controls="start-over-panel"
         >
@@ -1021,12 +1021,12 @@ function StartOver({ runs, busy, onPreview, onApply }) {
             sizes, materials and images stay, and the steps below reuse them.
           </p>
           <div className="flex flex-wrap items-end gap-3">
-            <button type="button" onClick={onPreview} className="btn-ghost h-9 !text-xs" disabled={busy}>
+            <button type="button" onClick={onPreview} className="btn-ghost btn-sm" disabled={busy}>
               <FiEye size={13} aria-hidden="true" /> Preview what goes
             </button>
             <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-[11px] font-semibold text-slate-500">
-                Type <span className="ops-code text-rose-600">{RESET_PHRASE}</span> to confirm
+              <span className="text-xs font-semibold text-slate-500">
+                Type <span className="ops-code text-rose-700">{RESET_PHRASE}</span> to confirm
               </span>
               <input
                 value={phrase}
@@ -1043,13 +1043,13 @@ function StartOver({ runs, busy, onPreview, onApply }) {
                 onApply(phrase.trim());
                 setPhrase('');
               }}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-rose-600 px-3.5 text-xs font-semibold text-white transition hover:bg-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="btn-danger btn-sm inline-flex"
               disabled={!ready || busy}
             >
               <FiTrash2 size={13} aria-hidden="true" /> {JOBS.reset.runLabel}
             </button>
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-slate-500">
             {previewed
               ? `Previewed ${timeOf(latest.finishedAt)} — the table-by-table list is in the report below.`
               : 'Preview first: the delete unlocks once you have seen exactly what goes.'}{' '}
@@ -1140,15 +1140,13 @@ export default function LegacyPosMigration() {
     const label = definition.usesScope ? scopeLabel : job === 'website' ? 'Old website' : 'Whole catalog';
 
     if (mode === 'apply') {
-      const confirmed = await Swal.fire({
+      const confirmed = await confirmAction({
+        tone: 'warning',
         title: `${definition.runLabel}?`,
         text: `${definition.confirm}${definition.usesScope ? ` This run covers ${scopeLabel}.` : ''}`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: definition.runLabel,
-        confirmButtonColor: '#0f172a'
+        confirmText: definition.runLabel
       });
-      if (!confirmed.isConfirmed) return;
+      if (!confirmed) return;
     }
     start.mutate({ job, mode, warehouseIds: definition.usesScope ? selectedWarehouseIds : undefined, scopeLabel: label });
     if (mode === 'preview') toast('Preview started');
@@ -1181,7 +1179,7 @@ export default function LegacyPosMigration() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageBar
         eyebrow="Migration"
         title="Catalog migration"
@@ -1194,7 +1192,7 @@ export default function LegacyPosMigration() {
             showroomsQuery.refetch();
             if (scopeReady) statusQuery.refetch();
           }}
-          className="btn-ghost h-9 !text-xs"
+          className="btn-ghost btn-sm"
           disabled={connectionQuery.isFetching || statusQuery.isFetching}
         >
           <FiRefreshCw size={13} className={connectionQuery.isFetching || statusQuery.isFetching ? 'animate-spin' : ''} /> Check connections
@@ -1223,13 +1221,13 @@ export default function LegacyPosMigration() {
           }
         >
           {status?.source?.missingWarehouses?.length ? (
-            <p className="text-[11px] font-semibold text-rose-600">
+            <p className="text-xs font-semibold text-rose-700">
               Not found in the old POS: {status.source.missingWarehouses.join(', ')}. Nothing can be imported until the
               names match.
             </p>
           ) : null}
           {status?.lastStockMovementAt ? (
-            <p className="text-[11px] text-slate-400">Last stock pulled {timeOf(status.lastStockMovementAt)}</p>
+            <p className="text-xs text-slate-500">Last stock pulled {timeOf(status.lastStockMovementAt)}</p>
           ) : null}
         </SourceCard>
       </div>
@@ -1256,7 +1254,7 @@ export default function LegacyPosMigration() {
               />
             ))}
           </ol>
-          <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+          <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
             Preview writes nothing — it reads both systems and reports what a run would do. Step history is kept until
             the API restarts.
           </p>
@@ -1285,7 +1283,7 @@ export default function LegacyPosMigration() {
                 key={entry.id}
                 type="button"
                 onClick={() => setActiveRunId(entry.id)}
-                className={`rounded-md border px-3 py-1.5 text-left text-[11px] transition hover:bg-slate-50 ${
+                className={`rounded-md border px-3 py-1.5 text-left text-xs transition hover:bg-slate-50 ${
                   entry.id === followedId ? 'border-slate-900' : 'border-slate-200'
                 }`}
               >
@@ -1293,7 +1291,7 @@ export default function LegacyPosMigration() {
                   {JOBS[entry.job]?.label || entry.job} · {entry.mode}
                   {entry.scopeLabel ? <span className="font-normal text-slate-500"> · {entry.scopeLabel}</span> : null}
                 </span>
-                <span className="ml-2 text-slate-400">{new Date(entry.startedAt).toLocaleTimeString()}</span>
+                <span className="ml-2 text-slate-500">{new Date(entry.startedAt).toLocaleTimeString()}</span>
                 <Pill tone={RUN_TONE[entry.status] || 'neutral'} className="ml-2">
                   {entry.status}
                 </Pill>
@@ -1317,7 +1315,7 @@ export default function LegacyPosMigration() {
                 key={entry.key}
                 type="button"
                 onClick={() => setTab(entry.key)}
-                className={`rounded-md border px-3 py-1 text-[11px] font-semibold transition ${
+                className={`rounded-md border px-3 py-1 text-xs font-semibold transition ${
                   tab === entry.key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -1333,7 +1331,7 @@ export default function LegacyPosMigration() {
                   aria-label="Search name or barcode"
                   className={`${fieldClass} h-8 !w-52 !py-1 !text-xs`}
                 />
-                <button type="submit" className="btn-ghost h-8 !text-xs" aria-label="Search">
+                <button type="submit" className="btn-ghost btn-sm" aria-label="Search">
                   <FiSearch size={13} />
                 </button>
               </form>
@@ -1342,11 +1340,11 @@ export default function LegacyPosMigration() {
         }
       >
         {!connected ? (
-          <SectionBody className="p-6 text-center text-sm text-slate-400">
+          <SectionBody className="p-6 text-center text-sm text-slate-500">
             Connect to the old POS to browse what it holds.
           </SectionBody>
         ) : !scopeReady ? (
-          <SectionBody className="p-6 text-center text-sm text-slate-400">
+          <SectionBody className="p-6 text-center text-sm text-slate-500">
             Select at least one showroom above to browse its products and stock.
           </SectionBody>
         ) : (

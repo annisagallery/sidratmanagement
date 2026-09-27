@@ -39,13 +39,13 @@ export default function ComplaintImagePicker({ files, setFiles, disabled = false
         {files.map((item) => (
           <div
             key={item.id}
-            className={`group relative overflow-hidden border border-gray-200 bg-gray-50 ${compact ? 'h-14 w-14 rounded-md' : 'h-20 w-20 rounded-md'}`}
+            className={`group relative overflow-hidden border border-slate-200 bg-slate-50 ${compact ? 'h-14 w-14 rounded-md' : 'h-20 w-20 rounded-md'}`}
           >
             <Image src={item.preview} alt={item.file.name} fill className="object-cover" />
             <button
               type="button"
               onClick={() => remove(item.id)}
-              className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-md bg-black/70 text-white shadow-sm transition hover:bg-black"
+              className="btn-brand absolute right-1 top-1 w-5"
               aria-label={`Remove ${item.file.name}`}
             >
               <FiX size={13} />
@@ -59,15 +59,15 @@ export default function ComplaintImagePicker({ files, setFiles, disabled = false
             onClick={() => inputRef.current?.click()}
             className={
               compact
-                ? 'inline-flex h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3.5 text-sm font-medium text-gray-600 shadow-sm transition hover:border-[var(--brand-ring)] hover:text-[var(--brand-strong)] disabled:opacity-40'
-                : 'h-20 w-20 rounded-md border-2 border-dashed border-gray-200 text-xs font-semibold text-gray-400 transition hover:border-[var(--brand-ring)] hover:text-[var(--brand-strong)] disabled:opacity-40'
+                ? 'inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-[var(--brand-strong)] disabled:opacity-40'
+                : 'h-20 w-20 rounded-md border-2 border-dashed border-slate-200 text-xs font-semibold text-slate-500 transition hover:border-slate-400 hover:text-[var(--brand-strong)] disabled:opacity-40'
             }
           >
             {compact ? (
               <>
                 <FiPaperclip size={16} />
                 <span>Attach</span>
-                <span className="text-gray-400">{files.length}/10</span>
+                <span className="text-slate-500">{files.length}/10</span>
               </>
             ) : (
               '+ Photo'
@@ -76,7 +76,7 @@ export default function ComplaintImagePicker({ files, setFiles, disabled = false
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={addFiles} />
-      {!compact && <p className="text-xs text-gray-400">Private attachments · up to 10 images</p>}
+      {!compact && <p className="text-xs text-slate-500">Private attachments · up to 10 images</p>}
     </div>
   );
 }

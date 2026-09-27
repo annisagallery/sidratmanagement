@@ -1,34 +1,34 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useMutation } from 'react-query';
-import { toast } from 'react-toastify';
 import { useRouter } from 'next-nprogress-bar';
-import { FiUpload } from 'react-icons/fi';
+import Image from 'next/image';
+import { MdArrowBack, MdImage, MdOutlineFileUpload } from 'react-icons/md';
 import { addCampaignByAdmin, updateCampaignByAdmin, uploadImage } from 'src/services';
+import { toastSuccess, alertError } from 'src/utils/swal';
 import CampaignProductPicker from 'src/components/_admin/campaigns/productPicker';
 import CampaignBranchPicker from 'src/components/_admin/campaigns/branchPicker';
-import Image from 'next/image';
+import PageHeader from 'src/components/_admin/ui/PageHeader';
+import Panel from 'src/components/_admin/ui/Panel';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import { Field, LengthCounter } from 'src/components/_admin/ui/fields';
 
 const TYPES = [
-  { value: 'flash_sale', label: 'Flash Sale' },
-  { value: 'discount', label: 'Discount Rule' },
-  { value: 'seasonal', label: 'Seasonal Event' },
+  { value: 'flash_sale', label: 'Flash sale' },
+  { value: 'discount', label: 'Discount rule' },
+  { value: 'seasonal', label: 'Seasonal event' },
   { value: 'announcement', label: 'Announcement' }
 ];
 
-function inp(extra = '') {
-  return `border border-gray-200 rounded-md px-3 py-2 w-full text-sm focus:outline-none focus:border-gray-400 ${extra}`;
-}
+const DISCOUNT_TYPES = [
+  { id: 'percent', label: 'Percentage (%)' },
+  { id: 'fixed', label: 'Fixed amount (৳)' }
+];
 
-function Field({ label, error, children }) {
-  return (
-    <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
-      {children}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  );
-}
+const STATUS_OPTIONS = [
+  { id: 'active', label: 'Active' },
+  { id: 'inactive', label: 'Inactive' }
+];
 
 function toSlug(str) {
   return str
@@ -43,13 +43,36 @@ function fmt(d) {
   return new Date(d).toISOString().slice(0, 16);
 }
 
+/** One uploadable image: preview (or a placeholder) and a replace button. */
+function ImageSlot({ title, description, image, uploading, onPick }) {
+  const ref = useRef();
+  return (
+    <Panel title={title} description={description}>
+      <div className="space-y-3">
+        {image?.path ? (
+          <Image src={image.path} alt={`${title} preview`} width={1200} height={144} className="h-36 w-full rounded-md border border-slate-200 object-cover" />
+        ) : (
+          <div className="flex h-36 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-slate-300 bg-slate-50 text-[13px] text-slate-500">
+            <MdImage size={24} className="text-slate-400" aria-hidden />
+            No image yet
+          </div>
+        )}
+        <input type="file" accept="image/*" ref={ref} className="hidden" onChange={onPick} tabIndex={-1} aria-hidden />
+        <button type="button" onClick={() => ref.current?.click()} disabled={uploading} className="btn-ghost w-full">
+          <MdOutlineFileUpload size={17} aria-hidden />
+          {uploading ? 'Uploading…' : image?.path ? 'Replace image' : 'Upload image'}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
 export default function CampaignForm({ data: existing }) {
   const router = useRouter();
-  const imgRef = useRef();
-  const cardImgRef = useRef();
   const [imgLoading, setImgLoading] = useState(false);
   const [cardImgLoading, setCardImgLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const back = () => router.push('/campaigns');
 
   const [form, setForm] = useState({
     name: existing?.name || '',
@@ -70,58 +93,45 @@ export default function CampaignForm({ data: existing }) {
     branches: (existing?.branches || []).map((b) => b.id ?? b)
   });
 
-  const set = (k) => (e) => {
-    const v = e.target.value;
+  const put = (k, v) => {
     setForm((p) => {
       const next = { ...p, [k]: v };
       if (k === 'name' && !existing) next.slug = toSlug(v);
       return next;
     });
+    setErrors((e) => ({ ...e, [k]: undefined, ...(k === 'name' ? { slug: undefined } : {}) }));
   };
+  const set = (k) => (e) => put(k, e.target.value);
 
   // Image upload helpers
-  const handleImageChange = async (e) => {
+  const upload = (key, setBusy) => async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    setImgLoading(true);
+    setBusy(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('model', 'campaigns');
       const res = await uploadImage(fd);
-      setForm((p) => ({ ...p, cover: { path: res.data?.path || res.path } }));
-    } catch {
-      toast.error('Image upload failed');
+      setForm((p) => ({ ...p, [key]: { path: res.data?.path || res.path } }));
+    } catch (err) {
+      alertError(err, { title: 'The image was not uploaded' });
     } finally {
-      setImgLoading(false);
-    }
-  };
-
-  const handleCardImageChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCardImgLoading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('model', 'campaigns');
-      const res = await uploadImage(fd);
-      setForm((p) => ({ ...p, cardImage: { path: res.data?.path || res.path } }));
-    } catch {
-      toast.error('Image upload failed');
-    } finally {
-      setCardImgLoading(false);
+      setBusy(false);
     }
   };
 
   // Validation
   const validate = () => {
     const e = {};
-    if (!form.name) e.name = 'Name is required';
-    if (!form.slug) e.slug = 'Slug is required';
-    if (!form.discount) e.discount = 'Discount is required';
-    if (!form.startDate) e.startDate = 'Start date is required';
-    if (!form.endDate) e.endDate = 'End date is required';
+    if (!form.name) e.name = 'Give the campaign a name.';
+    if (!form.slug) e.slug = 'Enter the web address.';
+    if (!form.discount) e.discount = 'Enter the discount.';
+    else if (form.discountType === 'percent' && Number(form.discount) > 100) e.discount = 'A percentage cannot be more than 100.';
+    if (!form.startDate) e.startDate = 'Choose when it starts.';
+    if (!form.endDate) e.endDate = 'Choose when it ends.';
+    else if (form.startDate && form.endDate <= form.startDate) e.endDate = 'The end must be after the start.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -131,10 +141,10 @@ export default function CampaignForm({ data: existing }) {
       existing ? updateCampaignByAdmin({ currentSlug: existing.slug, ...payload }) : addCampaignByAdmin(payload),
     {
       onSuccess: (res) => {
-        toast.success(res.message || 'Saved');
-        router.push('/campaigns');
+        toastSuccess(res.message || (existing ? 'Campaign saved' : 'Campaign created'));
+        back();
       },
-      onError: (e) => toast.error(e.response?.data?.message || 'Error')
+      onError: (e) => alertError(e, { title: existing ? 'The campaign was not saved' : 'The campaign was not created' })
     }
   );
 
@@ -144,39 +154,37 @@ export default function CampaignForm({ data: existing }) {
     saveMut.mutate({ ...form, products: form.products.map((p) => p.id), branches: form.branches });
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="p-6 w-full space-y-6">
-      <div className="flex items-center justify-end">
-        <button
-          type="submit"
-          disabled={saveMut.isLoading}
-          className="btn-brand px-6 py-2.5 text-sm disabled:opacity-50"
-        >
-          {saveMut.isLoading ? 'Saving…' : existing ? 'Save Changes' : 'Create Campaign'}
-        </button>
-      </div>
+  const saving = saveMut.isLoading;
+  const submitLabel = saving ? 'Saving…' : existing ? 'Save changes' : 'Create campaign';
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <PageHeader
+        title={existing ? `Edit ${existing.name}` : 'New campaign'}
+        subtitle={existing ? 'Changes reach the storefront and branches as soon as you save.' : 'A time-limited price for a set of products.'}
+        eyebrow="Campaigns"
+      >
+        <button type="button" onClick={back} className="btn-ghost">
+          <MdArrowBack size={17} aria-hidden /> Back to campaigns
+        </button>
+        <button type="submit" disabled={saving} className="btn-brand">
+          {submitLabel}
+        </button>
+      </PageHeader>
+
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left: main info */}
-        <div className="xl:col-span-2 space-y-5">
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-4 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">Campaign Info</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Campaign Name *" error={errors.name}>
-                <input
-                  className={inp(errors.name ? 'border-red-300' : '')}
-                  value={form.name}
-                  onChange={set('name')}
-                  placeholder="Summer Sale 2025"
-                />
+        <div className="min-w-0 space-y-6">
+          <Panel title="Details">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Name" required error={errors.name}>
+                <input className="input-ui" value={form.name} onChange={set('name')} placeholder="e.g. Summer sale" autoFocus={!existing} />
               </Field>
-              <Field label="Slug *" error={errors.slug}>
-                <input className={inp()} value={form.slug} onChange={set('slug')} placeholder="summer-sale-2025" />
+              <Field label="Web address" required error={errors.slug} help={form.slug ? `/campaigns/${form.slug}` : 'Filled in from the name.'}>
+                <input className="input-ui ops-code" value={form.slug} onChange={set('slug')} placeholder="summer-sale" spellCheck={false} />
               </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <Field label="Type">
-                <select className={inp()} value={form.type} onChange={set('type')}>
+                <select className="select-ui w-full" value={form.type} onChange={set('type')}>
                   {TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
                       {t.label}
@@ -185,160 +193,101 @@ export default function CampaignForm({ data: existing }) {
                 </select>
               </Field>
               <Field label="Status">
-                <select className={inp()} value={form.status} onChange={set('status')}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+                <Segmented label="Status" options={STATUS_OPTIONS} value={form.status} onChange={(v) => put('status', v)} />
+              </Field>
+              <Field label="Description" optional className="sm:col-span-2">
+                <textarea
+                  className="input-ui min-h-[84px] resize-y py-2"
+                  value={form.description}
+                  onChange={set('description')}
+                  rows={3}
+                  placeholder="What shoppers see on the campaign page"
+                />
               </Field>
             </div>
-            <Field label="Description">
-              <textarea
-                className={inp()}
-                value={form.description}
-                onChange={set('description')}
-                rows={3}
-                placeholder="Describe this campaign…"
-              />
-            </Field>
-          </div>
+          </Panel>
 
-          {/* SEO */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-4 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">SEO</h2>
-            <Field label="Meta Title">
-              <input className={inp()} value={form.metaTitle} onChange={set('metaTitle')} />
-            </Field>
-            <Field label="Meta Description">
-              <textarea className={inp()} value={form.metaDescription} onChange={set('metaDescription')} rows={2} />
-            </Field>
-          </div>
+          <CampaignProductPicker products={form.products} onChange={(products) => setForm((p) => ({ ...p, products }))} />
 
-          <CampaignProductPicker
-            products={form.products}
-            onChange={(products) => setForm((p) => ({ ...p, products }))}
-          />
+          <Panel title="Search engines" description="How the campaign page appears in search results.">
+            <div className="space-y-4">
+              <Field label="Page title" optional counter={<LengthCounter value={form.metaTitle} max={60} />}>
+                <input className="input-ui" value={form.metaTitle} onChange={set('metaTitle')} placeholder={form.name || undefined} />
+              </Field>
+              <Field label="Description" optional counter={<LengthCounter value={form.metaDescription} max={160} />}>
+                <textarea className="input-ui min-h-[64px] resize-y py-2" value={form.metaDescription} onChange={set('metaDescription')} rows={2} />
+              </Field>
+            </div>
+          </Panel>
         </div>
 
-        {/* Right: where it applies, then discount + dates + image */}
-        <div className="space-y-5">
-          <CampaignBranchPicker
-            selected={form.branches}
-            onChange={(branches) => setForm((p) => ({ ...p, branches }))}
+        {/* Right: discount, dates, where it applies, images */}
+        <div className="space-y-6">
+          <Panel title="Discount">
+            <div className="space-y-4">
+              <Segmented
+                label="Discount type"
+                options={DISCOUNT_TYPES}
+                value={form.discountType}
+                onChange={(v) => put('discountType', v)}
+                className="w-full [&>button]:flex-1 [&>button]:justify-center"
+              />
+              <Field
+                label={form.discountType === 'percent' ? 'Percentage off' : 'Amount off (৳)'}
+                required
+                error={errors.discount}
+                help={form.discountType === 'percent' ? 'Taken off the regular price.' : 'Taken off the regular price, in taka.'}
+              >
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={form.discountType === 'percent' ? 100 : undefined}
+                  className="input-ui tabular-nums"
+                  value={form.discount}
+                  onChange={set('discount')}
+                  placeholder={form.discountType === 'percent' ? 'e.g. 20' : 'e.g. 100'}
+                />
+              </Field>
+            </div>
+          </Panel>
+
+          <Panel title="Runs">
+            <div className="space-y-4">
+              <Field label="Starts" required error={errors.startDate}>
+                <input type="datetime-local" className="input-ui" value={form.startDate} onChange={set('startDate')} />
+              </Field>
+              <Field label="Ends" required error={errors.endDate}>
+                <input type="datetime-local" className="input-ui" value={form.endDate} onChange={set('endDate')} />
+              </Field>
+            </div>
+          </Panel>
+
+          <CampaignBranchPicker selected={form.branches} onChange={(branches) => setForm((p) => ({ ...p, branches }))} />
+
+          <ImageSlot
+            title="Cover image"
+            description="The banner at the top of the campaign page."
+            image={form.cover}
+            uploading={imgLoading}
+            onPick={upload('cover', setImgLoading)}
           />
-
-          {/* Discount */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-4 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">Discount</h2>
-            <Field label="Type">
-              <div className="flex gap-3">
-                {[
-                  ['percent', '% Percent'],
-                  ['fixed', '৳ Fixed']
-                ].map(([v, l]) => (
-                  <label
-                    key={v}
-                    className={`flex-1 text-center py-2 rounded-md border text-sm cursor-pointer transition-colors ${form.discountType === v ? 'bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand-strong)] font-medium' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    <input
-                      type="radio"
-                      className="hidden"
-                      value={v}
-                      checked={form.discountType === v}
-                      onChange={() => setForm((p) => ({ ...p, discountType: v }))}
-                    />
-                    {l}
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <Field label="Discount Value *" error={errors.discount}>
-              <input
-                type="number"
-                min={0}
-                className={inp(errors.discount ? 'border-red-300' : '')}
-                value={form.discount}
-                onChange={set('discount')}
-                placeholder={form.discountType === 'percent' ? 'e.g. 20' : 'e.g. 100'}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                {form.discountType === 'percent' ? 'Percentage off the regular price' : 'Fixed amount off in ৳'}
-              </p>
-            </Field>
-          </div>
-
-          {/* Dates */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-4 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">Duration</h2>
-            <Field label="Start Date *" error={errors.startDate}>
-              <input type="datetime-local" className={inp()} value={form.startDate} onChange={set('startDate')} />
-            </Field>
-            <Field label="End Date *" error={errors.endDate}>
-              <input type="datetime-local" className={inp()} value={form.endDate} onChange={set('endDate')} />
-            </Field>
-          </div>
-
-          {/* Cover image */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-3 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">
-              Cover Image <span className="text-gray-400 font-normal">(banner/hero)</span>
-            </h2>
-            {form.cover?.path && (
-              <Image
-                src={form.cover.path}
-                alt="Cover"
-                width={1200}
-                height={144}
-                className="w-full h-36 object-cover rounded-md border"
-              />
-            )}
-            <input type="file" accept="image/*" ref={imgRef} className="hidden" onChange={handleImageChange} />
-            <button
-              type="button"
-              onClick={() => imgRef.current?.click()}
-              disabled={imgLoading}
-              className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 py-2.5 rounded-md text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              <FiUpload /> {imgLoading ? 'Uploading…' : form.cover?.path ? 'Change Cover' : 'Upload Cover'}
-            </button>
-          </div>
-
-          {/* Card image */}
-          <div className="bg-white border border-gray-100 rounded-md p-5 space-y-3 shadow-sm">
-            <h2 className="font-semibold text-gray-700 text-sm">
-              Card Image <span className="text-gray-400 font-normal">(homepage carousel card)</span>
-            </h2>
-            <p className="text-xs text-gray-400">Shown as the pinned first card in the homepage campaign carousel.</p>
-            {form.cardImage?.path && (
-              <Image
-                src={form.cardImage.path}
-                alt="Card"
-                width={1200}
-                height={144}
-                className="w-full h-36 object-cover rounded-md border"
-              />
-            )}
-            <input type="file" accept="image/*" ref={cardImgRef} className="hidden" onChange={handleCardImageChange} />
-            <button
-              type="button"
-              onClick={() => cardImgRef.current?.click()}
-              disabled={cardImgLoading}
-              className="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 py-2.5 rounded-md text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              <FiUpload />{' '}
-              {cardImgLoading ? 'Uploading…' : form.cardImage?.path ? 'Change Card Image' : 'Upload Card Image'}
-            </button>
-          </div>
+          <ImageSlot
+            title="Card image"
+            description="Pinned as the first card in the homepage campaign carousel."
+            image={form.cardImage}
+            uploading={cardImgLoading}
+            onPick={upload('cardImage', setCardImgLoading)}
+          />
         </div>
       </div>
 
-      {/* Bottom save */}
-      <div className="flex justify-end pb-4">
-        <button
-          type="submit"
-          disabled={saveMut.isLoading}
-          className="btn-brand px-8 py-3 disabled:opacity-50"
-        >
-          {saveMut.isLoading ? 'Saving…' : existing ? 'Save Changes' : 'Create Campaign'}
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+        <button type="button" onClick={back} className="btn-ghost" disabled={saving}>
+          Cancel
+        </button>
+        <button type="submit" disabled={saving} className="btn-brand sm:min-w-40">
+          {submitLabel}
         </button>
       </div>
     </form>

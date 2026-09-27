@@ -36,8 +36,8 @@ export default function ScanDeskShell({ children }) {
           <MdQrCodeScanner size={19} />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold leading-tight text-slate-950">Production</p>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Scan station</p>
+          <p className="truncate text-sm font-semibold leading-tight text-slate-950">Production</p>
+          <p className="section-label">Scan station</p>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -46,7 +46,7 @@ export default function ScanDeskShell({ children }) {
           ) : null}
           <Link
             href="/production"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)]"
           >
             <FiArrowLeft size={15} />
             <span className="hidden sm:inline">Back to production</span>

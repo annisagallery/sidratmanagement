@@ -1,366 +1,336 @@
 'use client';
-import { useState, useEffect } from 'react';
-import Swal from 'sweetalert2';
+import { useState, useEffect, useMemo } from 'react';
+import { MdAdd, MdDeleteOutline } from 'react-icons/md';
+import { toastSuccess, alertError } from 'src/utils/swal';
 import { getCashSettings, updateCashSettings } from 'src/services';
-import { MdToggleOn, MdToggleOff, MdInfoOutline, MdAdd, MdDeleteOutline } from 'react-icons/md';
+import { Field, SettingsCard, Toggle } from 'src/components/_admin/ui/fields';
+import Segmented from 'src/components/_admin/ui/Segmented';
+import Callout from 'src/components/_admin/ui/Callout';
+import { ErrorState, LoadingBlock } from 'src/components/_admin/ui/TableStates';
 
 const BDT = '৳';
-const inp =
-  'border rounded-md px-3 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition';
 
-function Field({ label, hint, children }) {
+const DEFAULTS = {
+  isActive: false,
+  rewardPercent: 0,
+  purchaseRewardType: 'percent',
+  purchaseRanges: [],
+  minOrderAmount: 0,
+  maxCashBalance: 0,
+  expiryDays: 0,
+  allowCashAtCheckout: true,
+  maxUsePercent: 100,
+  signupBonus: 0,
+  reviewReward: 0
+};
+
+function MoneyInput({ value, onChange, label, suffix = BDT, disabled = false, ...rest }) {
   return (
-    <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
-      {hint && <p className="text-xs text-gray-400 mb-1.5">{hint}</p>}
-      {children}
-    </div>
+    <span className="relative block">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        aria-label={label}
+        className="input-ui pr-10 tabular-nums"
+        {...rest}
+      />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-slate-500">{suffix}</span>
+    </span>
   );
 }
 
+/** Which range (by index) breaks the rules, and why. */
+function rangeProblem(ranges) {
+  const sorted = ranges.map((range, index) => ({ ...range, index })).sort((a, b) => a.minAmount - b.minAmount);
+  for (let i = 0; i < sorted.length; i += 1) {
+    const range = sorted[i];
+    if (range.minAmount < 0 || range.maxAmount < 0 || range.rewardAmount < 0) return { index: range.index, message: 'Amounts cannot be negative.' };
+    if (range.maxAmount > 0 && range.maxAmount < range.minAmount) return { index: range.index, message: 'The maximum is below the minimum.' };
+    if (i > 0 && (sorted[i - 1].maxAmount === 0 || range.minAmount <= sorted[i - 1].maxAmount)) {
+      return { index: range.index, message: 'This range overlaps the one before it.' };
+    }
+  }
+  return null;
+}
+
 export default function CashSettingsPage() {
-  const [settings, setSettings] = useState({
-    isActive: false,
-    rewardPercent: 0,
-    purchaseRewardType: 'percent',
-    purchaseRanges: [],
-    minOrderAmount: 0,
-    maxCashBalance: 0,
-    expiryDays: 0,
-    allowCashAtCheckout: true,
-    maxUsePercent: 100,
-    signupBonus: 0,
-    reviewReward: 0
-  });
+  const [settings, setSettings] = useState(DEFAULTS);
+  const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [problem, setProblem] = useState(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setLoadError(null);
     getCashSettings()
-      .then((r) => setSettings((p) => ({ ...p, ...(r.data || {}) })))
-      .catch((e) => Swal.fire('Error', e.message, 'error'))
+      .then((r) => {
+        const next = { ...DEFAULTS, ...(r.data || {}) };
+        setSettings(next);
+        setSaved(next);
+      })
+      .catch((e) => setLoadError(e))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
-  const handleSave = async () => {
+  useEffect(load, []);
+
+  const dirty = useMemo(() => saved !== null && JSON.stringify(settings) !== JSON.stringify(saved), [settings, saved]);
+
+  const handleSave = async (event) => {
+    event?.preventDefault();
     const ranges = [...settings.purchaseRanges].sort((a, b) => a.minAmount - b.minAmount);
     if (settings.purchaseRewardType === 'range') {
-      const invalidIndex = ranges.findIndex(
-        (range, index) =>
-          range.minAmount < 0 ||
-          range.maxAmount < 0 ||
-          range.rewardAmount < 0 ||
-          (range.maxAmount > 0 && range.maxAmount < range.minAmount) ||
-          (index > 0 && (ranges[index - 1].maxAmount === 0 || range.minAmount <= ranges[index - 1].maxAmount))
-      );
-      if (invalidIndex >= 0) {
-        Swal.fire('Invalid purchase ranges', 'Ranges must contain valid amounts and cannot overlap.', 'warning');
-        return;
-      }
+      const found = rangeProblem(settings.purchaseRanges);
+      setProblem(found);
+      if (found) return;
     }
 
     setSaving(true);
     try {
       await updateCashSettings({ ...settings, purchaseRanges: ranges });
-      setSettings((current) => ({ ...current, purchaseRanges: ranges }));
-      Swal.fire({
-        toast: true,
-        position: 'top-end',
-        icon: 'success',
-        title: 'Settings saved!',
-        showConfirmButton: false,
-        timer: 2000
-      });
+      const next = { ...settings, purchaseRanges: ranges };
+      setSettings(next);
+      setSaved(next);
+      toastSuccess('Cashback settings saved');
     } catch (e) {
-      Swal.fire('Error', e.message, 'error');
+      alertError(e, { title: 'The settings were not saved' });
     } finally {
       setSaving(false);
     }
   };
 
-  const set = (key) => (e) => setSettings((p) => ({ ...p, [key]: Number(e.target.value) }));
-  const toggle = (key) => () => setSettings((p) => ({ ...p, [key]: !p[key] }));
-  const setRange = (index, key) => (e) =>
+  const setNumber = (key) => (e) => setSettings((p) => ({ ...p, [key]: Number(e.target.value) }));
+  const setRange = (index, key) => (e) => {
+    setProblem(null);
     setSettings((current) => ({
       ...current,
       purchaseRanges: current.purchaseRanges.map((range, rangeIndex) =>
         rangeIndex === index ? { ...range, [key]: Number(e.target.value) } : range
       )
     }));
+  };
   const addRange = () =>
     setSettings((current) => ({
       ...current,
       purchaseRanges: [...current.purchaseRanges, { minAmount: 0, maxAmount: 0, rewardAmount: 0 }]
     }));
-  const removeRange = (index) =>
+  const removeRange = (index) => {
+    setProblem(null);
     setSettings((current) => ({
       ...current,
       purchaseRanges: current.purchaseRanges.filter((_, rangeIndex) => rangeIndex !== index)
     }));
+  };
 
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {[1, 2].map((i) => (
-          <div key={i} className="h-72 bg-gray-100 rounded-md animate-pulse" />
-        ))}
-      </div>
-    );
-  }
+  if (loading) return <LoadingBlock rows={6} />;
+  // Never offer defaults as if they were the saved rules — saving them would
+  // overwrite the real ones.
+  if (loadError) return <ErrorState error={loadError} title="Cashback settings could not be loaded" onRetry={load} />;
 
   const exampleEarning = Math.floor((settings.rewardPercent / 100) * 1000);
-  const maxUsableLabel = settings.maxUsePercent > 0 ? `up to ${settings.maxUsePercent}% of order total` : 'unlimited';
+  const maxUsableLabel = settings.maxUsePercent > 0 ? `up to ${settings.maxUsePercent}% of the order total` : 'with no limit';
+
+  const summary = [
+    settings.purchaseRewardType === 'range'
+      ? `Purchase cashback uses ${settings.purchaseRanges.length} range${settings.purchaseRanges.length === 1 ? '' : 's'}.`
+      : settings.rewardPercent > 0
+        ? `A ${BDT}1,000 order earns ${BDT}${exampleEarning} (${settings.rewardPercent}%).`
+        : 'Set a cashback rate to start rewarding purchases.',
+    settings.signupBonus > 0 ? `New customers get ${BDT}${settings.signupBonus} on sign-up.` : null,
+    settings.reviewReward > 0 ? `Verified reviews earn ${BDT}${settings.reviewReward}.` : null,
+    settings.allowCashAtCheckout ? `Spendable at checkout ${maxUsableLabel}.` : 'Not spendable at checkout.'
+  ].filter(Boolean);
 
   return (
-    <div className="space-y-6">
-      {/* Active toggle */}
-      <div className="flex items-center justify-between bg-white border rounded-md px-5 py-4">
-        <div className="flex items-start gap-2">
-          <MdInfoOutline size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-800">
-            <span className="font-semibold">Cashback is {settings.isActive ? 'active' : 'inactive'}. </span>
-            {settings.purchaseRewardType === 'range' ? (
-              <>
-                Purchase cashback uses <strong>{settings.purchaseRanges.length} configured range{settings.purchaseRanges.length === 1 ? '' : 's'}</strong>.{' '}
-              </>
-            ) : settings.rewardPercent > 0 ? (
-              <>
-                A <strong>{BDT}1,000</strong> order earns{' '}
-                <strong>
-                  {BDT}
-                  {exampleEarning}
-                </strong>{' '}
-                cashback ({settings.rewardPercent}%).{' '}
-              </>
-            ) : (
-              <>Set a reward % to start giving cashback. </>
-            )}
-            {settings.signupBonus > 0 && (
-              <>
-                New users receive{' '}
-                <strong>
-                  {BDT}
-                  {settings.signupBonus}
-                </strong>{' '}
-                on signup.{' '}
-              </>
-            )}
-            {settings.reviewReward > 0 && (
-              <>
-                Verified reviews earn{' '}
-                <strong>
-                  {BDT}
-                  {settings.reviewReward}
-                </strong>
-                .{' '}
-              </>
-            )}
-            {settings.allowCashAtCheckout && <>Redeemable at checkout ({maxUsableLabel}).</>}
-          </p>
-        </div>
-        <button
-          onClick={toggle('isActive')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md font-semibold text-sm border flex-shrink-0 ml-4 transition ${
-            settings.isActive
-              ? 'bg-green-50 border-green-300 text-green-700'
-              : 'bg-gray-50 border-gray-200 text-gray-500'
-          }`}
-        >
-          {settings.isActive ? (
-            <MdToggleOn size={22} className="text-green-600" />
-          ) : (
-            <MdToggleOff size={22} className="text-gray-400" />
-          )}
-          {settings.isActive ? 'Active' : 'Inactive'}
-        </button>
-      </div>
+    <form onSubmit={handleSave} className="space-y-6" noValidate>
+      <SettingsCard title="Cashback programme" description={summary.join(' ')}>
+        <Toggle
+          label="Cashback is on"
+          help="When off, no cashback is earned or offered at checkout. Balances customers already hold are kept."
+          checked={settings.isActive}
+          onChange={(value) => setSettings((p) => ({ ...p, isActive: value }))}
+        />
+      </SettingsCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Earning Rules */}
-        <div className="bg-white border rounded-md p-6 space-y-5">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+        <SettingsCard title="Earning rules" description="How customers earn cashback.">
           <div>
-            <h2 className="font-bold text-gray-800">Earning Rules</h2>
-            <p className="text-xs text-gray-400 mt-0.5">How customers earn cashback</p>
-          </div>
-
-          <div>
-            <p className="block text-sm font-semibold text-gray-700 mb-2">Purchase Cashback Type</p>
-            <div className="grid grid-cols-2 border border-gray-200 rounded-md p-1 bg-gray-50">
-              {[
-                ['percent', 'Percentage'],
-                ['range', 'Purchase Range']
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setSettings((current) => ({ ...current, purchaseRewardType: value }))}
-                  className={`px-3 py-2 rounded-md text-sm font-semibold transition ${
-                    settings.purchaseRewardType === value ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <p className="mb-1.5 text-[13px] font-medium text-slate-800">Purchase cashback</p>
+            <Segmented
+              label="Purchase cashback type"
+              options={[
+                { id: 'percent', label: 'Percentage of order' },
+                { id: 'range', label: 'Fixed amount by range' }
+              ]}
+              value={settings.purchaseRewardType}
+              onChange={(value) => {
+                setProblem(null);
+                setSettings((current) => ({ ...current, purchaseRewardType: value }));
+              }}
+            />
           </div>
 
           {settings.purchaseRewardType === 'percent' ? (
-          <>
-          <Field label="Cashback Rate (%)" hint="% of order total awarded as cashback on delivery">
-            <div className="relative">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={settings.rewardPercent}
-                onChange={set('rewardPercent')}
-                className={inp}
-              />
-              {settings.rewardPercent > 0 && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-green-600 font-semibold pointer-events-none">
-                  {BDT}
-                  {exampleEarning} per {BDT}1,000
-                </span>
-              )}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Cashback rate"
+                help={settings.rewardPercent > 0 ? `${BDT}${exampleEarning} on every ${BDT}1,000, credited on delivery.` : 'Share of the order total, credited on delivery.'}
+              >
+                <MoneyInput value={settings.rewardPercent} onChange={setNumber('rewardPercent')} suffix="%" max={100} step={0.5} />
+              </Field>
+              <Field label="Minimum order to earn" help="Orders below this earn nothing. 0 means no minimum.">
+                <MoneyInput value={settings.minOrderAmount} onChange={setNumber('minOrderAmount')} />
+              </Field>
             </div>
-          </Field>
-
-          <Field label={`Minimum Order to Earn (${BDT})`} hint="Orders below this earn no cashback (0 = no minimum)">
-            <input
-              type="number"
-              min={0}
-              value={settings.minOrderAmount}
-              onChange={set('minOrderAmount')}
-              className={inp}
-            />
-          </Field>
-          </>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-700">Purchase Ranges</p>
-                  <p className="text-xs text-gray-400">Set a fixed cashback amount for each order-total range</p>
-                </div>
-                <button type="button" onClick={addRange} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-50">
-                  <MdAdd size={17} /> Add range
+                <p className="text-[13px] text-slate-600">A fixed cashback amount for each order-total range. A maximum of 0 means no upper limit.</p>
+                <button type="button" onClick={addRange} className="btn-ghost btn-sm shrink-0">
+                  <MdAdd size={16} aria-hidden /> Add range
                 </button>
               </div>
               {settings.purchaseRanges.length === 0 ? (
-                <div className="border border-dashed border-gray-200 rounded-md p-5 text-center text-sm text-gray-400">
-                  No purchase ranges configured
-                </div>
+                <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-[13px] text-slate-500">
+                  No ranges yet. Add one to reward purchases.
+                </p>
               ) : (
-                settings.purchaseRanges.map((range, index) => (
-                  <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_36px] gap-2 items-end p-3 border border-gray-100 rounded-md bg-gray-50">
-                    <Field label={`Minimum (${BDT})`}><input type="number" min={0} value={range.minAmount} onChange={setRange(index, 'minAmount')} className={inp} /></Field>
-                    <Field label={`Maximum (${BDT})`} hint="0 = unlimited"><input type="number" min={0} value={range.maxAmount} onChange={setRange(index, 'maxAmount')} className={inp} /></Field>
-                    <Field label={`Cashback (${BDT})`}><input type="number" min={0} value={range.rewardAmount} onChange={setRange(index, 'rewardAmount')} className={inp} /></Field>
-                    <button type="button" onClick={() => removeRange(index)} title="Remove range" className="h-[42px] w-9 flex items-center justify-center rounded-md text-red-500 hover:bg-red-50 justify-self-end sm:justify-self-auto">
-                      <MdDeleteOutline size={19} />
-                    </button>
-                  </div>
-                ))
+                <div className="overflow-hidden rounded-lg border border-slate-200">
+                  <table className="w-full text-[13px]">
+                    <caption className="sr-only">Purchase cashback ranges</caption>
+                    <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
+                      <tr>
+                        <th scope="col" className="px-3 py-2 text-left">From ({BDT})</th>
+                        <th scope="col" className="px-3 py-2 text-left">To ({BDT})</th>
+                        <th scope="col" className="px-3 py-2 text-left">Cashback ({BDT})</th>
+                        <th scope="col" className="w-12 px-2 py-2">
+                          <span className="sr-only">Remove</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {settings.purchaseRanges.map((range, index) => (
+                        <tr key={index} className={problem?.index === index ? 'bg-rose-50' : ''}>
+                          {['minAmount', 'maxAmount', 'rewardAmount'].map((key) => (
+                            <td key={key} className="px-3 py-2">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                value={range[key]}
+                                onChange={setRange(index, key)}
+                                aria-label={`Range ${index + 1} — ${key === 'minAmount' ? 'from' : key === 'maxAmount' ? 'to' : 'cashback'}`}
+                                aria-invalid={problem?.index === index}
+                                className="input-ui h-8 tabular-nums"
+                              />
+                            </td>
+                          ))}
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeRange(index)}
+                              aria-label={`Remove range ${index + 1}`}
+                              title="Remove range"
+                              className="btn-icon btn-icon-sm btn-icon-danger"
+                            >
+                              <MdDeleteOutline size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
+              {problem ? (
+                <p className="text-[13px] font-medium text-rose-700" role="alert">
+                  Range {problem.index + 1}: {problem.message}
+                </p>
+              ) : null}
             </div>
           )}
 
-          <Field label={`Signup Cashback (${BDT})`} hint="One-time bonus for new registrations (0 = disabled)">
-            <input type="number" min={0} value={settings.signupBonus} onChange={set('signupBonus')} className={inp} />
-          </Field>
-
-          <Field
-            label={`Review Cashback (${BDT})`}
-            hint="Fixed reward for each verified completed-order item review (0 = disabled)"
-          >
-            <input
-              type="number"
-              min={0}
-              value={settings.reviewReward}
-              onChange={set('reviewReward')}
-              className={inp}
-            />
-          </Field>
-
-          <Field label={`Max Cashback Balance per User (${BDT})`} hint="Maximum a user can hold (0 = unlimited)">
-            <input
-              type="number"
-              min={0}
-              value={settings.maxCashBalance}
-              onChange={set('maxCashBalance')}
-              className={inp}
-            />
-          </Field>
-
-          <Field label="Cashback Expiry (days)" hint="Days before cashback expires (0 = never expires)">
-            <input type="number" min={0} value={settings.expiryDays} onChange={set('expiryDays')} className={inp} />
-          </Field>
-        </div>
-
-        {/* Redemption Rules */}
-        <div className="bg-white border rounded-md p-6 space-y-5">
-          <div>
-            <h2 className="font-bold text-gray-800">Redemption Rules</h2>
-            <p className="text-xs text-gray-400 mt-0.5">How customers spend cashback at checkout</p>
+          <div className="grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
+            <Field label="Sign-up bonus" help="One-time bonus for new accounts. 0 turns it off.">
+              <MoneyInput value={settings.signupBonus} onChange={setNumber('signupBonus')} />
+            </Field>
+            <Field label="Review reward" help="For each verified review of a completed order item. 0 turns it off.">
+              <MoneyInput value={settings.reviewReward} onChange={setNumber('reviewReward')} />
+            </Field>
+            <Field label="Maximum balance per customer" help="The most one customer can hold. 0 means no limit.">
+              <MoneyInput value={settings.maxCashBalance} onChange={setNumber('maxCashBalance')} />
+            </Field>
+            <Field label="Expires after" help="Days before earned cashback expires. 0 means it never expires.">
+              <MoneyInput value={settings.expiryDays} onChange={setNumber('expiryDays')} suffix="days" />
+            </Field>
           </div>
+        </SettingsCard>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-md">
-            <div>
-              <p className="text-sm font-semibold text-gray-700">Allow Cashback at Checkout</p>
-              <p className="text-xs text-gray-400 mt-0.5">Let customers use cashback balance to pay</p>
-            </div>
-            <button
-              onClick={toggle('allowCashAtCheckout')}
-              className={`relative w-12 h-6 rounded-md transition-colors flex-shrink-0 ${settings.allowCashAtCheckout ? 'bg-green-500' : 'bg-gray-300'}`}
+        <div className="space-y-6">
+          <SettingsCard title="Redemption rules" description="How customers spend cashback at checkout.">
+            <Toggle
+              label="Allow cashback at checkout"
+              help="Customers can use their balance to pay."
+              checked={settings.allowCashAtCheckout}
+              onChange={(value) => setSettings((p) => ({ ...p, allowCashAtCheckout: value }))}
+            />
+            <Field
+              label="Most of an order payable with cashback"
+              help={settings.allowCashAtCheckout ? '100 lets cashback pay the whole order. 0 means no limit.' : 'Turn on cashback at checkout first.'}
             >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-md shadow transition-transform ${settings.allowCashAtCheckout ? 'translate-x-6' : ''}`}
-              />
-            </button>
-          </div>
-
-          <Field label="Max Cashback Usable per Order (%)" hint="0 = unlimited, 100 = can pay the full order">
-            <div className="relative">
-              <input
-                type="number"
-                min={0}
-                max={100}
+              <MoneyInput
                 value={settings.maxUsePercent}
-                onChange={set('maxUsePercent')}
-                className={inp}
+                onChange={setNumber('maxUsePercent')}
+                suffix="%"
+                max={100}
                 disabled={!settings.allowCashAtCheckout}
               />
-              {!settings.allowCashAtCheckout && (
-                <div className="absolute inset-0 bg-white/70 rounded-md cursor-not-allowed" />
-              )}
-            </div>
-          </Field>
+            </Field>
+          </SettingsCard>
 
-          <div className="bg-gray-50 rounded-md p-4 text-xs text-gray-500 space-y-1.5">
-            <p className="font-semibold text-gray-700 text-xs uppercase tracking-wide mb-2">Quick Reference</p>
-            <p>
-              • <strong>1 cashback = {BDT}1</strong> — direct taka, no conversion
-            </p>
-            <p>
-              • Cashback credited when order → <strong>Delivered</strong>
-            </p>
-            <p>• Review cashback is credited once per completed order item</p>
-            <p>• Admin can manually adjust from User Balances tab or any user's page</p>
-            <p>• All transactions are logged in the Transactions tab</p>
-          </div>
+          <Callout title="Quick reference">
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              <li>1 cashback = {BDT}1 — taka for taka, no conversion.</li>
+              <li>Purchase cashback is credited when the order is delivered.</li>
+              <li>Review cashback is credited once per completed order item.</li>
+              <li>Adjust a customer’s balance from User balances or their customer page.</li>
+              <li>Every movement is logged under Transactions.</li>
+            </ul>
+          </Callout>
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold text-sm disabled:opacity-50 transition shadow-sm"
-        >
-          {saving ? 'Saving…' : 'Save Settings'}
-        </button>
-      </div>
-    </div>
+      {dirty ? (
+        <div className="sticky bottom-4 z-30 mx-auto flex w-full max-w-xl flex-wrap items-center gap-3 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white shadow-2xl">
+          <span className="mr-auto font-medium" role="status">
+            You have unsaved changes
+          </span>
+          <button
+            type="button"
+            className="inline-flex h-8 items-center rounded-md px-3 text-[13px] font-medium text-slate-200 hover:bg-white/10 hover:text-white"
+            onClick={() => {
+              setSettings(saved);
+              setProblem(null);
+            }}
+            disabled={saving}
+          >
+            Discard
+          </button>
+          <button
+            type="submit"
+            className="inline-flex h-8 items-center rounded-md bg-white px-3 text-[13px] font-semibold text-slate-900 hover:bg-slate-100 disabled:opacity-60"
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      ) : null}
+    </form>
   );
 }

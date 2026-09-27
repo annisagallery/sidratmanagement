@@ -1,11 +1,16 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
-import { MdDragIndicator } from 'react-icons/md';
-import { FiEdit2, FiTrash2, FiPlus, FiImage, FiX, FiLink, FiEyeOff, FiCheck, FiAlertTriangle } from 'react-icons/fi';
-import * as api from 'src/services';
 import Image from 'next/image';
+import { MdAdd, MdArrowDownward, MdArrowUpward, MdDelete, MdDragIndicator, MdImage, MdLink, MdVisibilityOff } from 'react-icons/md';
+import * as api from 'src/services';
+import { toastSuccess, alertError, confirmDelete } from 'src/utils/swal';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
+import Panel from 'src/components/_admin/ui/Panel';
+import Drawer from 'src/components/_admin/ui/Drawer';
+import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import { Field, Switch, Toggle } from 'src/components/_admin/ui/fields';
+import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 const EMPTY_FORM = {
   title: '',
@@ -17,70 +22,27 @@ const EMPTY_FORM = {
   imagePath: null
 };
 
-function Toast({ toast }) {
-  if (!toast) return null;
-  const isErr = toast.type === 'error';
-  return (
-    <div
-      className={`fixed top-5 right-5 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-md shadow-lg text-sm font-medium border
-      ${isErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
-    >
-      {isErr ? <FiAlertTriangle className="text-base shrink-0" /> : <FiCheck className="text-base shrink-0" />}
-      {toast.msg}
-    </div>
-  );
-}
-
-export default function BannerList() {
-  const qc = useQueryClient();
+/** Add or edit one banner. Owns its form; the list only hears "saved". */
+function BannerDrawer({ mode, banner, onClose, onSaved }) {
   const fileRef = useRef(null);
-
-  const [localBanners, setLocalBanners] = useState([]);
-  const [dragIdx, setDragIdx] = useState(null);
-  const [dragOverIdx, setDragOverIdx] = useState(null);
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() =>
+    banner
+      ? {
+          title: banner.title || '',
+          subtitle: banner.subtitle || '',
+          link: banner.link || '',
+          alt: banner.alt || '',
+          isActive: banner.isActive !== false,
+          imageId: banner.image?.id || null,
+          imagePath: banner.image?.path || null
+        }
+      : EMPTY_FORM
+  );
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
+  const [imageError, setImageError] = useState('');
 
-  const showToast = (msg, type = 'success') => {
-    clearTimeout(toastTimer.current);
-    setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3200);
-  };
-
-  const { isLoading } = useQuery('admin-banners', api.getHomeBannersAdmin, {
-    onSuccess: (d) => setLocalBanners(d?.data || []),
-    onError: () => showToast('Failed to load banners', 'error')
-  });
-
-  // ── Modal ──────────────────────────────────────────────────────────────────
-
-  const openAdd = () => {
-    setForm(EMPTY_FORM);
-    setModal({ mode: 'add' });
-  };
-  const openEdit = (banner) => {
-    setForm({
-      title: banner.title || '',
-      subtitle: banner.subtitle || '',
-      link: banner.link || '',
-      alt: banner.alt || '',
-      isActive: banner.isActive !== false,
-      imageId: banner.image?.id || null,
-      imagePath: banner.image?.path || null
-    });
-    setModal({ mode: 'edit', banner });
-  };
-  const closeModal = () => {
-    setModal(null);
-    setForm(EMPTY_FORM);
-  };
-
-  // ── Image upload ───────────────────────────────────────────────────────────
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -93,17 +55,20 @@ export default function BannerList() {
       fd.append('model', 'HomeBanner');
       const res = await api.uploadImage(fd);
       setForm((f) => ({ ...f, imageId: res.id, imagePath: res.path }));
+      setImageError('');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Upload failed', 'error');
+      alertError(err, { title: 'The image was not uploaded' });
     } finally {
       setUploading(false);
     }
   };
 
-  // ── Save ───────────────────────────────────────────────────────────────────
-
-  const handleSave = async () => {
-    if (!form.imageId) return showToast('Please upload a banner image', 'error');
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.imageId) {
+      setImageError('Upload the banner image.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -114,21 +79,110 @@ export default function BannerList() {
         alt: form.alt,
         isActive: form.isActive
       };
-      if (modal.mode === 'add') {
+      if (mode === 'add') {
         await api.createHomeBanner(payload);
-        showToast('Banner added');
+        toastSuccess('Banner added');
       } else {
-        await api.updateHomeBanner(modal.banner.id, payload);
-        showToast('Banner updated');
+        await api.updateHomeBanner(banner.id, payload);
+        toastSuccess('Banner saved');
       }
-      closeModal();
-      qc.invalidateQueries('admin-banners');
+      onSaved();
+      onClose();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Save failed', 'error');
+      alertError(err, { title: mode === 'add' ? 'The banner was not added' : 'The banner was not saved' });
     } finally {
       setSaving(false);
     }
   };
+
+  return (
+    <Drawer
+      title={mode === 'add' ? 'Add banner' : 'Edit banner'}
+      eyebrow="Homepage"
+      onClose={onClose}
+      onSubmit={handleSave}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving || uploading} className="btn-brand">
+            {saving ? 'Saving…' : mode === 'add' ? 'Add banner' : 'Save changes'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div>
+          <p className="mb-1.5 text-[13px] font-medium text-slate-800">
+            Image
+            <span className="ml-0.5 text-rose-600" aria-hidden>
+              *
+            </span>
+          </p>
+          <div className="relative aspect-[3/1] w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+            {form.imagePath ? (
+              <Image src={form.imagePath} alt="Banner preview" fill className="object-cover" />
+            ) : (
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[13px] text-slate-500">
+                <MdImage size={26} className="text-slate-400" aria-hidden />
+                {uploading ? 'Uploading…' : 'No image yet'}
+              </span>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-slate-500">PNG, JPG or WEBP. Wide images (3:1 or 21:9) fit best.</p>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-ghost btn-sm">
+              {uploading ? 'Uploading…' : form.imagePath ? 'Replace image' : 'Upload image'}
+            </button>
+          </div>
+          {imageError && (
+            <p className="mt-1.5 text-[13px] font-medium text-rose-700" role="alert">
+              {imageError}
+            </p>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} tabIndex={-1} aria-hidden />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Title" optional>
+            <input value={form.title} onChange={set('title')} placeholder="e.g. Summer collection" className="input-ui" />
+          </Field>
+          <Field label="Subtitle" optional>
+            <input value={form.subtitle} onChange={set('subtitle')} placeholder="A short tagline" className="input-ui" />
+          </Field>
+          <Field label="Link" optional help="Where a tap on the banner goes." className="sm:col-span-2">
+            <input value={form.link} onChange={set('link')} placeholder="/products or https://…" className="input-ui" />
+          </Field>
+          <Field label="Image description" optional help="Read aloud by screen readers and used by search engines." className="sm:col-span-2">
+            <input value={form.alt} onChange={set('alt')} placeholder="Describe what the image shows" className="input-ui" />
+          </Field>
+        </div>
+
+        <Toggle
+          label="Show on the homepage"
+          help="Only banners that are on appear in the carousel."
+          checked={form.isActive}
+          onChange={(on) => setForm((f) => ({ ...f, isActive: on }))}
+        />
+      </div>
+    </Drawer>
+  );
+}
+
+export default function BannerList() {
+  const qc = useQueryClient();
+
+  const [localBanners, setLocalBanners] = useState([]);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [modal, setModal] = useState(null);
+
+  const { isLoading, isError, error, refetch } = useQuery('admin-banners', api.getHomeBannersAdmin, {
+    onSuccess: (d) => setLocalBanners(d?.data || [])
+  });
+
+  const refresh = () => qc.invalidateQueries('admin-banners');
 
   // ── Active toggle ──────────────────────────────────────────────────────────
 
@@ -137,507 +191,216 @@ export default function BannerList() {
     setLocalBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: next } : b)));
     try {
       await api.updateHomeBanner(banner.id, { isActive: next });
-    } catch {
+    } catch (err) {
       setLocalBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: banner.isActive } : b)));
-      showToast('Failed to update status', 'error');
+      alertError(err, { title: next ? 'The banner was not shown' : 'The banner was not hidden' });
     }
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (banner, i) => {
+    const confirmed = await confirmDelete({
+      title: 'Delete this banner?',
+      subject: banner.title || `Banner ${i + 1}`,
+      text: 'It is removed from the homepage carousel.'
+    });
+    if (!confirmed) return;
     try {
-      await api.deleteHomeBanner(id);
-      setDeleteConfirm(null);
-      showToast('Banner deleted');
-      qc.invalidateQueries('admin-banners');
+      await api.deleteHomeBanner(banner.id);
+      toastSuccess('Banner deleted');
+      refresh();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Delete failed', 'error');
+      alertError(err, { title: 'The banner was not deleted' });
     }
   };
 
-  // ── Drag & drop ────────────────────────────────────────────────────────────
+  // ── Reorder (drag, or Move up / Move down from the row menu) ──────────────
+
+  const move = async (fromIdx, toIdx) => {
+    if (fromIdx === null || fromIdx === toIdx || toIdx < 0 || toIdx > localBanners.length) return;
+    const reordered = [...localBanners];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setLocalBanners(reordered);
+    try {
+      await api.reorderHomeBanners(reordered.map((b) => b.id));
+    } catch (err) {
+      alertError(err, { title: 'The new order was not saved' });
+      refresh();
+    }
+  };
 
   const handleDragStart = (e, idx) => {
     setDragIdx(idx);
     e.dataTransfer.effectAllowed = 'move';
   };
-
   const handleDragOver = (e, idx) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (idx !== dragOverIdx) setDragOverIdx(idx);
   };
-
-  const handleDrop = async (e, toIdx) => {
+  const handleDrop = (e, toIdx) => {
     e.preventDefault();
     const fromIdx = dragIdx;
     setDragIdx(null);
     setDragOverIdx(null);
-    if (fromIdx === null || fromIdx === toIdx) return;
-
-    const reordered = [...localBanners];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    setLocalBanners(reordered);
-
-    try {
-      await api.reorderHomeBanners(reordered.map((b) => b.id));
-    } catch {
-      showToast('Failed to save new order', 'error');
-      qc.invalidateQueries('admin-banners');
-    }
+    move(fromIdx, toIdx);
   };
-
   const handleDragEnd = () => {
     setDragIdx(null);
     setDragOverIdx(null);
   };
 
   const activeCount = localBanners.filter((b) => b.isActive).length;
+  const hiddenCount = localBanners.length - activeCount;
+  const addButton = (
+    <button type="button" onClick={() => setModal({ mode: 'add' })} className="btn-brand">
+      <MdAdd size={18} aria-hidden /> Add banner
+    </button>
+  );
 
-  // ── Loading skeleton ───────────────────────────────────────────────────────
-
+  let body;
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-7 w-44 bg-gray-200 rounded-md animate-pulse" />
-            <div className="h-4 w-60 bg-gray-100 rounded-md animate-pulse" />
-          </div>
-          <div className="h-10 w-32 bg-gray-200 rounded-md animate-pulse" />
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-gray-100 rounded-md animate-pulse" />
-          ))}
-        </div>
+    body = (
+      <ul className="divide-y divide-slate-100" aria-busy="true">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4 bg-white border border-gray-200 rounded-md p-4">
-            <div className="w-5 h-8 bg-gray-100 rounded-md animate-pulse" />
-            <div className="w-7 h-7 bg-gray-100 rounded-md animate-pulse" />
-            <div className="w-36 h-20 bg-gray-100 rounded-md animate-pulse" />
+          <li key={i} className="flex items-center gap-4 px-5 py-4">
+            <div className="skeleton h-20 w-36 shrink-0" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-40 bg-gray-100 rounded-md animate-pulse" />
-              <div className="h-3 w-56 bg-gray-100 rounded-md animate-pulse" />
+              <div className="skeleton h-4 w-40" />
+              <div className="skeleton h-3 w-56" />
             </div>
-            <div className="flex gap-2">
-              <div className="h-8 w-8 bg-gray-100 rounded-md animate-pulse" />
-              <div className="h-8 w-8 bg-gray-100 rounded-md animate-pulse" />
-            </div>
-          </div>
+          </li>
         ))}
+      </ul>
+    );
+  } else if (isError) {
+    body = (
+      <div className="p-5">
+        <ErrorState error={error} title="The banners could not be loaded" onRetry={refetch} />
       </div>
     );
-  }
-
-  // ── Main render ────────────────────────────────────────────────────────────
-
-  return (
-    <div className="space-y-6">
-      <Toast toast={toast} />
-
-      {/* Header */}
-      <PageHeader
-        title="Home Banners"
-        subtitle={
-          <>
-            {localBanners.length} banner{localBanners.length !== 1 ? 's' : ''}
-            {localBanners.length > 0 && (
-              <>
-                {' · '}
-                <span className="font-medium text-emerald-600">{activeCount} active</span>
-                {localBanners.length - activeCount > 0 && (
-                  <>
-                    {' '}
-                    · <span className="text-slate-400">{localBanners.length - activeCount} hidden</span>
-                  </>
-                )}
-                {localBanners.length > 1 && <> · drag ⠿ to reorder</>}
-              </>
-            )}
-          </>
-        }
-      >
-        <button onClick={openAdd} className="btn-brand active:scale-95">
-          <FiPlus className="text-base" /> Add Banner
-        </button>
-      </PageHeader>
-
-      {/* Stats */}
-      {localBanners.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Total', value: localBanners.length, color: 'text-gray-700', bg: 'bg-gray-50   border-gray-200' },
-            { label: 'Active', value: activeCount, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-            {
-              label: 'Hidden',
-              value: localBanners.length - activeCount,
-              color: 'text-gray-400',
-              bg: 'bg-gray-50   border-gray-200'
-            }
-          ].map(({ label, value, color, bg }) => (
-            <div key={label} className={`border rounded-md px-4 py-3 ${bg}`}>
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">{label}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {localBanners.length === 0 && (
-        <div className="border-2 border-dashed border-gray-200 rounded-md py-20 text-center bg-gray-50/50">
-          <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center mx-auto mb-4">
-            <FiImage className="text-gray-300 text-3xl" />
-          </div>
-          <p className="text-gray-600 font-semibold">No banners yet</p>
-          <p className="text-gray-400 text-sm mt-1">Add your first banner to appear in the homepage carousel</p>
-          <button onClick={openAdd} className="btn-brand mt-5">
-            <FiPlus /> Add Banner
-          </button>
-        </div>
-      )}
-
-      {/* Banner list */}
-      {localBanners.length > 0 && (
-        <div className="space-y-2">
-          {localBanners.map((banner, i) => (
-            <div
+  } else if (!localBanners.length) {
+    body = (
+      <EmptyState
+        icon={MdImage}
+        title="No banners yet"
+        hint="Banners you add here rotate in the homepage carousel."
+        action={addButton}
+      />
+    );
+  } else {
+    body = (
+      <ol className="divide-y divide-slate-100">
+        {localBanners.map((banner, i) => {
+          const name = banner.title || `Banner ${i + 1}`;
+          const isDropTarget = dragOverIdx === i && dragIdx !== null && dragIdx !== i;
+          return (
+            <li
               key={banner.id}
               draggable
               onDragStart={(e) => handleDragStart(e, i)}
               onDragOver={(e) => handleDragOver(e, i)}
               onDrop={(e) => handleDrop(e, i)}
               onDragEnd={handleDragEnd}
-              className={`relative group flex items-center gap-4 bg-white border rounded-md px-4 py-3 transition-all select-none
-                ${
-                  dragIdx === i
-                    ? 'opacity-30 scale-[0.98] border-dashed border-[var(--brand-ring)]'
-                    : dragOverIdx === i && dragIdx !== null && dragIdx !== i
-                      ? 'border-[var(--brand)] shadow-lg shadow-slate-100 ring-2 ring-[var(--brand-ring)]'
-                      : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                }`}
+              className={`relative flex items-center gap-3 px-3 py-3 transition sm:gap-4 sm:px-5 ${
+                dragIdx === i ? 'opacity-40' : 'hover:bg-slate-50'
+              }`}
             >
-              {/* Drop indicator */}
-              {dragOverIdx === i && dragIdx !== null && dragIdx !== i && (
-                <div className="absolute -top-px left-6 right-6 h-0.5 bg-[var(--brand-soft)]0 rounded-md" />
-              )}
+              {isDropTarget && <span className="absolute inset-x-5 -top-px h-0.5 rounded-full bg-slate-900" aria-hidden />}
 
-              {/* Drag handle */}
-              <div className="cursor-grab active:cursor-grabbing text-gray-300 group-hover:text-gray-400 transition shrink-0 touch-none py-2">
-                <MdDragIndicator className="text-xl" />
-              </div>
+              <span className="hidden cursor-grab text-slate-400 active:cursor-grabbing sm:block" title="Drag to reorder" aria-hidden>
+                <MdDragIndicator size={20} />
+              </span>
+              <span className="w-5 shrink-0 text-center text-[13px] font-medium tabular-nums text-slate-500">{i + 1}</span>
 
-              {/* Order badge */}
-              <div className="w-7 h-7 rounded-md bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center shrink-0">
-                {i + 1}
-              </div>
-
-              {/* Thumbnail */}
-              <div className="relative w-36 h-20 rounded-md overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
+              <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-slate-100 sm:h-20 sm:w-36">
                 {banner.image?.path ? (
-                  <Image src={banner.image.path} alt={banner.alt || `Banner ${i + 1}`} fill className="object-cover" />
+                  <Image src={banner.image.path} alt={banner.alt || name} fill className={`object-cover ${banner.isActive ? '' : 'opacity-50 grayscale'}`} />
                 ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                    <FiImage className="text-gray-300 text-xl" />
-                    <span className="text-gray-300 text-[10px]">No image</span>
-                  </div>
-                )}
-                {!banner.isActive && (
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                    <FiEyeOff className="text-white/80 text-sm" />
-                  </div>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p
-                  className={`font-semibold text-sm truncate ${banner.title ? 'text-gray-800' : 'text-gray-300 italic font-normal'}`}
-                >
-                  {banner.title || 'No title'}
-                </p>
-                {banner.subtitle && <p className="text-xs text-gray-500 truncate mt-0.5">{banner.subtitle}</p>}
-                {banner.link ? (
-                  <p className="text-xs text-[var(--brand-strong)] truncate flex items-center gap-1 mt-1">
-                    <FiLink className="shrink-0 text-[10px]" />
-                    {banner.link}
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-300 mt-1 italic">No link set</p>
-                )}
-              </div>
-
-              {/* Status toggle */}
-              <div className="flex flex-col items-center gap-1.5 shrink-0 w-[90px]">
-                <button
-                  onClick={() => handleToggleActive(banner)}
-                  className={`relative w-10 h-5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                    banner.isActive ? 'bg-emerald-500 focus:ring-emerald-300' : 'bg-gray-300 focus:ring-gray-200'
-                  }`}
-                  title={banner.isActive ? 'Click to hide' : 'Click to show'}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-md shadow transition-transform ${banner.isActive ? 'translate-x-5' : ''}`}
-                  />
-                </button>
-                <span
-                  className={`text-[10px] font-semibold uppercase tracking-wider ${banner.isActive ? 'text-emerald-600' : 'text-gray-400'}`}
-                >
-                  {banner.isActive ? 'Active' : 'Hidden'}
-                </span>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => openEdit(banner)}
-                  className="p-2 rounded-md hover:bg-[var(--brand-soft)] text-gray-400 hover:text-[var(--brand-strong)] transition"
-                  title="Edit"
-                >
-                  <FiEdit2 className="text-sm" />
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(banner.id)}
-                  className="p-2 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition"
-                  title="Delete"
-                >
-                  <FiTrash2 className="text-sm" />
-                </button>
-              </div>
-
-              {/* Inline delete confirm */}
-              {deleteConfirm === banner.id && (
-                <div className="absolute inset-0 bg-white/96 backdrop-blur-[2px] rounded-md flex items-center justify-center gap-3 z-20 border border-red-200">
-                  <FiAlertTriangle className="text-red-400 text-lg shrink-0" />
-                  <span className="text-sm font-medium text-gray-700">Delete this banner?</span>
-                  <button
-                    onClick={() => handleDelete(banner.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm(null)}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-xs font-semibold transition"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* Drop zone at end */}
-          {dragIdx !== null && (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverIdx(localBanners.length);
-              }}
-              onDrop={(e) => handleDrop(e, localBanners.length)}
-              className={`h-14 rounded-md border-2 border-dashed flex items-center justify-center text-sm font-medium transition-all
-                ${
-                  dragOverIdx === localBanners.length
-                    ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-strong)]'
-                    : 'border-gray-200 text-gray-300'
-                }`}
-            >
-              Drop here to move to end
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
-      {modal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={(e) => e.target === e.currentTarget && closeModal()}
-        >
-          <div className="bg-white rounded-md shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">
-                  {modal.mode === 'add' ? 'Add New Banner' : 'Edit Banner'}
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {modal.mode === 'add'
-                    ? 'Upload an image and fill the fields below.'
-                    : 'Update this banner. Leave image unchanged to keep the current one.'}
-                </p>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-2 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
-              >
-                <FiX className="text-xl" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="px-6 py-5 space-y-5 overflow-y-auto">
-              {/* Image upload area */}
-              <div>
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-2">
-                  Banner Image <span className="text-red-400">*</span>
-                </label>
-
-                {form.imagePath ? (
-                  <div
-                    className="relative rounded-md overflow-hidden bg-gray-100 border border-gray-200"
-                    style={{ paddingTop: '38%' }}
-                  >
-                    <Image src={form.imagePath} alt="preview" fill className="object-cover" />
-                    <button
-                      onClick={() => fileRef.current?.click()}
-                      disabled={uploading}
-                      className="absolute inset-0 bg-black/0 hover:bg-black/40 transition flex items-center justify-center opacity-0 hover:opacity-100"
-                    >
-                      <span className="bg-white/90 text-gray-800 text-xs font-semibold px-3 py-1.5 rounded-md flex items-center gap-1.5 shadow">
-                        <FiImage className="text-sm" /> Change Image
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="w-full border-2 border-dashed border-gray-200 hover:border-[var(--brand)] rounded-md py-10 text-center transition-all group bg-gray-50 hover:bg-[var(--brand-soft)]/30 disabled:opacity-70"
-                  >
-                    {uploading ? (
-                      <div className="flex flex-col items-center gap-2 text-[var(--brand-strong)]">
-                        <svg className="animate-spin h-7 w-7" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                          />
-                        </svg>
-                        <span className="text-sm font-medium">Uploading…</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="w-12 h-12 bg-gray-100 group-hover:bg-[var(--brand-soft)] rounded-md flex items-center justify-center mx-auto mb-3 transition">
-                          <FiImage className="text-gray-400 group-hover:text-[var(--brand-strong)] text-2xl transition" />
-                        </div>
-                        <p className="text-sm font-semibold text-gray-600 group-hover:text-[var(--brand-strong)] transition">
-                          Click to upload
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP · Best ratio 3:1 or 21:9</p>
-                      </>
-                    )}
-                  </button>
-                )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-              </div>
-
-              {/* Text fields */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 block mb-1.5">Title</label>
-                  <input
-                    value={form.title}
-                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                    placeholder="e.g. Summer Collection"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-transparent placeholder-gray-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 block mb-1.5">Subtitle</label>
-                  <input
-                    value={form.subtitle}
-                    onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
-                    placeholder="Short tagline"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-transparent placeholder-gray-300"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-semibold text-gray-600 block mb-1.5">
-                    <FiLink className="inline mr-1 text-[11px]" /> Link URL
-                  </label>
-                  <input
-                    value={form.link}
-                    onChange={(e) => setForm((f) => ({ ...f, link: e.target.value }))}
-                    placeholder="/products  or  https://..."
-                    className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-transparent placeholder-gray-300"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-semibold text-gray-600 block mb-1.5">Alt Text (SEO)</label>
-                  <input
-                    value={form.alt}
-                    onChange={(e) => setForm((f) => ({ ...f, alt: e.target.value }))}
-                    placeholder="Describe the image for accessibility"
-                    className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-ring)] focus:border-transparent placeholder-gray-300"
-                  />
-                </div>
-              </div>
-
-              {/* Active toggle */}
-              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-700">Show on homepage</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Only active banners appear in the carousel</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold ${form.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
-                    {form.isActive ? 'Active' : 'Hidden'}
+                  <span className="absolute inset-0 flex items-center justify-center text-slate-400">
+                    <MdImage size={22} aria-hidden />
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, isActive: !f.isActive }))}
-                    className={`relative w-12 h-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                      form.isActive ? 'bg-emerald-500 focus:ring-emerald-300' : 'bg-gray-300 focus:ring-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-md shadow transition-transform ${form.isActive ? 'translate-x-6' : ''}`}
-                    />
-                  </button>
-                </div>
+                )}
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-3 px-6 py-4 border-t bg-gray-50/80 rounded-b-md shrink-0">
-              <p className="text-xs text-red-400">{!form.imageId && 'Image is required'}</p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition"
-                >
-                  Cancel
-                </button>
-                <button onClick={handleSave} disabled={saving || !form.imageId || uploading} className="btn-brand px-5">
-                  {saving ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                        />
-                      </svg>
-                      Saving…
-                    </>
-                  ) : modal.mode === 'add' ? (
-                    'Add Banner'
-                  ) : (
-                    'Save Changes'
-                  )}
-                </button>
+              <div className="min-w-0 flex-1">
+                <p className={`truncate text-sm font-semibold ${banner.title ? 'text-slate-900' : 'text-slate-500'}`}>{name}</p>
+                {banner.subtitle && <p className="mt-0.5 truncate text-[13px] text-slate-600">{banner.subtitle}</p>}
+                <p className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
+                  <MdLink size={14} className="shrink-0" aria-hidden />
+                  <span className="truncate">{banner.link || 'No link'}</span>
+                </p>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <span className={`hidden text-[13px] md:inline ${banner.isActive ? 'text-slate-700' : 'text-slate-500'}`}>
+                  {banner.isActive ? 'Showing' : (
+                    <span className="inline-flex items-center gap-1">
+                      <MdVisibilityOff size={14} aria-hidden /> Hidden
+                    </span>
+                  )}
+                </span>
+                <Switch
+                  checked={banner.isActive}
+                  onChange={() => handleToggleActive(banner)}
+                  label={`Show ${name} on the homepage`}
+                />
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                <button type="button" onClick={() => setModal({ mode: 'edit', banner })} className="btn-ghost btn-sm">
+                  Edit
+                </button>
+                <ActionMenu
+                  label={`More actions for ${name}`}
+                  items={[
+                    { label: 'Move up', icon: MdArrowUpward, onClick: () => move(i, i - 1), disabled: i === 0 },
+                    { label: 'Move down', icon: MdArrowDownward, onClick: () => move(i, i + 1), disabled: i === localBanners.length - 1 },
+                    { label: 'Delete', icon: MdDelete, tone: 'danger', onClick: () => handleDelete(banner, i) }
+                  ]}
+                />
+              </div>
+            </li>
+          );
+        })}
+
+        {dragIdx !== null && (
+          <li
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOverIdx(localBanners.length);
+            }}
+            onDrop={(e) => handleDrop(e, localBanners.length)}
+            className={`m-3 flex h-12 items-center justify-center rounded-md border-2 border-dashed text-[13px] font-medium transition ${
+              dragOverIdx === localBanners.length ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            Drop here to move to the end
+          </li>
+        )}
+      </ol>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader title="Banners">{addButton}</PageHeader>
+
+      <Panel
+        title="Carousel banners"
+        description={
+          localBanners.length
+            ? `${activeCount} showing${hiddenCount ? ` · ${hiddenCount} hidden` : ''}${localBanners.length > 1 ? ' · drag or use the menu to reorder' : ''}`
+            : 'Shown in order on the homepage.'
+        }
+        bodyClassName="!p-0"
+      >
+        <div className="mt-4 border-t border-slate-100">{body}</div>
+      </Panel>
+
+      {modal && <BannerDrawer mode={modal.mode} banner={modal.banner} onClose={() => setModal(null)} onSaved={refresh} />}
+    </>
   );
 }
