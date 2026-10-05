@@ -23,9 +23,11 @@ import {
 import * as api from 'src/services';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import { districts, upazilasForDistrict } from 'src/utils/bangladeshAddress';
+import { areaLabel } from 'src/components/_admin/shippingcharge/areas';
 import { toastSuccess, alertError } from 'src/utils/swal';
 
 ShippingChargeForm.propTypes = {
+  /** A shipping zone: { id, name, charge, status, areas: [{ district, upazila }] }. */
   data: PropTypes.object,
   isLoading: PropTypes.bool
 };
@@ -34,13 +36,13 @@ const STATUS_OPTIONS = [
   {
     value: 'active',
     label: 'Active',
-    help: 'Checkout can use these rates immediately.',
+    help: 'Checkout charges this zone immediately.',
     tone: 'emerald'
   },
   {
     value: 'inactive',
     label: 'Inactive',
-    help: 'Save the rules without using them at checkout.',
+    help: 'Keep the zone and its areas without charging it at checkout.',
     tone: 'slate'
   }
 ];
@@ -57,15 +59,6 @@ const buildTargets = (values) =>
     const selectedUpazilas = district === 'ALL' ? ['ALL'] : values.upazilasByDistrict[district] || [];
     return selectedUpazilas.map((upazila) => ({ district, upazila }));
   });
-
-async function runInBatches(items, task, batchSize = 5) {
-  const results = [];
-  for (let index = 0; index < items.length; index += batchSize) {
-    const batch = items.slice(index, index + batchSize);
-    results.push(...(await Promise.all(batch.map(task))));
-  }
-  return results;
-}
 
 function FieldError({ id, error, touched }) {
   if (!touched || !error) return null;
@@ -162,14 +155,14 @@ function DistrictSelector({ selected, onChange, invalid }) {
         District coverage <span className="text-rose-700">*</span>
       </legend>
       <p id="districts-help" className="mt-1 text-xs leading-5 text-slate-500">
-        Select one or more districts. The global fallback is exclusive and applies only when no specific rule matches.
+        Select one or more districts. "Any district" is the fallback: checkout uses it only where no other zone covers the address.
       </p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <SelectButton selected={selected.includes('ALL')} onClick={() => toggleDistrict('ALL')}>
           <span>
             <span className="block">Any district</span>
-            <span className="mt-0.5 block text-xs font-normal text-slate-500">Global fallback rule</span>
+            <span className="mt-0.5 block text-xs font-normal text-slate-500">Fallback for every other area</span>
           </span>
         </SelectButton>
         <button
@@ -365,7 +358,7 @@ CoverageBuilder.propTypes = {
 function StatusPicker({ value, onChange }) {
   return (
     <fieldset>
-      <legend className="text-sm font-semibold text-slate-900">Rule status</legend>
+      <legend className="text-sm font-semibold text-slate-900">Zone status</legend>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {STATUS_OPTIONS.map((option) => {
           const selected = value === option.value;
@@ -404,16 +397,16 @@ StatusPicker.propTypes = {
   onChange: PropTypes.func.isRequired
 };
 
-function RulePreview({ targets, charge, status, editing }) {
+function ZonePreview({ name, targets, charge, status }) {
   return (
-    <aside className="space-y-4 xl:sticky xl:top-6" aria-label="Shipping rule preview">
+    <aside className="space-y-4 xl:sticky xl:top-6" aria-label="Shipping zone preview">
       <section className="card-ui overflow-hidden">
         <div className="border-b border-slate-200 bg-slate-900 px-4 py-4 text-white">
-          <p className="section-label">Coverage manifest</p>
+          <p className="section-label">{name?.trim() || 'New zone'}</p>
           <div className="mt-2 flex items-end justify-between gap-3">
             <div>
               <p className="text-3xl font-semibold tabular-nums">{targets.length}</p>
-              <p className="mt-0.5 text-xs text-slate-400">rule{targets.length === 1 ? '' : 's'} ready</p>
+              <p className="mt-0.5 text-xs text-slate-400">area{targets.length === 1 ? '' : 's'} in this zone</p>
             </div>
             <span className={`rounded-md px-2 py-1 text-xs font-semibold ${status === 'active' ? 'bg-emerald-400 text-emerald-950' : 'bg-slate-600 text-white'}`}>
               {status === 'active' ? 'Active' : 'Inactive'}
@@ -435,11 +428,7 @@ function RulePreview({ targets, charge, status, editing }) {
                 <span className="flex h-5 min-w-5 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-500">
                   {index + 1}
                 </span>
-                <p className="min-w-0 text-xs leading-5 text-slate-700">
-                  <span className="font-semibold text-slate-900">{target.district === 'ALL' ? 'Any district' : target.district}</span>
-                  <span className="mx-1.5 text-slate-400">→</span>
-                  {target.upazila === 'ALL' ? 'Any upazila' : target.upazila}
-                </p>
+                <p className="min-w-0 text-xs leading-5 text-slate-700">{areaLabel(target)}</p>
               </div>
             ))}
             {!targets.length ? (
@@ -449,11 +438,9 @@ function RulePreview({ targets, charge, status, editing }) {
             ) : null}
           </div>
 
-          {editing && targets.length ? (
-            <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-800">
-              The current rule will be updated. {targets.length > 1 ? `${targets.length - 1} additional rule${targets.length === 2 ? '' : 's'} will be created.` : 'No additional rule will be created.'}
-            </div>
-          ) : null}
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            One charge and status for every area here. Change them once and the whole zone follows.
+          </p>
         </div>
       </section>
 
@@ -463,9 +450,9 @@ function RulePreview({ targets, charge, status, editing }) {
           <div>
             <h2 className="section-label">Checkout priority</h2>
             <ol className="mt-2 space-y-1 text-xs leading-5 text-slate-500">
-              <li><span className="font-semibold text-slate-700">1.</span> Exact district and upazila</li>
-              <li><span className="font-semibold text-slate-700">2.</span> District-wide rule</li>
-              <li><span className="font-semibold text-slate-700">3.</span> Global fallback</li>
+              <li><span className="font-semibold text-slate-700">1.</span> The zone holding the exact upazila</li>
+              <li><span className="font-semibold text-slate-700">2.</span> The zone holding the whole district</li>
+              <li><span className="font-semibold text-slate-700">3.</span> The any-district zone</li>
             </ol>
           </div>
         </div>
@@ -474,22 +461,37 @@ function RulePreview({ targets, charge, status, editing }) {
   );
 }
 
-RulePreview.propTypes = {
+ZonePreview.propTypes = {
+  name: PropTypes.string,
   targets: PropTypes.arrayOf(
     PropTypes.shape({ district: PropTypes.string.isRequired, upazila: PropTypes.string.isRequired })
   ).isRequired,
   charge: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-  status: PropTypes.string.isRequired,
-  editing: PropTypes.bool.isRequired
+  status: PropTypes.string.isRequired
 };
 
-export default function ShippingChargeForm({ data: currentCharge, isLoading: pageLoading = false }) {
+// The zone's areas as the coverage pickers hold them: districts in order, and
+// per district either ['ALL'] or its chosen upazilas.
+function coverageOf(areas = []) {
+  const districtsInZone = [];
+  const upazilasByDistrict = {};
+  areas.forEach(({ district, upazila }) => {
+    if (!upazilasByDistrict[district]) {
+      districtsInZone.push(district);
+      upazilasByDistrict[district] = [];
+    }
+    upazilasByDistrict[district].push(upazila);
+  });
+  return { districts: districtsInZone, upazilasByDistrict };
+}
+
+export default function ShippingChargeForm({ data: zone, isLoading: pageLoading = false }) {
   const router = useRouter();
-  const editing = Boolean(currentCharge);
-  const initialDistrict = currentCharge?.district || currentCharge?.city_name || '';
-  const initialUpazila = currentCharge?.upazila || currentCharge?.zone_name || '';
+  const editing = Boolean(zone);
+  const initialCoverage = useMemo(() => coverageOf(zone?.areas), [zone]);
 
   const validationSchema = Yup.object().shape({
+    name: Yup.string().trim().required('Give the zone a name.'),
     districts: Yup.array().of(Yup.string()).min(1, 'Select at least one district.'),
     upazilasByDistrict: Yup.object().test(
       'area-coverage',
@@ -506,73 +508,45 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
     status: Yup.string().oneOf(STATUS_OPTIONS.map((option) => option.value)).required('Status is required.')
   });
 
+  // One request for the whole zone. The server refuses areas another zone
+  // holds and names that zone, so nothing is half-saved.
   const { mutate, isLoading: isSubmitting } = useMutation(
-    editing ? 'update-shipping-charge' : 'new-shipping-charge',
-    async (values) => {
-      const targets = buildTargets(values);
-      const existingResponse = await api.getAllShippingCharges('page=1&limit=1000');
-      const existingKeys = new Set(
-        (existingResponse?.data || [])
-          .filter((rule) => !editing || rule.id !== currentCharge.id)
-          .map((rule) => locationKey(rule.district || rule.city_name, rule.upazila || rule.zone_name))
-      );
-      const conflicts = targets.filter((target) => existingKeys.has(locationKey(target.district, target.upazila)));
-
-      if (conflicts.length) {
-        const preview = conflicts
-          .slice(0, 3)
-          .map((target) => `${target.district} / ${target.upazila}`)
-          .join(', ');
-        throw new Error(
-          `${conflicts.length} selected rule${conflicts.length === 1 ? '' : 's'} already exist${conflicts.length === 1 ? 's' : ''}: ${preview}${conflicts.length > 3 ? '…' : ''}. Remove those locations and try again.`
-        );
-      }
-
-      const shared = { charge: Number(values.charge), status: values.status };
-
-      if (editing) {
-        const originalKey = locationKey(initialDistrict, initialUpazila);
-        const originalIndex = targets.findIndex((target) => locationKey(target.district, target.upazila) === originalKey);
-        const orderedTargets = [...targets];
-        if (originalIndex > 0) {
-          const [original] = orderedTargets.splice(originalIndex, 1);
-          orderedTargets.unshift(original);
-        }
-        const [primary, ...additional] = orderedTargets;
-
-        await api.updateShippingChargeByAdmin({ id: currentCharge.id, ...primary, ...shared });
-        await runInBatches(additional, (target) => api.addShippingChargeByAdmin({ ...target, ...shared }));
-        return {
-          message:
-            additional.length > 0
-              ? `Shipping rule updated and ${additional.length} additional rule${additional.length === 1 ? '' : 's'} created.`
-              : 'Shipping rule updated successfully.'
-        };
-      }
-
-      await runInBatches(targets, (target) => api.addShippingChargeByAdmin({ ...target, ...shared }));
-      return {
-        message: `${targets.length} shipping rule${targets.length === 1 ? '' : 's'} created successfully.`
+    editing ? 'update-shipping-zone' : 'new-shipping-zone',
+    (values) => {
+      const payload = {
+        name: values.name.trim(),
+        charge: Number(values.charge),
+        status: values.status,
+        areas: buildTargets(values)
       };
+      return editing ? api.updateShippingZone({ id: zone.id, ...payload }) : api.addShippingZone(payload);
     },
     {
       retry: false,
-      onSuccess: (result) => {
-        toastSuccess(result.message);
+      onSuccess: () => {
+        toastSuccess(editing ? 'Shipping zone updated' : 'Shipping zone created');
         router.push('/shippingcharge');
       },
       onError: (error) => {
-        alertError(error, { title: 'The shipping charge was not saved' });
+        const conflicts = error?.response?.data?.conflicts;
+        alertError(error, {
+          title: 'The shipping zone was not saved',
+          ...(conflicts?.length && {
+            text: 'These areas already belong to another zone. Remove them here, or take them out of that zone first.',
+            items: conflicts.map((c) => `${areaLabel(c)} — in ${c.zone}`)
+          })
+        });
       }
     }
   );
 
   const formik = useFormik({
     initialValues: {
-      districts: initialDistrict ? [initialDistrict] : [],
-      upazilasByDistrict: initialDistrict ? { [initialDistrict]: [initialUpazila || 'ALL'] } : {},
-      charge: currentCharge?.charge ?? '',
-      status: currentCharge?.status === 'deactive' ? 'inactive' : currentCharge?.status || STATUS_OPTIONS[0].value
+      name: zone?.name || '',
+      districts: initialCoverage.districts,
+      upazilasByDistrict: initialCoverage.upazilasByDistrict,
+      charge: zone?.charge ?? '',
+      status: zone?.status === 'active' || !zone ? 'active' : 'inactive'
     },
     enableReinitialize: true,
     validationSchema,
@@ -592,9 +566,9 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
     setFieldTouched('districts', true, false);
   };
 
-  if (pageLoading && !currentCharge) {
+  if (pageLoading && !zone) {
     return (
-      <div className="space-y-4" aria-label="Loading shipping charge">
+      <div className="space-y-4" aria-label="Loading shipping zone">
         <div className="h-12 animate-pulse rounded-md bg-slate-100" />
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="h-[520px] animate-pulse rounded-md bg-slate-100" />
@@ -607,11 +581,11 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
   return (
     <div className="space-y-6">
       <PageHeader
-        title={editing ? 'Edit Shipping Charge' : 'Add Shipping Charges'}
+        title={editing ? 'Edit Shipping Zone' : 'Add Shipping Zone'}
         subtitle={
           editing
-            ? 'Update this rule or extend the same rate to more delivery areas.'
-            : 'Build one or many district and upazila rules with a shared rate.'
+            ? 'Change the charge, status or areas once — every area in the zone follows.'
+            : 'One charge and status for a set of districts and upazilas.'
         }
         icon={MdOutlineLocalShipping}
       >
@@ -659,9 +633,24 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
 
               <SectionCard
                 icon={MdPayments}
-                title="3. Set rate and status"
-                description="The same charge and status will be applied to every rule in this batch."
+                title="3. Name, charge and status"
+                description="Every area in the zone uses this charge and status."
               >
+                <div className="mb-5">
+                  <label htmlFor="zone-name" className="mb-1.5 block text-[13px] font-medium text-slate-800">
+                    Zone name <span className="text-rose-700">*</span>
+                  </label>
+                  <input
+                    id="zone-name"
+                    type="text"
+                    placeholder="e.g. Inside Dhaka"
+                    aria-invalid={Boolean(touched.name && errors.name)}
+                    aria-describedby={touched.name && errors.name ? 'name-error' : undefined}
+                    className={`${inputClass} ${touched.name && errors.name ? invalidClass : ''}`}
+                    {...getFieldProps('name')}
+                  />
+                  <FieldError id="name-error" error={errors.name} touched={touched.name} />
+                </div>
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                   <div>
                     <label htmlFor="charge" className="block text-slate-900 mb-1.5 text-[13px] font-medium text-slate-800">
@@ -685,7 +674,7 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
                       />
                     </div>
                     <p id="charge-help" className="mt-1.5 text-xs leading-5 text-slate-500">
-                      Enter 0 to make these matching locations free.
+                      Enter 0 to make delivery to this zone free.
                     </p>
                     <FieldError id="charge-error" error={errors.charge} touched={touched.charge} />
                   </div>
@@ -705,19 +694,19 @@ export default function ShippingChargeForm({ data: currentCharge, isLoading: pag
                 >
                   {isSubmitting ? (
                     <>
-                      <MdAutorenew className="animate-spin" size={18} aria-hidden="true" /> Saving rules...
+                      <MdAutorenew className="animate-spin" size={18} aria-hidden="true" /> Saving zone...
                     </>
                   ) : (
                     <>
                       <MdTune size={18} aria-hidden="true" />
-                      {editing ? 'Update coverage' : `Create ${targets.length || ''} rule${targets.length === 1 ? '' : 's'}`}
+                      {editing ? 'Save zone' : 'Create zone'}
                     </>
                   )}
                 </button>
               </div>
             </div>
 
-            <RulePreview targets={targets} charge={values.charge} status={values.status} editing={editing} />
+            <ZonePreview name={values.name} targets={targets} charge={values.charge} status={values.status} />
           </div>
         </Form>
       </FormikProvider>

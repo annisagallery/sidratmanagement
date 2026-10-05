@@ -4,13 +4,13 @@ import { useQuery, useMutation } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import * as api from 'src/services';
 import { alertError, confirmAction, confirmDelete, toastSuccess } from 'src/utils/swal';
-import { MdAdd, MdEdit, MdDelete, MdLocalShipping, MdInbox, MdBlock, MdCheckCircle } from 'react-icons/md';
+import { MdAdd, MdDelete, MdLocalShipping, MdInbox, MdBlock, MdCheckCircle } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import ListToolbar from 'src/components/_admin/ui/ListToolbar';
 import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
-import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState } from 'src/components/_admin/ui/TableStates';
 import { RecordStatus } from 'src/components/_admin/ui/Badge';
+import { coverageSummary } from './areas';
 
 const STATUS_OPTS = [
   { label: 'All Status', value: '' },
@@ -18,37 +18,20 @@ const STATUS_OPTS = [
   { label: 'Inactive', value: 'inactive' }
 ];
 
-const StatusBadge = ({ status }) => <RecordStatus status={status} />;
+const fmtCharge = (charge) => (Number(charge) === 0 ? 'Free' : `৳${Number(charge).toLocaleString('en-BD')}`);
 
+// One row per zone: a price and the areas it covers, edited together.
 export default function ShippingChargeList() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState('');
-  const [sortOrder, setSortOrder] = useState('asc');
-  const limit = 20;
 
-  const handleSort = (field) => {
-    if (sortBy === field) setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortBy(field);
-      setSortOrder('asc');
-    }
-    setPage(1);
-  };
-
-  const params = new URLSearchParams({
-    page,
-    limit,
-    ...(search && { search }),
-    ...(status && { status }),
-    ...(sortBy && { sortBy, sortOrder })
-  }).toString();
+  const params = { ...(query && { search: query }), ...(status && { status }) };
 
   const { data, isLoading, isFetching, refetch, isError, error: loadError } = useQuery(
-    ['admin-shipping', params],
-    () => api.getAllShippingCharges(params),
+    ['admin-shipping-zones', params],
+    () => api.getShippingZones(params),
     {
       keepPreviousData: true,
       onError: (error) => alertError(error, { title: "Couldn't load shipping charges" })
@@ -63,7 +46,7 @@ export default function ShippingChargeList() {
       onSuccess: () => {
         toastSuccess(
           `Free shipping ${isFree ? 'disabled' : 'enabled'}`,
-          isFree ? 'Checkout charges the rates below again.' : 'Every order now ships at no charge.'
+          isFree ? 'Checkout charges the zones below again.' : 'Every order now ships at no charge.'
         );
         refetch();
       },
@@ -71,25 +54,24 @@ export default function ShippingChargeList() {
     }
   );
 
-  const areaOf = (charge) => `${charge.district || 'ALL'} · ${charge.upazila || 'ALL'}`;
+  const nameOf = (zone) => zone.name;
 
-  const handleDelete = async (charge) => {
+  const handleDelete = async (zone) => {
     const confirmed = await confirmDelete({
-      subject: areaOf(charge),
-      text: 'Checkout falls back to the default rate for this area.'
+      subject: zone.name,
+      text: `Its ${zone.areas.length} area${zone.areas.length === 1 ? '' : 's'} fall back to the next matching zone at checkout.`
     });
     if (!confirmed) return;
     try {
-      await api.deleteShippingChargeByAdmin(charge.id);
-      toastSuccess('Shipping charge deleted');
+      await api.deleteShippingZone(zone.id);
+      toastSuccess('Shipping zone deleted');
       refetch();
     } catch (error) {
-      alertError(error, { title: "Couldn't delete that charge" });
+      alertError(error, { title: "Couldn't delete that zone" });
     }
   };
 
-  const setChargeStatus = (chargeStatus) => (charge) =>
-    api.updateShippingChargeByAdmin({ id: charge.id, status: chargeStatus });
+  const setStatusTo = (next) => (zone) => api.setShippingZoneStatus({ id: zone.id, status: next });
 
   const bulkActions = [
     {
@@ -97,16 +79,16 @@ export default function ShippingChargeList() {
       icon: MdCheckCircle,
       tone: 'success',
       action: 'Activated',
-      unit: 'charges',
+      unit: 'zones',
       confirm: (rows) =>
         confirmAction({
           tone: 'success',
-          title: `Activate ${rows.length} shipping charge${rows.length === 1 ? '' : 's'}?`,
-          text: 'Checkout starts quoting these rates for their areas.',
+          title: `Activate ${rows.length} shipping zone${rows.length === 1 ? '' : 's'}?`,
+          text: 'Checkout starts charging these zones for their areas.',
           confirmText: 'Activate'
         }),
-      perform: setChargeStatus('active'),
-      rowLabel: areaOf,
+      perform: setStatusTo('active'),
+      rowLabel: nameOf,
       onSettled: refetch
     },
     {
@@ -114,17 +96,17 @@ export default function ShippingChargeList() {
       icon: MdBlock,
       tone: 'warning',
       action: 'Deactivated',
-      unit: 'charges',
+      unit: 'zones',
       confirm: (rows) =>
         confirmAction({
           tone: 'warning',
-          title: `Deactivate ${rows.length} shipping charge${rows.length === 1 ? '' : 's'}?`,
-          text: 'Checkout falls back to the default rate for these areas.',
-          items: rows.map(areaOf),
+          title: `Deactivate ${rows.length} shipping zone${rows.length === 1 ? '' : 's'}?`,
+          text: 'Their areas fall back to the next matching zone at checkout.',
+          items: rows.map(nameOf),
           confirmText: 'Deactivate'
         }),
-      perform: setChargeStatus('inactive'),
-      rowLabel: areaOf,
+      perform: setStatusTo('inactive'),
+      rowLabel: nameOf,
       onSettled: refetch
     },
     {
@@ -132,68 +114,71 @@ export default function ShippingChargeList() {
       icon: MdDelete,
       tone: 'danger',
       action: 'Deleted',
-      unit: 'charges',
+      unit: 'zones',
       confirm: (rows) =>
         confirmDelete({
           count: rows.length,
-          unit: 'charges',
-          subject: rows.length === 1 ? areaOf(rows[0]) : undefined,
-          items: rows.map(areaOf),
-          text: 'Checkout falls back to the default rate for these areas.'
+          unit: 'zones',
+          subject: rows.length === 1 ? rows[0].name : undefined,
+          items: rows.map(nameOf),
+          text: 'Their areas fall back to the next matching zone at checkout.'
         }),
-      perform: (charge) => api.deleteShippingChargeByAdmin(charge.id),
-      rowLabel: areaOf,
+      perform: (zone) => api.deleteShippingZone(zone.id),
+      rowLabel: nameOf,
       onSettled: refetch
     }
   ];
 
-  const charges = data?.data || [];
+  const zones = data?.data || [];
   const total = data?.total || 0;
-  const totalPages = data?.count || 1;
-  const sort = { by: sortBy, order: sortOrder, onSort: handleSort };
 
   const columns = [
     {
-      key: 'district',
-      label: 'District',
-      sortable: true,
-      render: (c) => <span className="font-semibold text-slate-800">{c.district || c.city_name}</span>
+      key: 'name',
+      label: 'Zone',
+      render: (z) => <span className="font-semibold text-slate-800">{z.name}</span>
     },
     {
-      key: 'upazila',
-      label: 'Upazila',
-      sortable: true,
-      render: (c) => <span className="text-slate-600">{c.upazila || c.zone_name || '—'}</span>
+      key: 'areas',
+      label: 'Covers',
+      render: (z) => (
+        <div className="min-w-0 max-w-[520px]">
+          <p className="truncate text-[13px] text-slate-600" title={coverageSummary(z.areas, z.areas.length)}>
+            {coverageSummary(z.areas)}
+          </p>
+          <p className="text-xs text-slate-400">
+            {z.areas.length} area{z.areas.length === 1 ? '' : 's'}
+          </p>
+        </div>
+      )
     },
     {
       key: 'charge',
       label: 'Charge',
-      sortable: true,
       align: 'right',
-      render: (c) => <span className="font-medium text-slate-800">৳{c.charge}</span>
+      render: (z) => <span className="font-medium tabular-nums text-slate-800">{fmtCharge(z.charge)}</span>
     },
     {
       key: 'status',
       label: 'Status',
-      sortable: true,
       align: 'center',
-      render: (c) => <StatusBadge status={c.status === 'deactive' ? 'inactive' : c.status} />
+      render: (z) => <RecordStatus status={z.status} />
     },
     {
       key: 'actions',
       label: '',
       srLabel: 'Actions',
       align: 'right',
-      render: (c) => (
+      render: (z) => (
         <div className="flex items-center justify-end gap-1" onClick={stopRow}>
-          <button type="button" onClick={() => router.push(`/shippingcharge/${c.id}`)} className="btn-ghost btn-sm">
+          <button type="button" onClick={() => router.push(`/shippingcharge/${z.id}`)} className="btn-ghost btn-sm">
             Edit
           </button>
           <button
             type="button"
-            onClick={() => handleDelete(c)}
+            onClick={() => handleDelete(z)}
             className="btn-icon btn-icon-sm btn-icon-danger"
-            aria-label="Delete this shipping charge"
+            aria-label={`Delete the ${z.name} zone`}
             title="Delete"
           >
             <MdDelete size={18} />
@@ -209,12 +194,15 @@ export default function ShippingChargeList() {
         <div className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
           <MdLocalShipping size={20} className="flex-shrink-0 text-amber-700" />
           <p className="text-sm font-semibold text-amber-800">
-            Free Shipping is currently enabled. Saved rules are preserved and can still be managed.
+            Free Shipping is currently enabled. Saved zones are preserved and can still be managed.
           </p>
         </div>
       )}
 
-      <PageHeader title="Shipping Charges" subtitle={`${total} charge${total !== 1 ? 's' : ''} total`}>
+      <PageHeader
+        title="Shipping Charges"
+        subtitle={`${total} zone${total !== 1 ? 's' : ''} · checkout charges the zone holding the exact area, then the whole district, then any district`}
+      >
         <button type="button"
           onClick={() => toggleFree()}
           disabled={toggling}
@@ -223,30 +211,22 @@ export default function ShippingChargeList() {
           <MdLocalShipping size={16} /> {isFree ? 'Disable Free Shipping' : 'Enable Free Shipping'}
         </button>
         <button type="button" onClick={() => router.push('/shippingcharge/add')} className="btn-brand">
-          <MdAdd size={18} /> Add charge
+          <MdAdd size={18} /> Add zone
         </button>
       </PageHeader>
 
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        onSubmit={() => setPage(1)}
-        searchPlaceholder="Search by district or upazila..."
+        onSubmit={() => setQuery(search.trim())}
+        searchPlaceholder="Search by zone, district or upazila..."
         onReset={() => {
           setSearch('');
+          setQuery('');
           setStatus('');
-          setSortBy('');
-          setPage(1);
         }}
       >
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="select-ui min-w-[140px]"
-        >
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="select-ui min-w-[140px]">
           {STATUS_OPTS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -256,26 +236,24 @@ export default function ShippingChargeList() {
       </ListToolbar>
 
       <DataTable
-        onRowClick={(c) => router.push(`/shippingcharge/${c.id}`)}
-        rowLabel={() => 'Edit shipping charge'}
+        onRowClick={(z) => router.push(`/shippingcharge/${z.id}`)}
+        rowLabel={() => 'Edit shipping zone'}
         error={isError ? loadError : null}
         onRetry={refetch}
         columns={columns}
-        data={charges}
-        sort={sort}
-        selectionLabel="charges"
-        exportFileName="shipping-charges-selection.csv"
+        data={zones}
+        selectionLabel="zones"
+        exportFileName="shipping-zones-selection.csv"
         bulkActions={bulkActions}
         isLoading={isLoading}
         isFetching={isFetching}
         empty={
           <EmptyState
-            title="No shipping charges found"
-            hint="Add a default rate or create rates for specific districts and areas."
+            title="No shipping zones found"
+            hint="Add a zone with a price for a set of districts or areas, and an any-district zone as the fallback."
             icon={MdInbox}
           />
         }
-        footer={<Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} unit="charges" />}
       />
     </div>
   );

@@ -7,11 +7,11 @@ import { ErrorState } from 'src/components/_admin/ui/TableStates';
 
 export default function Page({ params }) {
   const { id } = use(params);
-  const { data, isLoading, isError, error, refetch } = useQuery(['admin-shipping-charge', id], () =>
-    api.getShippingChargeByAdmin(id)
+  const { data, isLoading, isError, error, refetch } = useQuery(['admin-shipping-zone', id], () =>
+    api.getShippingZone(id)
   );
 
   // Without a record the form is a create form — never show it for a failed load.
-  if (isError) return <ErrorState error={error} title="This shipping charge could not be loaded" onRetry={refetch} />;
+  if (isError) return <ErrorState error={error} title="This shipping zone could not be loaded" onRetry={refetch} />;
   return <EditShippingCharge isLoading={isLoading} data={data?.data} />;
 }

@@ -398,26 +398,29 @@ export const getShippingCharge = async (district, upazila) => {
   return data;
 };
 
-//couriers
-export const getAllShippingCharges = async (params) => {
-  const { data } = await http.get(`/admin/shipping?${params}`);
+// Shipping zones: one charge and status for a set of areas.
+export const getShippingZones = async (params = {}) => {
+  const { data } = await http.get(`/admin/shipping-zones`, { params });
   return data;
 };
-
-export const getShippingChargeByAdmin = async (id) => {
-  const { data } = await http.get(`/admin/shipping/${id}`);
+export const getShippingZone = async (id) => {
+  const { data } = await http.get(`/admin/shipping-zones/${id}`);
   return data;
 };
-export const addShippingChargeByAdmin = async (payload) => {
-  const { data } = await http.post(`/admin/shipping`, payload);
+export const addShippingZone = async (payload) => {
+  const { data } = await http.post(`/admin/shipping-zones`, payload);
   return data;
 };
-export const updateShippingChargeByAdmin = async ({ id, ...payload }) => {
-  const { data } = await http.put(`/admin/shipping/${id}`, payload);
+export const updateShippingZone = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/admin/shipping-zones/${id}`, payload);
   return data;
 };
-export const deleteShippingChargeByAdmin = async (id) => {
-  const { data } = await http.delete(`/admin/shipping/${id}`);
+export const setShippingZoneStatus = async ({ id, status }) => {
+  const { data } = await http.put(`/admin/shipping-zones/${id}/status`, { status });
+  return data;
+};
+export const deleteShippingZone = async (id) => {
+  const { data } = await http.delete(`/admin/shipping-zones/${id}`);
   return data;
 };
 
