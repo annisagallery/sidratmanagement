@@ -38,6 +38,7 @@ import {
   addPurchasePayment,
   deletePurchasePayment,
   getPurchase,
+  getPurchasePaymentOptions,
   receivePurchase,
   voidPurchase
 } from 'src/services';
@@ -69,7 +70,13 @@ const num = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const METHODS = ['cash', 'bank', 'bkash', 'nagad', 'cheque', 'other'];
+// A purchase is paid from HQ cash or an HQ payment method (and one of its
+// accounts). The "Paid from" select holds 'cash' or 'method:<id>'.
+const EMPTY_PAYMENT = { amount: '', source: '', paymentAccount: '', reference: '', note: '' };
+const paymentPayload = (payment) =>
+  payment.source === 'cash'
+    ? { via: 'cash' }
+    : { via: 'method', paymentMethod: payment.source.slice('method:'.length), paymentAccount: payment.paymentAccount };
 
 export default function PurchaseDetail({ id }) {
   const router = useRouter();
@@ -80,7 +87,13 @@ export default function PurchaseDetail({ id }) {
   const purchase = purchaseQuery.data?.data;
 
   const [receiveDraft, setReceiveDraft] = useState({});
-  const [payment, setPayment] = useState({ amount: '', method: 'cash', reference: '', note: '' });
+  const [payment, setPayment] = useState(EMPTY_PAYMENT);
+  const optionsQuery = useQuery(['purchase-payment-options'], getPurchasePaymentOptions, { staleTime: 60_000 });
+  const paymentOptions = optionsQuery.data?.data;
+  const chosenMethod = payment.source.startsWith('method:')
+    ? paymentOptions?.methods?.find((method) => method.id === payment.source.slice('method:'.length))
+    : null;
+  const methodAccounts = (chosenMethod?.accounts || []).filter(Boolean);
 
   const items = useMemo(() => purchase?.items || [], [purchase]);
   const due = dueOf(purchase);
@@ -116,15 +129,20 @@ export default function PurchaseDetail({ id }) {
     }
   );
 
-  const pay = useMutation(() => addPurchasePayment({ id, ...payment, amount: num(payment.amount) }), {
+  const pay = useMutation(
+    () => addPurchasePayment({ id, amount: num(payment.amount), reference: payment.reference, note: payment.note, ...paymentPayload(payment) }),
+    {
     onSuccess: () => {
       toastSuccess('Payment recorded');
-      setPayment({ amount: '', method: 'cash', reference: '', note: '' });
+      setPayment(EMPTY_PAYMENT);
       queryClient.invalidateQueries(['purchase', id]);
       queryClient.invalidateQueries('purchases');
+      queryClient.invalidateQueries(['purchase-payment-options']);
     },
     onError: (error) => alertError(error, { title: 'The payment could not be recorded' })
-  });
+    }
+  );
+  const paymentReady = num(payment.amount) > 0 && payment.source && (!methodAccounts.length || payment.paymentAccount);
 
   const removePayment = useMutation((paymentId) => deletePurchasePayment({ id, paymentId }), {
     onSuccess: () => {
@@ -372,7 +390,7 @@ export default function PurchaseDetail({ id }) {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Method</th>
+              <th>Paid from</th>
               <th>Reference</th>
               <th>Recorded by</th>
               <th className="text-right">Amount</th>
@@ -388,7 +406,7 @@ export default function PurchaseDetail({ id }) {
                   <td className="whitespace-nowrap text-slate-600">
                     {row.paidAt ? format(new Date(row.paidAt), 'dd MMM yyyy') : '—'}
                   </td>
-                  <td className="capitalize text-slate-700">{row.method}</td>
+                  <td className="text-slate-700">{row.method}</td>
                   <td className="ops-code text-[12px] text-slate-500">{row.reference || '—'}</td>
                   <td className="text-[12px] text-slate-600">{row.createdBy?.name || 'System'}</td>
                   <td className="text-right font-semibold tabular-nums text-slate-800">{money(row.amount)}</td>
@@ -414,7 +432,7 @@ export default function PurchaseDetail({ id }) {
 
         {due > 0 ? (
           <SectionBody className="border-t border-slate-200 p-4">
-            <div className="grid gap-3 md:grid-cols-[140px_140px_1fr_auto]">
+            <div className="grid gap-3 md:grid-cols-[140px_200px_180px_1fr_auto]">
               <label className="block">
                 <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Amount</span>
                 <input
@@ -429,15 +447,35 @@ export default function PurchaseDetail({ id }) {
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Method</span>
+                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Paid from</span>
                 <select
-                  value={payment.method}
-                  onChange={(event) => setPayment((current) => ({ ...current, method: event.target.value }))}
-                  className={`${fieldClass} capitalize`}
+                  value={payment.source}
+                  onChange={(event) => setPayment((current) => ({ ...current, source: event.target.value, paymentAccount: '' }))}
+                  className={fieldClass}
                 >
-                  {METHODS.map((method) => (
-                    <option key={method} value={method}>
-                      {method}
+                  <option value="">Choose…</option>
+                  <option value="cash">
+                    HQ Cash{paymentOptions ? ` (${money(paymentOptions.cashBalance)} in hand)` : ''}
+                  </option>
+                  {(paymentOptions?.methods || []).map((method) => (
+                    <option key={method.id} value={`method:${method.id}`}>
+                      {method.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[13px] font-medium text-slate-800">Account</span>
+                <select
+                  value={payment.paymentAccount}
+                  onChange={(event) => setPayment((current) => ({ ...current, paymentAccount: event.target.value }))}
+                  disabled={!methodAccounts.length}
+                  className={fieldClass}
+                >
+                  <option value="">{methodAccounts.length ? 'Choose the account…' : 'No accounts'}</option>
+                  {methodAccounts.map((account) => (
+                    <option key={account} value={account}>
+                      {account}
                     </option>
                   ))}
                 </select>
@@ -455,7 +493,7 @@ export default function PurchaseDetail({ id }) {
                 <button
                   type="button"
                   onClick={() => pay.mutate()}
-                  disabled={pay.isLoading || num(payment.amount) <= 0}
+                  disabled={pay.isLoading || !paymentReady}
                   className="btn-brand w-full md:w-auto"
                 >
                   {pay.isLoading ? 'Saving…' : 'Record payment'}

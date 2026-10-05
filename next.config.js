@@ -15,7 +15,11 @@ const nextConfig = {
     ],
   },
   async rewrites() {
-    return [{ source: '/backend-api/:path*', destination: `${apiOrigin}/api/:path*` }];
+    return [
+      // The API's existing health check lives at /health, outside /api.
+      { source: '/backend-api/health', destination: `${apiOrigin}/health` },
+      { source: '/backend-api/:path*', destination: `${apiOrigin}/api/:path*` },
+    ];
   },
   async headers() {
     return [{

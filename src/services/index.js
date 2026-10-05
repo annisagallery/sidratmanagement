@@ -668,6 +668,18 @@ export const getPaymentsByAdmin = async (params = {}) => {
   const { data } = await http.get(`/admin/payments`, { params });
   return data;
 };
+// Advance payments taken while raising an order: what the customer can have
+// paid with, and whether a transaction ID matched what was actually received.
+export const getAdvanceOptions = async () => {
+  const { data } = await http.get('/admin/orders/advance-options');
+  return data;
+};
+
+export const checkAdvanceTrx = async ({ trxId, amount, method, orderNo } = {}) => {
+  const { data } = await http.get('/admin/orders/advance-check', { params: { trxId, amount, method, orderNo } });
+  return data;
+};
+
 export const getPaymentByTrxId = async (trxId) => {
   const value = String(trxId || '').trim();
   if (!value) throw new Error('Transaction ID is required');
@@ -856,6 +868,9 @@ export const receivePurchase = async ({ id, lines }) =>
 // reason, if any of it has since been sold.
 export const voidPurchase = async ({ id, reason }) =>
   (await http.post(`/admin/purchases/${id}/void`, { reason })).data;
+// Where a purchase can be paid from: HQ cash (with its balance) and the HQ
+// payment methods with their accounts.
+export const getPurchasePaymentOptions = async () => (await http.get('/admin/purchases/payment-options')).data;
 export const addPurchasePayment = async ({ id, ...payload }) =>
   (await http.post(`/admin/purchases/${id}/payments`, payload)).data;
 export const deletePurchasePayment = async ({ id, paymentId }) =>

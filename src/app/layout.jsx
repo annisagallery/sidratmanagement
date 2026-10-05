@@ -23,7 +23,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000';
 
 async function fetchSiteSettings() {
   try {
-    const res = await fetch(`${BASE_URL}/api/settings`, { cache: 'no-store' });
+    const res = await fetch(`${BASE_URL}/api/settings`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
     const json = await res.json();
     return json?.data || null;
@@ -52,7 +52,7 @@ export default async function RootLayout({ children }) {
       <body>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <AppTitle />
-        <Providers>{children}</Providers>
+        <Providers siteSettings={settings}>{children}</Providers>
         <ToastContainer position="bottom-right" autoClose={3000} newestOnTop closeOnClick={false} />
       </body>
     </html>

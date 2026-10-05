@@ -4,13 +4,14 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
 import Image from 'next/image';
-import { FiAlertCircle, FiArrowLeft, FiCheck, FiChevronDown, FiCopy, FiLock, FiSearch, FiTrash2, FiX } from 'react-icons/fi';
+import { FiAlertCircle, FiArrowLeft, FiCheck, FiChevronDown, FiCopy, FiEdit2, FiLock, FiSearch, FiTrash2, FiX } from 'react-icons/fi';
 import { toast as toastify } from 'react-toastify';
 import { alertError, confirmAction, alertWarning } from 'src/utils/swal';
 import { ErrorState } from 'src/components/_admin/ui/TableStates';
 import * as api from 'src/services';
 import { usePermissions } from 'src/context/PermissionsContext';
 import { addressDistrict, addressUpazila, districts, upazilasForDistrict } from 'src/utils/bangladeshAddress';
+import AdvancePaymentsPanel from './AdvancePaymentsPanel';
 
 // Items, prices, discount and shipping can change only until packing starts —
 // the server refuses them afterwards (services/orderWorkflow EDITABLE_ORDER_STATUSES).
@@ -295,6 +296,33 @@ const inp =
   'input-ui w-full';
 // Compact inputs for the item grid, where a row holds seven controls.
 const sm = 'input-ui h-8 px-2 text-[13px] sm:text-[13px]';
+// Desk cart fields carry their name inside the box ("Color  Bluish Ash"), so
+// the label sits next to its value instead of in a row of small print above.
+// They are see-through, taking the white or grey of the card they sit on.
+const lineField =
+  'flex h-7 items-center gap-1.5 rounded-md border border-slate-300/80 bg-transparent px-2 transition hover:border-slate-400 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_3px_var(--brand-ring)]';
+const lineLabel = 'shrink-0 text-xs text-slate-500';
+const lineControl =
+  'h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed';
+// The desk's order panel uses the same named-box fields, a step taller.
+const deskField =
+  'flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 transition hover:border-slate-300 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_3px_var(--brand-ring)]';
+
+function DeskField({ label, required = false, invalid = false, className = '', children }) {
+  return (
+    <label className={`${deskField} ${invalid ? '!border-rose-400' : ''} ${className}`}>
+      <span className="shrink-0 text-xs text-slate-500">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-rose-700" aria-hidden>
+            *
+          </span>
+        ) : null}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 // The order desk packs every section onto one screen; sections read this to
 // tighten their own spacing. The edit screen keeps the roomy layout.
@@ -549,7 +577,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
   if (!items.length) {
     return (
       <div
-        className={`rounded-lg border border-dashed px-4 text-center ${compact ? 'py-6' : 'py-10'} ${
+        className={`rounded-lg border border-dashed px-4 text-center ${compact ? 'm-3 py-6' : 'py-10'} ${
           missing ? 'border-rose-300 bg-rose-50/50' : 'border-slate-300 bg-slate-50'
         }`}
       >
@@ -561,204 +589,205 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
 
   return (
     compact ? (
-      // The desk's cart: the same table with fewer columns — stock sits under
-      // the product name and the custom surcharge in the custom row — so it
-      // fits the column without scrolling sideways.
-      <div className="admin-sidebar-scroll overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full min-w-[640px] border-collapse text-[13px]">
-          <caption className="sr-only">Products in this order</caption>
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-              <th scope="col" className="px-3 py-1.5 text-left">Product</th>
-              <th scope="col" className="px-2 py-1.5 text-left">Options</th>
-              <th scope="col" className="w-20 px-2 py-1.5 text-right">Regular</th>
-              <th scope="col" className="w-20 px-2 py-1.5 text-right">Sale</th>
-              <th scope="col" className="w-16 px-2 py-1.5 text-center">Qty</th>
-              <th scope="col" className="w-24 px-2 py-1.5 text-right">Total</th>
-              <th scope="col" className="w-16 px-2 py-1.5">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
-              const lineTotal = getLineUnit(item) * Number(item.qty || 1);
-              const totalAvailable =
-                item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
-              const stockLabel = isTypeCustom
-                ? 'Made to order'
-                : item.stock > 0
-                  ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
-                  : totalAvailable == null
-                    ? 'To make'
-                    : totalAvailable > 0
-                      ? `${totalAvailable} to make`
-                      : 'Out of stock';
-              const stockTone = isTypeCustom
-                ? 'text-violet-700'
-                : item.stock > 0
-                  ? 'text-emerald-700'
-                  : item.overSale
-                    ? 'text-amber-700'
-                    : 'text-rose-700';
-              const priceLocked = locked || !canOverridePrice;
-              const priceChanged = isPriceOverridden(item);
-              const nonTypeDims = item.attrDimensions.filter((d) => d.name !== 'Type');
-              const field = `${sm} !h-7 !px-2 text-xs`;
+      // The desk's cart: one card per line, every other card shaded. Each
+      // field carries its name inside it, so there is no row of tiny labels;
+      // the money reads as a sum — price × quantity = total — with every
+      // total in the same right-hand column. Custom pieces have a violet edge.
+      // Newest first, on screen only: the order keeps its lines in the order
+      // they were added, and each card keeps that line number.
+      <ol className="space-y-1.5 p-2" aria-label="Products in this order, newest first">
+        {[...items].reverse().map((item, index) => {
+          const lineNo = items.length - index;
+          const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
+          const lineTotal = getLineUnit(item) * Number(item.qty || 1);
+          const totalAvailable =
+            item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
+          const stockLabel = isTypeCustom
+            ? 'Made to order'
+            : item.stock > 0
+              ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
+              : totalAvailable == null
+                ? 'To make'
+                : totalAvailable > 0
+                  ? `${totalAvailable} to make`
+                  : 'Out of stock';
+          const stockTone = isTypeCustom
+            ? 'text-violet-700'
+            : item.stock > 0
+              ? 'text-emerald-700'
+              : item.overSale
+                ? 'text-amber-700'
+                : 'text-rose-700';
+          const priceLocked = locked || !canOverridePrice;
+          const priceChanged = isPriceOverridden(item);
+          const nonTypeDims = item.attrDimensions.filter((d) => d.name !== 'Type');
 
-              return (
-                <React.Fragment key={item._key}>
-                  <tr className="border-t border-slate-100 align-top">
-                    <td className="px-3 py-1.5">
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="max-w-[220px] truncate text-[13px] font-semibold text-slate-900" title={item.productName}>
-                          {item.productName}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={locked}
-                          aria-pressed={isTypeCustom}
-                          title={isTypeCustom ? 'Made to order — switch back to standard' : 'Switch to a custom, made-to-order piece'}
-                          onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
-                          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                            isTypeCustom ? 'bg-violet-50 text-violet-800 ring-violet-600/20' : 'bg-slate-100 text-slate-700 ring-slate-500/10 hover:bg-slate-200'
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full ${isTypeCustom ? 'bg-violet-500' : 'bg-slate-400'}`} aria-hidden />
-                          {isTypeCustom ? 'Custom' : 'Standard'}
-                        </button>
-                        <span className={`text-xs ${stockTone}`}>{stockLabel}</span>
-                      </div>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      {nonTypeDims.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {nonTypeDims.map((dim) => {
-                            const values = isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
-                            return (
-                              <select
-                                key={dim.name}
-                                value={item.selectedAttrs[dim.name] || ''}
-                                onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
-                                title={dim.name}
-                                aria-label={`${dim.name} for ${item.productName}`}
-                                disabled={locked}
-                                className={`${field} min-w-[84px] py-0 font-medium text-slate-700`}
-                              >
-                                {values.map((value) => (
-                                  <option key={value} value={value}>
-                                    {value}
-                                  </option>
-                                ))}
-                              </select>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.regularPrice ?? ''}
-                        onChange={(e) => onUpdate(item._key, { regularPrice: Number(e.target.value) || 0 })}
-                        readOnly={priceLocked}
-                        aria-label={`Regular price for ${item.productName}`}
-                        title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
-                        className={`${field} w-full text-right ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
-                      />
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.discountPrice ?? ''}
-                        onChange={(e) => onUpdate(item._key, { discountPrice: e.target.value === '' ? null : Number(e.target.value) || 0 })}
-                        readOnly={priceLocked}
-                        placeholder="—"
-                        aria-label={`Sale price for ${item.productName}`}
-                        className={`${field} w-full text-right ${priceLocked ? 'bg-slate-50 text-slate-500' : ''}`}
-                      />
-                      {priceChanged ? <span className="mt-0.5 block text-right text-xs font-medium text-amber-700">Changed</span> : null}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="1"
-                        max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
-                        value={item.qty}
-                        onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                        disabled={locked}
-                        aria-label={`Quantity of ${item.productName}`}
-                        className={`${field} w-full text-center`}
-                      />
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <p className="pt-1 font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</p>
-                      {Number(item.qty || 1) > 1 ? <p className="text-xs text-slate-500">{fmt(getLineUnit(item))} each</p> : null}
-                    </td>
-                    <td className="px-1 py-1.5">
-                      {locked ? null : (
-                        <div className="flex justify-end gap-0.5">
-                          <button type="button" onClick={() => onDuplicate(item._key)} className="btn-icon btn-icon-sm !h-7 !w-7" title="Duplicate" aria-label={`Duplicate ${item.productName}`}>
-                            <FiCopy size={14} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onRemove(item._key)}
-                            className="btn-icon btn-icon-sm btn-icon-danger !h-7 !w-7"
-                            title="Remove"
-                            aria-label={`Remove ${item.productName}`}
-                          >
-                            <FiTrash2 size={14} aria-hidden />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                  {isTypeCustom ? (
-                    <tr className="align-top">
-                      <td colSpan={7} className="px-3 pb-1.5">
-                        <div className="flex gap-2">
-                          <input
-                            value={item.customizeDetails}
-                            onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
+          return (
+            <li
+              key={item._key}
+              className={`rounded-lg border border-l-[3px] border-slate-300 py-1.5 pl-1.5 pr-2 ${index % 2 ? 'bg-slate-100' : 'bg-white'} ${
+                isTypeCustom ? 'border-l-violet-500' : 'border-l-slate-300'
+              }`}
+            >
+              {/* Which product, and what kind */}
+              <div className="flex items-center gap-2">
+                <span className="w-6 shrink-0 text-right text-sm tabular-nums text-slate-400">{lineNo}.</span>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <p className="max-w-full truncate text-sm font-semibold text-slate-900" title={item.productName}>
+                    {item.productName}
+                  </p>
+                  <div className="flex items-center gap-x-2 text-xs">
+                    <button
+                      type="button"
+                      disabled={locked}
+                      aria-pressed={isTypeCustom}
+                      title={isTypeCustom ? 'Made to order — switch back to standard' : 'Switch to a custom, made-to-order piece'}
+                      onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
+                      className={`inline-flex items-center gap-1 rounded px-1.5 py-px font-medium ring-1 ring-inset ${
+                        isTypeCustom ? 'bg-violet-50 text-violet-800 ring-violet-600/20' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${isTypeCustom ? 'bg-violet-500' : 'bg-slate-400'}`} aria-hidden />
+                      {isTypeCustom ? 'Custom' : 'Standard'}
+                    </button>
+                    <span className={stockTone}>{stockLabel}</span>
+                  </div>
+                </div>
+                {locked ? null : (
+                  <div className="flex shrink-0 gap-0.5">
+                    <button type="button" onClick={() => onDuplicate(item._key)} className="btn-icon btn-icon-sm !h-7 !w-7" title="Duplicate" aria-label={`Duplicate ${item.productName}`}>
+                      <FiCopy size={14} aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(item._key)}
+                      className="btn-icon btn-icon-sm btn-icon-danger !h-7 !w-7"
+                      title="Remove"
+                      aria-label={`Remove ${item.productName}`}
+                    >
+                      <FiTrash2 size={14} aria-hidden />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Options, then the sum */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-8">
+                {nonTypeDims.length ? (
+                  <div className="flex max-w-full shrink-0 flex-wrap gap-1.5">
+                    {nonTypeDims.map((dim) => {
+                      const values = isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
+                      return (
+                        <label key={dim.name} className={`${lineField} shrink-0 ${locked ? 'bg-slate-50' : ''}`}>
+                          <span className={lineLabel}>{dim.name}</span>
+                          <select
+                            value={item.selectedAttrs[dim.name] || ''}
+                            onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
                             disabled={locked}
-                            placeholder="Measurements and instructions for production"
-                            aria-label={`Custom details for ${item.productName}`}
-                            className={`${field} min-w-0 flex-1`}
-                          />
-                          <label className="flex shrink-0 items-center gap-1 text-xs text-slate-500">
-                            Custom +
-                            <input
-                              type="number"
-                              min="0"
-                              value={item.customizePrice || ''}
-                              onChange={(e) => onUpdate(item._key, { customizePrice: Number(e.target.value) || 0 })}
-                              placeholder="0"
-                              disabled={locked}
-                              className={`${field} w-20 text-right`}
-                            />
-                          </label>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                            className={`${lineControl} !w-auto !flex-none cursor-pointer pr-1 font-medium`}
+                          >
+                            {values.map((value) => (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="flex-1 text-xs text-slate-400">No options</p>
+                )}
+
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <label
+                    className={`${lineField} w-[108px] ${priceLocked ? 'bg-slate-50' : ''}`}
+                    title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
+                  >
+                    <span className={lineLabel}>Regular</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.regularPrice ?? ''}
+                      onChange={(e) => onUpdate(item._key, { regularPrice: Number(e.target.value) || 0 })}
+                      readOnly={priceLocked}
+                      className={`${lineControl} text-right tabular-nums ${priceLocked ? 'text-slate-500' : ''}`}
+                    />
+                  </label>
+                  <label
+                    className={`${lineField} w-[96px] ${priceLocked ? 'bg-slate-50' : ''} ${priceChanged ? '!border-amber-400' : ''}`}
+                    title={priceChanged ? 'Changed from the catalogue price' : undefined}
+                  >
+                    <span className={priceChanged ? 'shrink-0 text-xs font-medium text-amber-700' : lineLabel}>Sale</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.discountPrice ?? ''}
+                      onChange={(e) => onUpdate(item._key, { discountPrice: e.target.value === '' ? null : Number(e.target.value) || 0 })}
+                      readOnly={priceLocked}
+                      placeholder="—"
+                      className={`${lineControl} text-right tabular-nums ${priceLocked ? 'text-slate-500' : ''}`}
+                    />
+                    {priceChanged ? <span className="sr-only">Changed from the catalogue price</span> : null}
+                  </label>
+                  <span className="text-sm text-slate-400" aria-hidden>
+                    ×
+                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
+                    value={item.qty}
+                    onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                    disabled={locked}
+                    aria-label={`Quantity of ${item.productName}`}
+                    className={`${sm} !h-7 !w-14 !border-slate-300/80 !bg-transparent !px-1.5 text-center tabular-nums !shadow-none hover:!border-slate-400`}
+                  />
+                  <span className="text-sm text-slate-400" aria-hidden>
+                    =
+                  </span>
+                  <span className="w-20 text-right text-[15px] font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</span>
+                </div>
+              </div>
+
+              {isTypeCustom ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-8">
+                  <label className={`${lineField} min-w-[220px] flex-1 ${locked ? 'bg-slate-50' : ''}`}>
+                    <span className={lineLabel}>Measurements</span>
+                    <input
+                      value={item.customizeDetails}
+                      onChange={(e) => onUpdate(item._key, { customizeDetails: e.target.value })}
+                      disabled={locked}
+                      placeholder="Chest, length, sleeves and any instructions for production"
+                      className={lineControl}
+                    />
+                  </label>
+                  <label className={`${lineField} ml-auto w-[150px] ${locked ? 'bg-slate-50' : ''}`}>
+                    <span className={lineLabel}>Custom +</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.customizePrice || ''}
+                      onChange={(e) => onUpdate(item._key, { customizePrice: Number(e.target.value) || 0 })}
+                      placeholder="0"
+                      disabled={locked}
+                      className={`${lineControl} text-right tabular-nums`}
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
     ) : (
     <div className="admin-sidebar-scroll overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full min-w-[960px] border-collapse text-[13px]">
         <caption className="sr-only">Products in this order</caption>
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+            <th scope="col" className="w-10 py-2.5 pl-3 pr-1 text-right">#</th>
             <th scope="col" className="w-44 px-3 py-2.5 text-left">Product</th>
             <th scope="col" className="px-3 py-2.5 text-left">Options</th>
             <th scope="col" className="w-28 px-3 py-2.5 text-center">Stock</th>
@@ -774,9 +803,11 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
         </thead>
 
         <tbody>
-          {items.map((item) => {
+          {items.map((item, index) => {
             const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
             const lineTotal = getLineUnit(item) * Number(item.qty || 1);
+            // Shade every other product, both of its rows together.
+            const stripe = index % 2 ? 'bg-slate-100/70' : 'bg-white';
             const totalAvailable =
               item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
             // In stock now, and how many more production can make.
@@ -801,7 +832,10 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
 
             return (
               <React.Fragment key={item._key}>
-                <tr className="border-t border-slate-100 align-top hover:bg-slate-50/40">
+                <tr className={`border-t border-slate-100 align-top ${stripe}`}>
+                  <td rowSpan={2} className="py-2 pl-3 pr-1 pt-3 text-right align-top text-xs font-medium tabular-nums text-slate-500">
+                    {index + 1}
+                  </td>
                   <td rowSpan={2} className="px-2 py-2 align-top">
                     <p className="text-sm font-semibold leading-tight text-slate-900">{item.productName}</p>
                     <button
@@ -825,18 +859,18 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                       if (!nonTypeDims.length)
                         return <span className="text-xs italic text-slate-400">No options</span>;
                       return (
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-nowrap items-center gap-1.5">
                           {nonTypeDims.map((dim) => {
                             const values =
                               isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
                             return (
-                              <div key={dim.name} className="shrink-0">
+                              <div key={dim.name} className="min-w-[96px] flex-1">
                                 <select
                                   value={item.selectedAttrs[dim.name] || ''}
                                   onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
                                   title={dim.name}
                                   disabled={locked}
-                                  className={`${sm} h-8 min-w-[96px] py-0 text-xs font-medium text-slate-700`}
+                                  className={`${sm} h-8 py-0 text-xs font-medium text-slate-700`}
                                 >
                                   {values.map((value) => (
                                     <option key={value} value={value}>
@@ -946,7 +980,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                   </td>
                 </tr>
 
-                <tr className="border-b border-slate-100 align-top">
+                <tr className={`border-b border-slate-100 align-top ${stripe}`}>
                   <td colSpan={8} className="px-2 pb-2 pt-0">
                     {isTypeCustom ? (
                       <input
@@ -1195,8 +1229,126 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
     );
   }
 
+  // Address dropdown — same pattern as product search
+  const savedList =
+    showAddrList && savedAddresses.length > 0 ? (
+      <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
+        <p className="section-label px-4 pb-1 pt-2">Saved addresses</p>
+        {savedAddresses.map((addr, i) => {
+          const text = [addr.name, addressDistrict(addr), addressUpazila(addr), addr.address].filter(Boolean).join(' - ');
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleSelectSavedAddress(addr, i)}
+              className={`flex w-full items-center px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selectedAddrIdx === i ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'}`}
+            >
+              <p className="truncate">{text}</p>
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
+  const savedToggle =
+    savedAddresses.length > 0 ? (
+      <button
+        type="button"
+        onClick={() => setShowAddrList((v) => !v)}
+        aria-label={`${showAddrList ? 'Hide' : 'Show'} ${savedAddresses.length} saved address${savedAddresses.length === 1 ? '' : 'es'}`}
+        aria-expanded={showAddrList}
+        className="-mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:text-slate-800"
+      >
+        <FiChevronDown size={14} className={`transition-transform ${showAddrList ? 'rotate-180' : ''}`} aria-hidden />
+      </button>
+    ) : null;
+
+  // The desk's narrow panel: every field names itself inside its box.
+  if (compact) {
+    return (
+      <div className="space-y-1.5">
+        <div ref={addrWrapRef} className="relative flex gap-1.5">
+          <DeskField label="Phone" required invalid={Boolean(errors.phone)} className="flex-1">
+            <input
+              type="tel"
+              value={phone}
+              onChange={handlePhoneChange}
+              onKeyDown={(e) => e.key === 'Enter' && doLookup()}
+              id="order-phone"
+              placeholder="01XXXXXXXXX"
+              aria-invalid={Boolean(errors.phone)}
+              aria-describedby={errors.phone ? 'order-phone-error' : undefined}
+              className={`${lineControl} tabular-nums`}
+            />
+            {savedToggle}
+          </DeskField>
+          <button type="button" onClick={() => doLookup()} disabled={loading || phone.trim().length < 7} className="btn-ghost btn-sm !h-8 shrink-0">
+            <FiSearch size={14} aria-hidden /> {loading ? 'Finding…' : 'Find'}
+          </button>
+          {savedList}
+        </div>
+        <FieldError id="order-phone-error">{errors.phone}</FieldError>
+        {phoneLooksWrong && !errors.phone ? (
+          <p className="text-xs font-medium text-amber-700">This doesn’t look like a Bangladeshi mobile number (01XXXXXXXXX).</p>
+        ) : null}
+
+        <DeskField label="Name" required invalid={Boolean(errors.name)}>
+          <input
+            id="order-name"
+            value={address.name || ''}
+            onChange={(e) => updateAddress('name', e.target.value)}
+            aria-invalid={Boolean(errors.name)}
+            className={lineControl}
+          />
+        </DeskField>
+        <FieldError>{errors.name}</FieldError>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          <DeskField label="District" required>
+            <select id="order-district" value={address.district || ''} onChange={(e) => handleDistrictChange(e.target.value)} className={`${lineControl} cursor-pointer`}>
+              <option value="">Select…</option>
+              {districts.map((district) => (
+                <option key={district} value={district}>
+                  {district}
+                </option>
+              ))}
+            </select>
+          </DeskField>
+          <DeskField label="Upazila" required className={address.district ? '' : 'bg-slate-50'}>
+            <select
+              id="order-upazila"
+              value={address.upazila || ''}
+              onChange={(e) => handleUpazilaChange(e.target.value)}
+              disabled={!address.district}
+              className={`${lineControl} cursor-pointer`}
+            >
+              <option value="">Select…</option>
+              {upazilas.map((upazila) => (
+                <option key={upazila} value={upazila}>
+                  {upazila}
+                </option>
+              ))}
+            </select>
+          </DeskField>
+        </div>
+
+        <DeskField label="Address" required invalid={Boolean(errors.address)} className="!h-auto !items-start py-1.5">
+          <textarea
+            id="order-address"
+            rows={2}
+            value={address.address || ''}
+            onChange={(e) => updateAddress('address', e.target.value)}
+            aria-invalid={Boolean(errors.address)}
+            placeholder="House, road, area"
+            className={`${lineControl} resize-none leading-5`}
+          />
+        </DeskField>
+        <FieldError>{errors.address}</FieldError>
+      </div>
+    );
+  }
+
   return (
-    <div className={compact ? 'space-y-2.5' : 'space-y-3'}>
+    <div className="space-y-3">
       {/* Phone + Find button */}
       <div>
         <Label required htmlFor="order-phone">
@@ -1247,25 +1399,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             <FiSearch size={15} aria-hidden /> {loading ? 'Finding…' : compact ? 'Find' : 'Find customer'}
           </button>
 
-          {/* Address dropdown — same pattern as product search */}
-          {showAddrList && savedAddresses.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-xl">
-              <p className="section-label px-4 pb-1 pt-2">Saved addresses</p>
-              {savedAddresses.map((addr, i) => {
-                const text = [addr.name, addressDistrict(addr), addressUpazila(addr), addr.address].filter(Boolean).join(' - ');
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleSelectSavedAddress(addr, i)}
-                    className={`flex w-full items-center px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selectedAddrIdx === i ? 'bg-slate-100 font-medium text-slate-900' : 'text-slate-700'}`}
-                  >
-                    <p className="truncate">{text}</p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {savedList}
         </div>
         <FieldError id="order-phone-error">{errors.phone}</FieldError>
         {phoneLooksWrong && !errors.phone ? (
@@ -1526,8 +1660,45 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
     onChange({ deliveryType: type, estimatedDelivery: addDays(found?.days ?? 7) });
   };
 
+  // The desk: a slim three-way switch and a named date field.
+  if (compact) {
+    return (
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-3 gap-0.5 rounded-md bg-slate-100 p-0.5" role="group" aria-label="Delivery type">
+          {deliveryTypes.map((type) => {
+            const active = value.deliveryType === type.key;
+            return (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => selectType(type.key)}
+                aria-pressed={active}
+                title={type.hint || undefined}
+                className={`h-7 rounded text-[13px] font-medium transition ${
+                  active ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {type.label}
+              </button>
+            );
+          })}
+        </div>
+        <DeskField label="Delivery by">
+          <input
+            id="order-eta"
+            type="date"
+            min={today}
+            value={value.estimatedDelivery || ''}
+            onChange={(e) => onChange({ ...value, estimatedDelivery: e.target.value })}
+            className={`${lineControl} cursor-pointer`}
+          />
+        </DeskField>
+      </div>
+    );
+  }
+
   return (
-    <div className={compact ? 'space-y-2' : 'space-y-3'}>
+    <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Delivery type">
         {deliveryTypes.map((type) => {
           const active = value.deliveryType === type.key;
@@ -1606,25 +1777,41 @@ function TrxLookupSection({ linked, onChange }) {
   const remove = (id) => onChange(linked.filter((p) => p.id !== id));
 
   return (
-    <div className={compact ? 'space-y-2' : 'space-y-3'}>
-      <div className="flex gap-2">
-        <input
-          value={trxInput}
-          onChange={(e) => {
-            setTrxInput(e.target.value);
-            setMessage('');
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && search()}
-          placeholder="TrxID of a received payment"
-          aria-label="Transaction ID to link"
-          spellCheck={false}
-          className={`${inp} ops-code flex-1`}
-        />
+    <div className={compact ? 'space-y-1.5' : 'space-y-3'}>
+      <div className={`flex ${compact ? 'gap-1.5' : 'gap-2'}`}>
+        {compact ? (
+          <DeskField label="Paid TrxID" className="flex-1">
+            <input
+              value={trxInput}
+              onChange={(e) => {
+                setTrxInput(e.target.value);
+                setMessage('');
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && search()}
+              placeholder="From a received payment"
+              spellCheck={false}
+              className={`${lineControl} ops-code`}
+            />
+          </DeskField>
+        ) : (
+          <input
+            value={trxInput}
+            onChange={(e) => {
+              setTrxInput(e.target.value);
+              setMessage('');
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && search()}
+            placeholder="TrxID of a received payment"
+            aria-label="Transaction ID to link"
+            spellCheck={false}
+            className={`${inp} ops-code flex-1`}
+          />
+        )}
         <button
           type="button"
           onClick={search}
           disabled={searching || !trxInput.trim()}
-          className="btn-brand btn-sm"
+          className={`btn-brand btn-sm ${compact ? '!h-8' : ''}`}
         >
           {searching ? 'Finding…' : 'Link'}
         </button>
@@ -1767,17 +1954,17 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
 /** One numbered step of the order panel; ticks green once it is complete. */
 function DeskStep({ n, title, done = false, aside, children }) {
   return (
-    <section className="px-4 py-4" aria-label={title}>
-      <div className="mb-3 flex items-center gap-2.5">
+    <section className="px-3 py-2.5" aria-label={title}>
+      <div className="mb-1.5 flex items-center gap-2">
         <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-            done ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'
+          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+            done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
           }`}
           aria-hidden
         >
-          {done ? <FiCheck size={13} /> : n}
+          {done ? <FiCheck size={11} /> : n}
         </span>
-        <h2 className="text-sm font-semibold text-slate-900">
+        <h2 className="text-[13px] font-semibold text-slate-900">
           {title}
           {done ? <span className="sr-only"> (complete)</span> : null}
         </h2>
@@ -1846,6 +2033,11 @@ function CourierRecord({ customer, fraudData }) {
 export default function CreateOrder({ orderNo = null, desk = false }) {
   const isEdit = Boolean(orderNo);
   const [noteOpen, setNoteOpen] = useState(false);
+  // Desk summary: which amount is being edited in place, and the advances
+  // (with their matched / unverified state) taken for this order.
+  const [editingAmount, setEditingAmount] = useState(null);
+  const [advances, setAdvances] = useState([]);
+  const [advanceOpen, setAdvanceOpen] = useState(false);
   useEffect(() => {
     if (!desk) return undefined;
     const onKey = (event) => {
@@ -2254,6 +2446,9 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
         adminNote: adminNote || null,
         adminNoteImages: uploadedAdminNoteImages.map((image) => image.id || image.id),
         linkedPaymentIds: linkedPayments.map((p) => p.id),
+        // Re-checked by the server; anything not matched there is saved
+        // unverified only because staff chose to (force).
+        advancePayments: advances.map(({ method, amount, trxId, note, force }) => ({ method, amount, trxId, note, force })),
         paymentMethod: linkedPayments[0]?.type || 'cod'
       };
 
@@ -2381,14 +2576,58 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
     const pieces = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
     const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
     const paidLinked = linkedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const dueNow = Math.max(0, orderTotal - paidLinked);
+    const advanceTotal = advances.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const advanceUnverified = advances.filter((entry) => !entry.verified).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const collected = paidLinked + advanceTotal;
+    const dueNow = Math.max(0, orderTotal - collected);
     const customerDone = Boolean(address.phone && address.name && address.district && address.upazila && address.address);
     const deliveryDone = Boolean(delivery.deliveryType && delivery.estimatedDelivery);
-    const paymentDone = paidLinked > 0 || Number(shipping || 0) > 0;
     const row = (label, value, tone = 'text-slate-900') => (
       <div className="flex justify-between gap-4 text-[13px]">
         <dt className="text-slate-500">{label}</dt>
         <dd className={`tabular-nums ${tone}`}>{value}</dd>
+      </div>
+    );
+    // A summary amount with its edit button; the value turns into a field in place.
+    const editButton = (label, onClick, disabled = false) => (
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick}
+        disabled={disabled}
+        className="btn-icon btn-icon-sm !h-6 !w-6"
+        aria-label={`Edit ${label.toLowerCase()}`}
+        title={`Edit ${label.toLowerCase()}`}
+      >
+        <FiEdit2 size={12} aria-hidden />
+      </button>
+    );
+    const amountRow = ({ id, label, value, onChange, sign = '', tone = 'text-slate-900' }) => (
+      <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
+        <dt className="text-slate-500">{label}</dt>
+        <dd className="flex items-center gap-1">
+          {editingAmount === id ? (
+            <input
+              id={`desk-${id}`}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              autoFocus
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onBlur={() => setEditingAmount(null)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && setEditingAmount(null)}
+              aria-label={`${label} (৳)`}
+              className={`${sm} !h-7 !w-28 text-right tabular-nums`}
+            />
+          ) : (
+            <span className={`tabular-nums ${Number(value || 0) > 0 ? tone : 'text-slate-900'}`}>
+              {Number(value || 0) > 0 ? `${sign}${fmt(value)}` : fmt(0)}
+            </span>
+          )}
+          {editButton(label, () => setEditingAmount(editingAmount === id ? null : id), itemsLocked)}
+        </dd>
       </div>
     );
 
@@ -2416,7 +2655,37 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
               </div>
               {itemsLocked ? lockedNotice : productSearch}
             </header>
-            <div className="min-h-0 flex-1 overflow-auto p-3">{itemsTable}</div>
+            <div className="min-h-0 flex-1 overflow-auto">{itemsTable}</div>
+            {/* Order labels and the staff note — not needed to check out, so they
+                sit under the products rather than in the order panel. */}
+            <div className="border-t border-slate-200 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="text-xs font-medium text-slate-500">Tags</span>
+                <div className="min-w-0 flex-1">
+                  <TagPicker selected={tags} onChange={setTags} />
+                </div>
+                {!isEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setNoteOpen((v) => !v)}
+                    aria-expanded={noteOpen}
+                    aria-controls="desk-note"
+                    className="btn-ghost btn-sm shrink-0"
+                  >
+                    Internal note
+                    {adminNote?.trim() || adminNoteImages?.length ? (
+                      <span className="rounded bg-emerald-50 px-1 text-[11px] font-medium text-emerald-700">Added</span>
+                    ) : null}
+                    <FiChevronDown size={14} className={`transition-transform ${noteOpen ? 'rotate-180' : ''}`} aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+              {noteOpen && !isEdit ? (
+                <div id="desk-note" className="mt-2">
+                  <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
+                </div>
+              ) : null}
+            </div>
             <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px]">
               <span className="text-slate-600">
                 {items.length} line{items.length === 1 ? '' : 's'} · {pieces} piece{pieces === 1 ? '' : 's'}
@@ -2431,7 +2700,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           <aside className="card-ui flex min-h-0 flex-col" aria-label="Order">
             <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
               <DeskStep n={1} title="Customer" done={customerDone}>
-                <div className="space-y-3">
+                <div className="space-y-1.5">
                   <CustomerSection
                     key={initialized ? 'ready' : 'init'}
                     address={address}
@@ -2447,99 +2716,51 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
               </DeskStep>
 
               <DeskStep n={2} title="Delivery" done={deliveryDone}>
-                <div className="space-y-3">
-                  <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-slate-700">Tags</p>
-                    <TagPicker selected={tags} onChange={setTags} />
-                  </div>
-                </div>
+                <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
               </DeskStep>
-
-              <DeskStep n={3} title="Payment" done={paymentDone}>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="desk-shipping">Shipping (৳)</Label>
-                      <input
-                        id="desk-shipping"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        value={shipping}
-                        onChange={(e) => setShipping(e.target.value)}
-                        disabled={itemsLocked}
-                        className={`${inp} text-right tabular-nums`}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="desk-discount">Discount (৳)</Label>
-                      <input
-                        id="desk-discount"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        value={discount}
-                        onChange={(e) => setDiscount(e.target.value)}
-                        disabled={itemsLocked}
-                        className={`${inp} text-right tabular-nums`}
-                      />
-                    </div>
-                  </div>
-                  {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
-                    <p className="text-[13px] font-medium text-rose-700" role="alert">
-                      The discount is larger than the order.
-                    </p>
-                  ) : null}
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-slate-700">Payment already received</p>
-                    {payments}
-                  </div>
-                </div>
-              </DeskStep>
-
-              {!isEdit ? (
-                <section>
-                  <button
-                    type="button"
-                    onClick={() => setNoteOpen((v) => !v)}
-                    aria-expanded={noteOpen}
-                    aria-controls="desk-note"
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
-                  >
-                    <span className="text-sm font-semibold text-slate-900">Internal note</span>
-                    <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                      {adminNote?.trim() || adminNoteImages?.length ? 'Added' : 'Optional · staff only'}
-                      <FiChevronDown size={15} className={`transition-transform ${noteOpen ? 'rotate-180' : ''}`} aria-hidden />
-                    </span>
-                  </button>
-                  {noteOpen ? (
-                    <div id="desk-note" className="px-4 pb-4">
-                      <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
-                    </div>
-                  ) : null}
-                </section>
-              ) : null}
             </div>
 
             {/* Checkout — always in view */}
-            <footer className="space-y-3 border-t border-slate-200 bg-slate-50 px-4 py-3.5">
-              <dl className="space-y-1">
-                {row('Subtotal', fmt(subTotal))}
-                {row('Shipping', fmt(shipping))}
-                {Number(discount || 0) > 0 ? row('Discount', `−${fmt(discount)}`, 'text-emerald-700') : null}
+            <footer className="space-y-2 border-t border-slate-200 bg-slate-50 px-3 py-2.5">
+              <dl>
+                <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
+                  <dt className="text-slate-500">Subtotal</dt>
+                  <dd className="pr-7 tabular-nums text-slate-900">{fmt(subTotal)}</dd>
+                </div>
+                {amountRow({ id: 'shipping', label: 'Shipping', value: shipping, onChange: setShipping })}
+                {amountRow({ id: 'discount', label: 'Discount', value: discount, onChange: setDiscount, sign: '−', tone: 'text-emerald-700' })}
+                {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
+                  <p className="pb-1 text-right text-xs font-medium text-rose-700" role="alert">
+                    The discount is larger than the order.
+                  </p>
+                ) : null}
+                <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
+                  <dt className="text-slate-500">
+                    Advance
+                    {advanceUnverified > 0 ? <span className="ml-1.5 text-xs text-amber-700">{fmt(advanceUnverified)} unverified</span> : null}
+                  </dt>
+                  <dd className="flex items-center gap-1">
+                    <span className={`tabular-nums ${advanceTotal > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                      {advanceTotal > 0 ? `−${fmt(advanceTotal)}` : fmt(0)}
+                    </span>
+                    {editButton('Advance', () => setAdvanceOpen(true))}
+                  </dd>
+                </div>
                 {paidLinked > 0 ? row('Paid', `−${fmt(paidLinked)}`, 'text-emerald-700') : null}
               </dl>
-              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2.5">
-                <span className="text-sm font-semibold text-slate-900">{paidLinked > 0 ? 'To collect' : 'Total'}</span>
-                <span className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(paidLinked > 0 ? dueNow : orderTotal)}</span>
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2">
+                <span className="text-sm font-semibold text-slate-900">
+                  {collected > 0 ? 'To collect' : 'Total'}
+                  {collected > 0 ? <span className="ml-1.5 text-xs font-normal text-slate-500">of {fmt(orderTotal)}</span> : null}
+                </span>
+                <span className="text-xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(collected > 0 ? dueNow : orderTotal)}</span>
               </div>
               {errorsBlock}
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting || !items.length}
-                className="btn-brand h-12 w-full text-[15px]"
+                className="btn-brand h-11 w-full text-[15px]"
                 title="Ctrl + Enter"
               >
                 {submitting ? 'Placing order…' : items.length ? 'Place order' : 'Add a product to continue'}
@@ -2547,6 +2768,16 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
             </footer>
           </aside>
         </div>
+        {advanceOpen ? (
+          <AdvancePaymentsPanel
+            value={advances}
+            onChange={setAdvances}
+            onClose={() => setAdvanceOpen(false)}
+            orderTotal={orderTotal}
+            loadOptions={api.getAdvanceOptions}
+            checkTrx={api.checkAdvanceTrx}
+          />
+        ) : null}
       </Compact.Provider>
     );
   }

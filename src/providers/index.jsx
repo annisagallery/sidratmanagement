@@ -4,6 +4,8 @@ import PropTypes from 'prop-types';
 import dynamic from 'next/dynamic';
 import { QueryClient, QueryClientProvider } from 'react-query';
 
+import ServerStatusGate from 'src/components/ServerStatusGate';
+import { isUnreachable } from 'src/services/serverStatus';
 import ThemeRegistry from 'src/theme';
 import LinearIndeterminate from '../components/loading';
 import SiteSettingsDataProvider from './siteSettings';
@@ -20,9 +22,9 @@ function HydrationGate({ children }) {
 
 HydrationGate.propTypes = { children: PropTypes.node.isRequired };
 
-Providers.propTypes = { children: PropTypes.node.isRequired };
+Providers.propTypes = { children: PropTypes.node.isRequired, siteSettings: PropTypes.object };
 
-export default function Providers({ children }) {
+export default function Providers({ children, siteSettings = null }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -33,6 +35,8 @@ export default function Providers({ children }) {
             // need an instant refetch on every navigation.
             staleTime: 30_000,
             retry: (failureCount, error) => {
+              // The server is down: ServerStatusGate refetches once it is back.
+              if (isUnreachable(error)) return false;
               if (error?.response?.status === 401 || error?.response?.status === 403) return false;
               return failureCount < 2;
             },
@@ -44,9 +48,10 @@ export default function Providers({ children }) {
   return (
     <ThemeRegistry>
       <QueryClientProvider client={queryClient}>
+        <ServerStatusGate />
         <HydrationGate>
           <PermissionsProvider>
-            <SiteSettingsDataProvider>
+            <SiteSettingsDataProvider initial={siteSettings}>
               {children}
             </SiteSettingsDataProvider>
           </PermissionsProvider>

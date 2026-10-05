@@ -28,7 +28,6 @@ import {
   FiShoppingBag,
   FiSliders,
   FiSmartphone,
-  FiStar,
   FiTag,
   FiTrash2
 } from 'react-icons/fi';
@@ -296,7 +295,6 @@ export const navGroups = [
     key: 'marketing',
     label: 'Marketing',
     items: [
-      { key: 'reviews', label: 'Reviews', href: '/reviews', icon: FiStar, subject: 'Banner' },
       { key: 'campaigns', label: 'Campaigns', href: '/campaigns', icon: HiOutlineSpeakerphone, subject: 'Campaign' },
       { key: 'coupons', label: 'Coupons', href: '/coupon-codes', icon: FiTag, subject: 'Coupon' },
       { key: 'cashback', label: 'Cashback', href: '/cash-settings/transactions', icon: BsCash, subject: 'Cashback', children: [{ label: 'Transactions', href: '/cash-settings/transactions' }, { label: 'User balances', href: '/cash-settings/list' }, { label: 'Cashback settings', href: '/cash-settings' }] },

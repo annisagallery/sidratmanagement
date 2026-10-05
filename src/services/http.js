@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { checkServer, isUnreachable, markServerUp } from './serverStatus';
 import useAdminUserStore from 'src/stores/userStore';
 import { attachPasswordConfirmation } from './confirmDelete';
 
@@ -12,8 +13,15 @@ const http = axios.create({
 });
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    markServerUp();
+    return response;
+  },
   (error) => {
+    // No answer from the API: a health check confirms it before the
+    // "server unavailable" screen goes up (see services/serverStatus).
+    if (isUnreachable(error)) checkServer();
+
     const status = error?.response?.status;
     const url = error?.config?.url || '';
     const isLoginRequest = url.includes('/auth/adminlogin');
