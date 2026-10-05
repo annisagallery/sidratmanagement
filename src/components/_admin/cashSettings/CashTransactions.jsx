@@ -95,7 +95,7 @@ export default function CashTransactions() {
       }
     },
     { key: 'balanceAfter', label: 'Balance after', align: 'right', render: (tx) => <span className="font-semibold text-slate-700">{BDT}{(tx.balanceAfter || 0).toLocaleString()}</span> },
-    { key: 'creator', label: 'Created By', render: (tx) => <span className="text-xs text-slate-500">{tx.creator?.name || <span className="text-slate-500">System</span>}</span> },
+    { key: 'createdBy', label: 'Created By', render: (tx) => <span className="text-xs text-slate-500">{tx.createdBy?.name || <span className="text-slate-500">System</span>}</span> },
     { key: 'createdAt', label: 'Date', align: 'right', render: (tx) => <span className="whitespace-nowrap text-xs text-slate-500">{fmtDate(tx.createdAt)}</span> }
   ];
 

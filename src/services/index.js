@@ -732,6 +732,11 @@ export const createPaymentFromSms = async ({ id, ...payload }) => {
   const { data } = await http.post(`/admin/sms/${id}/payment`, payload);
   return data;
 };
+// Put a read payment nobody claimed onto its order.
+export const assignSmsToOrder = async ({ id, orderNo }) => {
+  const { data } = await http.post(`/admin/sms/${id}/assign`, { orderNo });
+  return data;
+};
 export const dismissSms = async (id) => {
   const { data } = await http.post(`/admin/sms/${id}/dismiss`);
   return data;

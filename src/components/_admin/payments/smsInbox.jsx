@@ -8,11 +8,13 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiEyeOff,
+  FiLink,
   FiPlus,
   FiRefreshCw,
   FiSearch,
   FiSmartphone
 } from 'react-icons/fi';
+import Link from 'next/link';
 import { MdInbox } from 'react-icons/md';
 import PageHeader from 'src/components/_admin/ui/PageHeader';
 import { fDateTime } from 'src/utils/formatTime';
@@ -54,15 +56,31 @@ const REASON_LABELS = {
 // status would keep showing finished work as work still waiting.
 const TABS = [
   { key: 'pending', label: 'Needs review', countKey: 'pending' },
+  { key: 'unassigned', label: 'Unassigned', countKey: 'unassigned' },
   { key: 'parsed', label: 'Read', countKey: 'parsed' },
   { key: 'aside', label: 'Set aside', countKey: 'aside' },
   { key: 'all', label: 'All', countKey: 'all' }
 ];
 
+// A customer's claim on this message (needs review or verified). Claimed money
+// is the verifier's to decide, so the inbox never offers to assign it.
+const claimOf = (message) => message.intents?.[0] || null;
+
+// Money in and on no order: a read credit nobody booked or set aside, or a
+// payment recorded from the message that was never put on an order.
+function isUnassigned(message) {
+  if (claimOf(message)) return false;
+  if (message.paymentId) return !message.payment?.orderNo;
+  return message.parseStatus === 'parsed' && message.direction === 'credit' && !message.reviewedAt;
+}
+
 // One reading of a message, used by both panes so the list and the pane can
 // never disagree about what state something is in.
 function readingOf(message) {
-  if (message.paymentId) return { tone: 'emerald', label: 'Recorded' };
+  const claim = claimOf(message);
+  if (claim?.status === 'needs_review') return { tone: 'amber', label: 'In verification' };
+  if (isUnassigned(message)) return { tone: 'amber', label: 'Unassigned' };
+  if (message.paymentId || claim) return { tone: 'emerald', label: 'Recorded' };
   if (message.parseStatus === 'parsed') return { tone: 'emerald', label: 'Read' };
   if (message.parseStatus === 'ignored') return { tone: 'slate', label: 'Ignored' };
   if (message.reviewedAt) return { tone: 'slate', label: 'Dismissed' };
@@ -180,6 +198,95 @@ function CreatePaymentModal({ sms, types, onClose, onDone }) {
   );
 }
 
+// Staff supply only the order: the amount, method and trxId are what the SMS
+// says, so there is nothing to retype and nothing to get wrong.
+function AssignModal({ sms, onClose, onDone }) {
+  const [orderNo, setOrderNo] = useState('');
+  const [error, setError] = useState('');
+  const amount = sms.payment?.amount ?? sms.parsed?.amount;
+  const trxId = sms.payment?.trxId || sms.parsed?.trxId;
+
+  const { mutate, isLoading } = useMutation(() => api.assignSmsToOrder({ id: sms.id, orderNo: orderNo.trim() }), {
+    onSuccess: () => {
+      toastSuccess('Payment assigned', `Now counted against order #${orderNo.trim()}.`);
+      onDone();
+      onClose();
+    },
+    onError: (e) => {
+      const msg = e?.response?.data?.message || 'The payment was not assigned.';
+      const alreadyOrderNo = e?.response?.data?.orderNo;
+      alertError(null, { title: 'The payment was not assigned', text: alreadyOrderNo ? `${msg}: ${alreadyOrderNo}` : msg });
+    }
+  });
+
+  const submit = (e) => {
+    e?.preventDefault?.();
+    if (!orderNo.trim()) {
+      setError('Enter the order number.');
+      return;
+    }
+    mutate();
+  };
+
+  return (
+    <ModalShell
+      title="Assign to an order"
+      subtitle="SMS inbox"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={isLoading}>
+            Cancel
+          </button>
+          <button type="button" onClick={submit} disabled={isLoading} className="btn-brand">
+            {isLoading ? 'Assigning…' : 'Assign payment'}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5">
+        <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-[13px]">
+          <div className="flex justify-between gap-4 px-4 py-2.5">
+            <dt className="text-slate-500">Amount</dt>
+            <dd className="font-semibold tabular-nums text-slate-900">{fmtAmount(amount) || '—'}</dd>
+          </div>
+          {sms.provider && (
+            <div className="flex justify-between gap-4 px-4 py-2.5">
+              <dt className="text-slate-500">Method</dt>
+              <dd className="uppercase text-slate-900">{sms.provider}</dd>
+            </div>
+          )}
+          {trxId && (
+            <div className="flex justify-between gap-4 px-4 py-2.5">
+              <dt className="text-slate-500">Transaction ID</dt>
+              <dd className="ops-code text-slate-900">{trxId}</dd>
+            </div>
+          )}
+          {sms.parsed?.senderAccount && (
+            <div className="flex justify-between gap-4 px-4 py-2.5">
+              <dt className="text-slate-500">Paid from</dt>
+              <dd className="ops-code text-slate-900">{sms.parsed.senderAccount}</dd>
+            </div>
+          )}
+        </dl>
+        <Field label="Order number" required error={error}>
+          <input
+            value={orderNo}
+            onChange={(e) => {
+              setOrderNo(e.target.value);
+              setError('');
+            }}
+            className={`${fieldClass} ops-code`}
+            spellCheck={false}
+            autoFocus
+          />
+        </Field>
+        <p className="text-[13px] text-slate-500">The customer gets the usual payment-received SMS.</p>
+      </form>
+    </ModalShell>
+  );
+}
+
 // ── List rail ─────────────────────────────────────────────────────────────────
 
 function MessageRow({ message, selected, onSelect }) {
@@ -215,7 +322,7 @@ function MessageRow({ message, selected, onSelect }) {
         {message.parsed?.trxId && (
           <span className="ops-code truncate text-xs text-slate-500">{message.parsed?.trxId}</span>
         )}
-        {message.paymentId && (
+        {message.payment?.orderNo && (
           <FiCheckCircle className="ml-auto shrink-0 text-emerald-600" size={14} aria-label="Recorded as a payment" />
         )}
       </div>
@@ -244,7 +351,7 @@ function ParsedField({ label, value, mono = false, wanted = false }) {
   );
 }
 
-function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) {
+function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, onAssign, busy }) {
   if (!message) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
@@ -259,6 +366,13 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
 
   const unread = message.parseStatus === 'unrecognised';
   const amount = fmtAmount(message.parsed?.amount);
+  const claim = claimOf(message);
+  const unassigned = isUnassigned(message);
+  // Recording by hand is for a message the rules could not read. A read
+  // message already is its payment — recording it with no order would book the
+  // trxId and turn the customer's later claim into a "reused" flag — so it is
+  // assigned to an order instead.
+  const canRecord = unread && !message.paymentId;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -282,15 +396,24 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
           </p>
         </div>
 
-        {!message.paymentId && (
+        {(!message.paymentId || unassigned) && !claim && (
           <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" onClick={onReparse} disabled={busy} className="btn-ghost btn-sm">
-              <FiRefreshCw size={14} aria-hidden /> Read again
-            </button>
-            <button type="button" onClick={onRecord} disabled={busy} className="btn-brand btn-sm">
-              <FiPlus size={14} aria-hidden /> Record payment
-            </button>
-            {!message.reviewedAt && (
+            {!message.paymentId && (
+              <button type="button" onClick={onReparse} disabled={busy} className="btn-ghost btn-sm">
+                <FiRefreshCw size={14} aria-hidden /> Read again
+              </button>
+            )}
+            {unassigned && (
+              <button type="button" onClick={onAssign} disabled={busy} className="btn-brand btn-sm">
+                <FiLink size={14} aria-hidden /> Assign to order
+              </button>
+            )}
+            {canRecord && (
+              <button type="button" onClick={onRecord} disabled={busy} className="btn-brand btn-sm">
+                <FiPlus size={14} aria-hidden /> Record payment
+              </button>
+            )}
+            {!message.paymentId && !message.reviewedAt && (
               <button
                 type="button"
                 onClick={onDismiss}
@@ -312,6 +435,23 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800">{message.body}</p>
         </article>
 
+        {claim?.status === 'needs_review' && (
+          <Callout tone="warning" title="A customer has claimed this payment">
+            Order {claim.orderNo || '—'} submitted this transaction ID, and it is waiting for a decision under{' '}
+            <Link href="/payments/verification" className="font-semibold underline">
+              Payments → Verification
+            </Link>
+            .
+          </Callout>
+        )}
+
+        {unassigned && !message.paymentId && (
+          <Callout tone="warning" title="Unassigned payment">
+            This money arrived but no customer has claimed it, so it is on no order. Assign it to the order it pays for, or set it
+            aside if it is not a customer payment.
+          </Callout>
+        )}
+
         {message.paymentId && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-900" role="status">
             <span className="flex items-center gap-1.5 font-semibold">
@@ -321,7 +461,11 @@ function ReadingPane({ message, onBack, onReparse, onDismiss, onRecord, busy }) 
             {message.payment?.amount != null && (
               <span className="text-xs tabular-nums">{fmtAmount(message.payment.amount)}</span>
             )}
-            {message.payment?.orderNo && <span className="text-xs">Order {message.payment.orderNo}</span>}
+            {message.payment?.orderNo ? (
+              <span className="text-xs">Order {message.payment.orderNo}</span>
+            ) : (
+              <span className="text-xs font-semibold text-amber-800">Not on an order yet</span>
+            )}
           </div>
         )}
 
@@ -378,13 +522,14 @@ export default function SmsInbox() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState(null);
   const [createFor, setCreateFor] = useState(null);
+  const [assignFor, setAssignFor] = useState(null);
   const limit = 25;
   const qc = useQueryClient();
 
   const params = useMemo(
     () => ({
       pending: tab === 'pending' ? 'true' : undefined,
-      status: tab === 'parsed' || tab === 'aside' ? tab : undefined,
+      status: ['parsed', 'aside', 'unassigned'].includes(tab) ? tab : undefined,
       search: query || undefined,
       page,
       limit
@@ -418,6 +563,7 @@ export default function SmsInbox() {
     qc.invalidateQueries(['sms-messages']);
     qc.invalidateQueries(['sms-stats']);
     qc.invalidateQueries(['payments']);
+    qc.invalidateQueries(['payment-intents']);
   };
 
   const { mutate: reparse, isLoading: reparsing } = useMutation(api.reparseSms, {
@@ -506,12 +652,14 @@ export default function SmsInbox() {
                 <div className="flex h-full flex-col items-center justify-center gap-1.5 p-8 text-center">
                   <MdInbox className="text-slate-300" size={32} aria-hidden />
                   <p className="text-sm font-medium text-slate-900">
-                    {tab === 'pending' ? 'Nothing waiting on you' : 'No messages here'}
+                    {tab === 'pending' ? 'Nothing waiting on you' : tab === 'unassigned' ? 'No unassigned payments' : 'No messages here'}
                   </p>
                   <p className="text-[13px] text-slate-500">
                     {tab === 'pending'
                       ? 'Every message the rules could not read has been dealt with.'
-                      : 'Try another tab, or clear the search.'}
+                      : tab === 'unassigned'
+                        ? 'Every payment that arrived is on an order or in verification.'
+                        : 'Try another tab, or clear the search.'}
                   </p>
                 </div>
               ) : (
@@ -561,10 +709,13 @@ export default function SmsInbox() {
               onReparse={() => reparse(open.id)}
               onDismiss={() => dismiss(open.id)}
               onRecord={() => setCreateFor(open)}
+              onAssign={() => setAssignFor(open)}
             />
           </div>
         </div>
       </div>
+
+      {assignFor && <AssignModal sms={assignFor} onClose={() => setAssignFor(null)} onDone={invalidate} />}
 
       {createFor && (
         <CreatePaymentModal

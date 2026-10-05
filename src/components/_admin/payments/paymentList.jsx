@@ -26,9 +26,19 @@ function dtStr(d) {
 // "webhook" is how the record arrived, not something a person should have to
 // decode: it means the system recorded it by itself — an SMS match or an
 // outside system — as opposed to someone on staff entering it.
-function SourceBadge({ source }) {
-  return source === 'webhook' ? <Badge tone="violet">Automatic</Badge> : <Badge tone="info">Added by staff</Badge>;
+function SourceBadge({ payment }) {
+  if (payment.source === 'webhook') return <Badge tone="violet">Automatic</Badge>;
+  const who = staffName(payment);
+  return <Badge tone="info">{who ? `Added by ${who}` : 'Added by staff'}</Badge>;
 }
+
+// Rows from before payments linked to a user keep only the text they were
+// saved with (usually an email), so that is the fallback; "webhook" and
+// "admin" were placeholders, not people.
+const staffName = (payment) =>
+  payment.createdBy?.name ||
+  (['webhook', 'sms-matcher', 'admin'].includes(payment.legacyCreatedBy) ? null : payment.legacyCreatedBy) ||
+  null;
 
 function AssignModal({ payment, onClose, onDone }) {
   const [orderNo, setOrderNo] = useState('');
@@ -166,7 +176,9 @@ export default function PaymentList({ initialAddOpen = false }) {
       key: 'createdBy',
       label: 'Added by',
       hideBelow: 'xl',
-      render: (p) => <span className="text-[13px] text-slate-600">{p.createdBy || '—'}</span>
+      render: (p) => (
+        <span className="text-[13px] text-slate-600">{staffName(p) || (p.source === 'webhook' ? 'Automatic' : '—')}</span>
+      )
     },
     {
       key: 'createdAt',
@@ -186,7 +198,7 @@ export default function PaymentList({ initialAddOpen = false }) {
           <Badge tone="warning">Unassigned</Badge>
         )
     },
-    { key: 'source', label: 'Source', hideBelow: 'lg', render: (p) => <SourceBadge source={p.source} /> },
+    { key: 'source', label: 'Source', hideBelow: 'lg', render: (p) => <SourceBadge payment={p} /> },
     {
       key: 'actions',
       label: '',
