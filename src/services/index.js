@@ -233,8 +233,8 @@ export const getProductBom = async ({ slug }) => {
   const { data } = await http.get(`/admin/products/${slug}/bom`);
   return data;
 };
-export const saveProductBom = async ({ slug, variationId = null, lines }) => {
-  const { data } = await http.put(`/admin/products/${slug}/bom`, { variationId, lines });
+export const saveProductBom = async ({ slug, ...payload }) => {
+  const { data } = await http.put(`/admin/products/${slug}/bom`, payload);
   return data;
 };
 export const getBomMaterials = async () => {
@@ -934,3 +934,5 @@ export const getMyAbility = async () => {
 };
 // Role CRUD (create/edit/delete) is managed entirely from the HRM app now —
 // this app only lists roles (for the assign-role dropdown) and assigns them.
+
+export const getOrderFilterOptions = async () => (await http.get('/admin/orders/filter-options')).data;

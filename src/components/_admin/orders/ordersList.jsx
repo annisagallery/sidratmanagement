@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { orderChannelLabel } from 'src/utils/orderChannel';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next-nprogress-bar';
@@ -10,6 +11,9 @@ import {
   MdChevronRight,
   MdDelete,
   MdInbox,
+  MdExpandMore,
+  MdFilterAltOff,
+  MdTune,
   MdLabel,
   MdLocalShipping,
   MdReceiptLong,
@@ -50,30 +54,47 @@ const fmtDate = (date) => (date ? fDate(date) : '—');
 const fmtMoney = (amount) =>
   new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 0 }).format(amount || 0);
 
-const sourceLabel = (order) => {
-  if (order.source === 'showroom') return 'Showroom';
-  // Older manual showroom orders were stored as POS. Treat only a due date
-  // materially later than checkout as manual; instant POS due dates match
-  // their creation time.
-  const dueGap =
-    order.estimatedDelivery && order.createdAt
-      ? new Date(order.estimatedDelivery).getTime() - new Date(order.createdAt).getTime()
-      : 0;
-  if (order.source === 'pos' && dueGap > 60 * 60 * 1000) return 'Showroom';
-  return { online: 'Online', admin: 'CC', pos: 'POS' }[order.source] || 'Online';
-};
+const sourceLabel = orderChannelLabel;
 
 export default function OrderList() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState(() => searchParams.get('status') || '');
-  const [view, setView] = useState('active');
-  const [tableView, setTableView] = useState('summary');
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState('estimatedDelivery');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const urlSearch = searchParams.get('search') || '';
+  const [searchState, setSearchState] = useState({ url: urlSearch, text: urlSearch });
+  if (searchState.url !== urlSearch) setSearchState({ url: urlSearch, text: urlSearch });
+  const search = searchState.url === urlSearch ? searchState.text : urlSearch;
+  const setSearch = (text) => setSearchState({ url: urlSearch, text });
+  const status = searchParams.get('status') || '';
+  const view = searchParams.get('view') || 'active';
+  const tableView = searchParams.get('tableView') || 'summary';
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+  const sortBy = searchParams.get('sortBy') || 'estimatedDelivery';
+  const sortOrder = searchParams.get('sortOrder') || 'asc';
+  const channel = ['online', 'admin', 'branch'].includes(searchParams.get('channel')) ? searchParams.get('channel') : 'orders';
+  const channelBranch = searchParams.get('channelBranch') || '';
+  const paymentStatus = searchParams.get('paymentStatus') || '';
+  const dateField = searchParams.get('dateField') || 'createdAt';
+  const from = searchParams.get('from') || '';
+  const to = searchParams.get('to') || '';
+  const preset = searchParams.get('preset') || '';
+  const tag = searchParams.get('tag') || '';
+  const deliveryType = searchParams.get('deliveryType') || '';
+  const courier = searchParams.get('courier') || '';
+  const createdBy = searchParams.get('createdBy') || '';
+  const moreFilterCount = [from || to, tag, deliveryType, courier, createdBy].filter(Boolean).length;
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(Boolean(moreFilterCount));
   const limit = 20;
+  const patchFilters = (patch, { resetPage = true } = {}) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('branch');
+    if (resetPage) next.delete('page');
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value === '' || value == null) next.delete(key);
+      else next.set(key, String(value));
+    });
+    router.replace('/orders' + (next.size ? '?' + next.toString() : ''), { scroll: false });
+  };
+  const setPage = (value) => patchFilters({ page: value }, { resetPage: false });
 
   const qc = useQueryClient();
   const settings = useSiteSettings();
@@ -82,24 +103,18 @@ export default function OrderList() {
   const { data: tagData } = useQuery('admin-order-tags', () => api.getOrderTagsByAdmin(''));
   const orderTags = tagData?.data || [];
 
-  const handleSort = (field) => {
-    if (sortBy === field) setSortOrder((order) => (order === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortBy(field);
-      setSortOrder('desc');
-    }
-    setPage(1);
-  };
-
-  // This page is the fulfillment queue only; counter sales stay outside this channel.
+  const optionsQuery = useQuery('order-filter-options', api.getOrderFilterOptions);
+  const branches = optionsQuery.data?.data?.branches || [];
+  const staff = optionsQuery.data?.data?.staff || [];
+  const handleSort = (field) => patchFilters({ sortBy: field, sortOrder: sortBy === field && sortOrder === 'asc' ? 'desc' : 'asc' });
   const params = new URLSearchParams({
-    page,
-    limit,
-    channel: 'orders',
-    ...(search && { search }),
-    ...(status ? { status } : { view }),
-    ...(tableView === 'compact' && { includeDetails: 'true' }),
-    ...(sortBy && { sortBy, sortOrder })
+    page, limit, channel, view, sortBy, sortOrder,
+    ...(urlSearch && { search: urlSearch }), ...(status && { status }),
+    ...(channel === 'branch' && { channelBranch }),
+    ...(paymentStatus && { paymentStatus }), ...(from && { from }), ...(to && { to }), dateField,
+    ...(preset && { preset }), ...(tag && { tag }), ...(deliveryType && { deliveryType }),
+    ...(courier && { courier }), ...(createdBy && { createdBy }),
+    ...(tableView === 'compact' && { includeDetails: 'true' })
   }).toString();
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery(
@@ -107,7 +122,7 @@ export default function OrderList() {
     () => api.getOrdersByAdmin(params),
     { keepPreviousData: true }
   );
-  const filtered = Boolean(search || status || view !== 'active');
+  const filtered = Boolean(urlSearch || status || view !== 'active' || channel !== 'orders' || paymentStatus || from || to || preset || tag || deliveryType || courier || createdBy);
 
   const orders = data?.data || [];
   const total = data?.total || 0;
@@ -146,8 +161,8 @@ export default function OrderList() {
 
   // The chosen status/tag has to survive from the confirm step into the per-row
   // work, so each action stashes it here rather than re-prompting per order.
-  let pendingStatus = null;
-  let pendingTag = null;
+  const pendingStatus = useRef(null);
+  const pendingTag = useRef(null);
 
   const bulkActions = [
     {
@@ -172,16 +187,16 @@ export default function OrderList() {
       unit: 'orders',
       hint: 'Move every selected order to the same fulfillment status',
       confirm: async (rows) => {
-        pendingStatus = await promptSelect({
+        pendingStatus.current = await promptSelect({
           title: `Move ${rows.length} order${rows.length === 1 ? '' : 's'} to…`,
           text: 'Status changes notify the customer if an SMS template is enabled for the new status.',
           options: statuses.map((entry) => ({ value: entry.value, label: entry.label })),
           placeholder: 'Choose a status',
           confirmText: 'Move orders'
         });
-        return Boolean(pendingStatus);
+        return Boolean(pendingStatus.current);
       },
-      perform: (order) => api.updateOrderStatusByAdmin({ orderNo: order.orderNo, status: pendingStatus }),
+      perform: (order) => api.updateOrderStatusByAdmin({ orderNo: order.orderNo, status: pendingStatus.current }),
       rowLabel: (order) => `#${order.orderNo}`,
       onSettled: refreshOrders
     },
@@ -194,19 +209,19 @@ export default function OrderList() {
       hint: 'Add one tag to every selected order, keeping tags they already have',
       disabled: () => orderTags.length === 0,
       confirm: async (rows) => {
-        pendingTag = await promptSelect({
+        pendingTag.current = await promptSelect({
           title: `Tag ${rows.length} order${rows.length === 1 ? '' : 's'}`,
           text: 'The tag is added alongside any tags these orders already carry.',
           options: orderTags.map((tag) => ({ value: tag.id, label: tag.name })),
           placeholder: 'Choose a tag',
           confirmText: 'Add tag'
         });
-        return Boolean(pendingTag);
+        return Boolean(pendingTag.current);
       },
       perform: (order) => {
         const existing = (order.tags || []).map((tag) => tag.id ?? tag);
-        if (existing.some((id) => String(id) === String(pendingTag))) return Promise.resolve();
-        return api.updateOrderStatus({ id: order.orderNo, tags: [...existing, pendingTag] });
+        if (existing.some((id) => String(id) === String(pendingTag.current))) return Promise.resolve();
+        return api.updateOrderStatus({ id: order.orderNo, tags: [...existing, pendingTag.current] });
       },
       rowLabel: (order) => `#${order.orderNo}`,
       onSettled: refreshOrders
@@ -275,10 +290,14 @@ export default function OrderList() {
     },
     {
       key: 'items',
-      label: 'Items',
+      label: 'Ready / Total',
       align: 'center',
       hideBelow: 'lg',
-      render: (order) => <span className="font-medium tabular-nums text-slate-700">{order.items?.length || 0}</span>
+      render: (order) => (
+        <span className="whitespace-nowrap font-medium tabular-nums text-slate-700" title="Ready pieces / total pieces (includes packed, shipped and delivered)">
+          {order.readyItemCount ?? 0} / {order.itemCount ?? order.items?.reduce((sum, item) => sum + Number(item.quantity || 1), 0) ?? 0}
+        </span>
+      )
     },
     {
       key: 'createdBy',
@@ -348,61 +367,98 @@ export default function OrderList() {
         </Link>
       </PageHeader>
 
+      <section className="card-ui overflow-hidden" aria-label="Order search and filters">
+        <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
       <ListToolbar
+        searchClassName="sm:max-w-xl"
         search={search}
         onSearchChange={setSearch}
-        onSubmit={() => setPage(1)}
+        onSubmit={() => patchFilters({ search })}
         searchPlaceholder="Search order, customer or phone…"
-        onReset={() => {
-          setSearch('');
-          setStatus('');
-          setView('active');
-          setSortBy('estimatedDelivery');
-          setSortOrder('asc');
-          setPage(1);
-        }}
+        onRefresh={refetch}
+        refreshing={isFetching}
         right={
           <Segmented
             label="Order table view"
             options={[
               { id: 'summary', label: 'Summary', icon: MdViewList },
-              { id: 'compact', label: 'Compact details', icon: MdTableRows }
+              { id: 'compact', label: 'Detailed', icon: MdTableRows }
             ]}
             value={tableView}
             onChange={(id) => {
-              setTableView(id);
-              setPage(1);
+              patchFilters({ tableView: id });
             }}
           />
         }
-      >
-        <select
-          value={view}
-          onChange={(event) => {
-            setView(event.target.value);
-            setStatus('');
-            setPage(1);
-          }}
-          className="select-ui min-w-[140px]"
-          aria-label="Order visibility"
-        >
-          <option value="active">Open orders</option>
-          <option value="all">All orders</option>
-        </select>
-        <StatusSelect
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value);
-            setPage(1);
-          }}
-          statuses={statuses}
-          placeholder={view === 'active' ? 'All open statuses' : 'All statuses'}
-          className="select-ui min-w-[155px]"
-          aria-label="Fulfillment status"
-        />
-      </ListToolbar>
+      />
+        </div>
+        <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-[1.4fr_.9fr_1fr_1.1fr]">
+        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-slate-600">
+          Channel
+          <select className="select-ui w-full min-w-0" value={channel === 'branch' ? 'branch:' + channelBranch : channel} onChange={(e) => {
+            const value = e.target.value;
+            patchFilters(value.startsWith('branch:') ? { channel: 'branch', channelBranch: value.slice(7) } : { channel: value, channelBranch: '' });
+          }}>
+            <option value="orders">All order channels</option>
+            <option value="online">00 - Website</option>
+            <option value="admin">01 - Contact center</option>
+            {branches.map((b) => <option key={b.id} value={'branch:' + b.id}>{b.orderChannelCode ? b.orderChannelCode + ' - ' : ''}{b.name}{b.deletedAt ? ' (archived)' : ''}</option>)}
+          </select>
+        </label>
+        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-slate-600">
+          Orders
+          <select className="select-ui w-full min-w-0" value={view} onChange={(e) => patchFilters({ view: e.target.value, status: '', preset: '' })}>
+            <option value="active">Open orders</option><option value="all">All orders</option>
+          </select>
+        </label>
+        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-slate-600">
+          Fulfilment status
+          <StatusSelect value={status} onChange={(e) => patchFilters({ status: e.target.value, preset: '' })} statuses={statuses} placeholder="All statuses" className="select-ui w-full min-w-0" />
+        </label>
+        <label className="grid min-w-0 gap-1.5 text-xs font-medium text-slate-600">
+          Payment
+          <select className="select-ui w-full min-w-0" value={paymentStatus} onChange={(e) => patchFilters({ paymentStatus: e.target.value, preset: preset === 'unpaid' ? '' : preset })}>
+            <option value="">Any payment status</option><option value="unpaid">Unpaid / balance due</option>
+            <option value="pending_verification">Pending verification</option><option value="paid">Paid</option><option value="refunded">Refunded</option>
+          </select>
+        </label>
+        </div>
+        {optionsQuery.isError && <p role="alert" className="px-4 pb-3 text-sm text-rose-700 sm:px-5">Channel and staff filters could not be loaded. <button type="button" className="underline" onClick={() => optionsQuery.refetch()}>Retry</button></p>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:px-5">
+          <div className="flex flex-wrap items-center gap-1" aria-label="Order shortcuts">
+            {[['', 'All open'], ['overdue', 'Overdue'], ['due-today', 'Due today'], ['ready', 'Products ready'], ['unpaid', 'Payment pending']].map(([id, label]) => {
+              const active = preset === id && (id !== '' || (view === 'active' && !status));
+              return <button key={id} type="button" aria-pressed={active} className={'inline-flex min-h-9 items-center rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ' + (active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200/70 hover:text-slate-900')} onClick={() => patchFilters({ preset: id, status: '', view: 'active', paymentStatus: id === 'unpaid' ? '' : paymentStatus })}>{label}</button>;
+            })}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => { setSearch(''); router.replace('/orders', { scroll: false }); }} className="btn-quiet btn-sm gap-1.5">
+              <MdFilterAltOff size={15} aria-hidden /> Clear filters
+            </button>
+            <span className="h-5 w-px bg-slate-200" aria-hidden />
+            <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-700 transition hover:bg-slate-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" aria-expanded={moreFiltersOpen} aria-controls="order-additional-filters" onClick={() => setMoreFiltersOpen((open) => !open)}>
+              <MdTune size={16} aria-hidden /> More filters
+              {moreFilterCount > 0 && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-700">{moreFilterCount}</span>}
+              <MdExpandMore size={17} className={moreFiltersOpen ? 'rotate-180' : ''} aria-hidden />
+            </button>
+          </div>
+        </div>
+        <div id="order-additional-filters" hidden={!moreFiltersOpen} className="border-t border-slate-200 px-4 py-4 sm:px-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 [&_label]:min-w-0 [&_select]:w-full">
+          <label className="grid gap-1 text-xs font-medium text-slate-600">Date type<select className="select-ui" value={dateField} onChange={(e) => patchFilters({ dateField: e.target.value })}><option value="createdAt">Created date</option><option value="estimatedDelivery">Promised delivery date</option></select></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">From<input type="date" className="input-ui" value={from} max={to || undefined} onChange={(e) => patchFilters({ from: e.target.value })} /></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">To<input type="date" className="input-ui" value={to} min={from || undefined} onChange={(e) => patchFilters({ to: e.target.value })} /></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">Created by<select className="select-ui" value={createdBy} onChange={(e) => patchFilters({ createdBy: e.target.value })}><option value="">Any staff member</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">Tag<select className="select-ui" value={tag} onChange={(e) => patchFilters({ tag: e.target.value })}><option value="">Any tag</option>{orderTags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">Delivery type<select className="select-ui" value={deliveryType} onChange={(e) => patchFilters({ deliveryType: e.target.value })}><option value="">Any delivery type</option><option value="regular">Regular</option><option value="urgent">Urgent</option><option value="sameDay">Same day</option></select></label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">Courier<select className="select-ui" value={courier} onChange={(e) => patchFilters({ courier: e.target.value })}><option value="">Any courier</option><option value="pathao">Pathao</option><option value="steadfast">Steadfast</option><option value="carrybee">CarryBee</option></select></label>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">Date ranges include the whole day in Bangladesh time.</p>
+        </div>
+      </section>
 
-      {isError && !data ? (
+
+      {isError ? (
         <ErrorState error={error} title="Orders could not be loaded" onRetry={refetch} />
       ) : tableView === 'compact' ? (
         <CompactOrdersTable

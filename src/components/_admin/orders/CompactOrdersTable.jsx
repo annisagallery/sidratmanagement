@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { orderChannelLabel } from 'src/utils/orderChannel';
 import { MdArrowDownward, MdArrowUpward, MdChevronRight, MdInbox, MdUnfoldMore } from 'react-icons/md';
 
 import Pagination from 'src/components/_admin/ui/Pagination';
@@ -55,15 +56,7 @@ const itemVariant = (item) =>
     .filter(Boolean)
     .join(' / ');
 
-const sourceLabel = (order) => {
-  if (order.source === 'showroom') return 'Showroom';
-  const dueGap =
-    order.estimatedDelivery && order.createdAt
-      ? new Date(order.estimatedDelivery).getTime() - new Date(order.createdAt).getTime()
-      : 0;
-  if (order.source === 'pos' && dueGap > 60 * 60 * 1000) return 'Showroom';
-  return { online: 'Online', admin: 'CC', pos: 'POS' }[order.source] || 'Online';
-};
+const sourceLabel = orderChannelLabel;
 
 function Tags({ tags = [] }) {
   if (!tags.length) return null;

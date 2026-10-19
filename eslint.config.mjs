@@ -9,6 +9,7 @@ export default defineConfig([
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'react/prop-types': 'off',
+      'react/jsx-key': ['error', { checkFragmentShorthand: true, checkKeyMustBeforeSpread: true, warnOnDuplicates: true }],
       'react/no-unescaped-entities': 'off',
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/purity': 'warn',

@@ -3,24 +3,14 @@ import { useQuery } from 'react-query';
 import { FiCheck, FiGlobe } from 'react-icons/fi';
 import * as api from 'src/services';
 
-// Where a campaign's price applies.
-//
-// The storefront is itself a branch — code ECOM, "Online Store" — so it appears
-// in this list like any other. Leaving it unticked is what keeps a
-// branch-only campaign off the website, both from the campaign pages and from
-// the prices the storefront quotes.
-//
-// Ticking nothing means the campaign runs everywhere. That is not a shortcut:
-// it is what every campaign created before branch targeting looks like, and
-// they must keep discounting exactly as they did. The panel says so plainly
-// rather than leaving an empty list looking like a mistake.
+// Campaign sales channels are independent of physical fulfilment locations.
 
-export default function CampaignBranchPicker({ selected, onChange }) {
+export default function CampaignBranchPicker({ selected, onChange, salesChannels = [], onChannelsChange }) {
   const { data, isLoading, isError, refetch } = useQuery('admin-branches-campaign', api.adminGetBranches);
 
-  const branches = (data?.data || []).filter((b) => !b.deletedAt && b.type !== 'HQ');
+  const branches = (data?.data || []).filter((b) => !b.deletedAt && b.code !== 'ECOM' && b.type !== 'ECOM');
   const chosen = new Set(selected);
-  const everywhere = chosen.size === 0;
+  const everywhere = chosen.size === 0 && salesChannels.length === 0;
 
   const toggle = (id) => {
     const next = new Set(chosen);
@@ -36,7 +26,7 @@ export default function CampaignBranchPicker({ selected, onChange }) {
         {!everywhere && (
           <button
             type="button"
-            onClick={() => onChange([])}
+            onClick={() => { onChange([]); onChannelsChange([]); }}
             className="btn-ghost btn-sm"
           >
             Run everywhere
@@ -44,6 +34,14 @@ export default function CampaignBranchPicker({ selected, onChange }) {
         )}
       </div>
 
+      <label className="block text-sm font-medium text-slate-700">
+        Sales channel
+        <select className="input-ui mt-1" value={salesChannels.length === 1 ? salesChannels[0] : 'all'} onChange={(e) => onChannelsChange(e.target.value === 'all' ? [] : [e.target.value])}>
+          <option value="all">Online and POS</option>
+          <option value="online">Online only</option>
+          <option value="showroom">POS only</option>
+        </select>
+      </label>
       {everywhere ? (
         <p className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
           <FiGlobe className="mt-0.5 shrink-0 text-slate-500" size={14} aria-hidden />
@@ -51,7 +49,7 @@ export default function CampaignBranchPicker({ selected, onChange }) {
         </p>
       ) : (
         <p className="text-[13px] text-slate-500">
-          Only the chosen branches use this price. Everywhere else pays the normal price.
+          The selected channel uses this price. Branch choices below limit POS sales; online sales use the online channel setting.
         </p>
       )}
 
@@ -72,7 +70,7 @@ export default function CampaignBranchPicker({ selected, onChange }) {
         <div className="space-y-1.5">
           {branches.map((branch) => {
             const isOn = chosen.has(branch.id);
-            const isWeb = branch.code === 'ECOM';
+            const suppliesOnline = branch.isOnlineFulfillment;
             return (
               <button
                 key={branch.id}
@@ -94,9 +92,9 @@ export default function CampaignBranchPicker({ selected, onChange }) {
                   {isOn && <FiCheck size={11} aria-hidden />}
                 </span>
                 <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{branch.name}</span>
-                {isWeb && (
+                {suppliesOnline && (
                   <span className="section-label shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5">
-                    Website
+                    Supplies online
                   </span>
                 )}
               </button>

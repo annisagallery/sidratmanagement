@@ -74,7 +74,7 @@ function BranchDrawer({ initial, onSave, onClose, saving }) {
     setErrors(next);
     if (Object.keys(next).length) return;
     onSave({
-      ...form,
+      ...Object.fromEntries(Object.keys(EMPTY).map((key) => [key, form[key]])),
       weeklyHours: seedWeek(form.weeklyHours, {
         offDay: form.offDay,
         openTime: form.openTime,
@@ -201,7 +201,8 @@ export default function BranchesManager() {
   const [hqForm, setHqForm] = useState({ address: '' });
 
   const { data, isLoading, isError, error, refetch } = useQuery('admin-branches', adminGetBranches);
-  const all = data?.data ?? [];
+  const all = (data?.data ?? []).filter((b) => b.code !== 'ECOM' && b.type !== 'ECOM');
+  const onlineBranch = all.find((b) => b.isOnlineFulfillment);
   const hq = all.find((b) => b.type === 'HQ' || b.code === 'HQ');
   const branches = all.filter((b) => b.type !== 'HQ' && b.code !== 'HQ');
 
@@ -211,7 +212,9 @@ export default function BranchesManager() {
     return acc;
   }, {});
 
-  const invalidate = () => qc.invalidateQueries('admin-branches');
+  const invalidate = () => qc.invalidateQueries({
+    predicate: (query) => ['admin-branches', 'admin-branches-calendar', 'admin-branches-campaign', 'inventory-branches', 'inventory-branchs'].includes(query.queryKey[0])
+  });
 
   const createMut = useMutation(adminCreateBranch, {
     onSuccess: () => {
@@ -264,11 +267,24 @@ export default function BranchesManager() {
   else
     body = (
       <>
+        <Panel title="Online fulfilment" description="Online orders reserve stock at this physical location. Sales reports distinguish online and POS using the sales channel.">
+          <Field label="Branch supplying online orders" help="Changing this setting affects new orders. Existing orders keep their original stock location.">
+            <select
+              className="input-ui sm:max-w-sm"
+              value={onlineBranch?.id || ''}
+              disabled={updateMut.isLoading}
+              onChange={(e) => updateMut.mutate({ id: e.target.value, isOnlineFulfillment: true })}
+            >
+              {!onlineBranch && <option value="" disabled>Choose a fulfilment branch</option>}
+              {all.filter((b) => b.isActive).map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+            </select>
+          </Field>
+        </Panel>
         {/* HQ — system location (not a branch, never on storefront) */}
         {hq && (
           <Panel
             title="Head office"
-            description="A system location for online inventory. It is not a branch and never appears on the storefront."
+            description="The head office holds physical stock and receives production. Its online fulfilment setting is managed above."
             action={
               !editHq && (
                 <button
@@ -314,7 +330,7 @@ export default function BranchesManager() {
                   <p className="text-[13px] font-medium text-slate-900">
                     HQ <span className="ops-code ml-1 text-xs font-normal text-slate-500">{hq.code}</span>
                     <Badge tone="info" className="ml-2">
-                      Online inventory
+                      Head office
                     </Badge>
                   </p>
                   <p className="mt-0.5 text-[13px] text-slate-600">{hq.address || 'No address saved'}</p>
@@ -343,14 +359,16 @@ export default function BranchesManager() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[13px] font-semibold text-slate-900">{b.name}</p>
                         <span className="ops-code text-xs text-slate-500">{b.code}</span>
+                        {b.orderChannelCode && <Badge>Order channel {b.orderChannelCode}</Badge>}
                         {!b.isActive && <Badge>Inactive</Badge>}
+                        {b.isOnlineFulfillment && <Badge tone="info">Online fulfilment</Badge>}
                       </div>
                       <p className="mt-0.5 text-[13px] text-slate-600">{b.address}</p>
                       <BranchMeta branch={b} />
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="hidden text-[13px] text-slate-600 sm:inline">{b.isActive ? 'Active' : 'Inactive'}</span>
-                      <Switch checked={b.isActive} onChange={() => toggleActive(b)} label={`${b.name} is active`} disabled={updateMut.isLoading} />
+                      <Switch checked={b.isActive} onChange={() => toggleActive(b)} label={`${b.name} is active`} disabled={updateMut.isLoading || b.isOnlineFulfillment} />
                       <button type="button" onClick={() => setDrawer({ branch: b })} className="btn-ghost btn-sm">
                         Edit
                       </button>

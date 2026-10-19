@@ -1,5 +1,7 @@
 'use client';
 
+import { orderChannelLabel } from 'src/utils/orderChannel';
+
 /**
  * The reference column: who, where, and under what terms.
  *
@@ -14,22 +16,7 @@ import { FiEdit2, FiFileText, FiMail, FiMapPin, FiMessageCircle, FiPhone } from 
 
 import { Card, CopyButton, Row, money, tagColor, tagId, tagName } from './parts';
 
-const HOUR_MS = 60 * 60 * 1000;
-
-/**
- * Where the order came from. Older manual showroom orders were stored as POS,
- * so a due date materially later than checkout is what separates them from an
- * instant counter sale.
- */
-export function channelLabel(order) {
-  if (order.source === 'showroom') return 'Showroom';
-  const dueGap =
-    order.estimatedDelivery && order.createdAt
-      ? new Date(order.estimatedDelivery).getTime() - new Date(order.createdAt).getTime()
-      : 0;
-  if (order.source === 'pos' && dueGap > HOUR_MS) return 'Showroom';
-  return { online: 'Online store', admin: 'Contact centre', pos: 'POS counter' }[order.source] || 'Online store';
-}
+export const channelLabel = orderChannelLabel;
 
 const DELIVERY_LABEL = { regular: 'Regular', urgent: 'Urgent', sameDay: 'Same day' };
 

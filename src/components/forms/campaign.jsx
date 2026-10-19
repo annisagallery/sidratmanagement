@@ -90,7 +90,8 @@ export default function CampaignForm({ data: existing }) {
     status: existing?.status || 'active',
     products: existing?.products || [],
     // Empty means "everywhere" — see CampaignBranchPicker.
-    branches: (existing?.branches || []).map((b) => b.id ?? b)
+    branches: (existing?.branches || []).map((b) => b.id ?? b),
+    salesChannels: existing?.salesChannels || []
   });
 
   const put = (k, v) => {
@@ -263,7 +264,7 @@ export default function CampaignForm({ data: existing }) {
             </div>
           </Panel>
 
-          <CampaignBranchPicker selected={form.branches} onChange={(branches) => setForm((p) => ({ ...p, branches }))} />
+          <CampaignBranchPicker selected={form.branches} onChange={(branches) => setForm((p) => ({ ...p, branches }))} salesChannels={form.salesChannels} onChannelsChange={(salesChannels) => setForm((p) => ({ ...p, salesChannels }))} />
 
           <ImageSlot
             title="Cover image"

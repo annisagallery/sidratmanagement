@@ -21,6 +21,7 @@ export default function ListToolbar({
   onSearchChange,
   onSubmit,
   searchPlaceholder = 'Search…',
+  searchClassName = 'sm:max-w-sm',
   onReset,
   onRefresh,
   refreshing = false,
@@ -65,7 +66,7 @@ export default function ListToolbar({
       className="flex flex-wrap items-center gap-2"
     >
       {onSearchChange && (
-        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+        <div className={`relative min-w-[220px] flex-1 ${searchClassName}`}>
           <MdSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} aria-hidden />
           <input
             type="search"

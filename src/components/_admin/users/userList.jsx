@@ -36,8 +36,8 @@ function Avatar({ name }) {
 const StatusBadge = ({ status }) => <RecordStatus status={status} />;
 
 /**
- * Customers page: storefront accounts only (no access role). Staff — and
- * turning a customer into staff — live in HRM → People.
+ * Customers include storefront accounts and buyers with staff access roles.
+ * Staff access is managed separately in HRM → People.
  */
 export default function UserList() {
   const router = useRouter();

@@ -1,6 +1,6 @@
 'use client';
 import { useRouter } from 'next-nprogress-bar';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import Link from 'next/link';
 import { adminAdjustCash, getUserCashList } from 'src/services';
@@ -47,7 +47,7 @@ export default function CashList() {
 
   // Amount and reason are collected once and applied to every selected account —
   // each adjustment still lands as its own ledger entry carrying that reason.
-  let pendingAdjustment = null;
+  const pendingAdjustment = useRef(null);
 
   const collectAdjustment = (type) => async (rows) => {
     const amount = await promptText({
@@ -79,12 +79,12 @@ export default function CashList() {
     });
     if (!reason) return false;
 
-    pendingAdjustment = { amount: value, type, message: reason };
+    pendingAdjustment.current = { amount: value, type, message: reason };
     return true;
   };
 
   const applyAdjustment = (user) =>
-    adminAdjustCash({ userId: user.id, ...pendingAdjustment });
+    adminAdjustCash({ userId: user.id, ...pendingAdjustment.current });
 
   const bulkActions = [
     {

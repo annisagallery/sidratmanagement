@@ -106,7 +106,7 @@ function OrdersTab({ userPhone }) {
           </thead>
           <tbody>
             {orders.map((o) => (
-              <tr key={o.id}>
+              <tr key={o.orderNo}>
                 <td>
                   <Link href={`/orders/${o.orderNo}`} className="ops-code font-semibold text-slate-900 hover:underline">
                     #{o.orderNo}
@@ -465,7 +465,7 @@ export default function UserDetails({ userPhone }) {
 
       <KpiGrid>
         <StatTile label="Orders" value={(stats?.totalOrders || 0).toLocaleString()} hint={`${stats?.delivered || 0} delivered`} />
-        <StatTile label="Total spent" value={money(stats?.totalSpent)} hint={`${stats?.cancelled || 0} cancelled`} />
+        <StatTile label="Total spent" value={money(stats?.totalSpent)} hint={`(${money(stats?.pendingSpent)} pending)`} title="Successfully delivered orders only" />
         <StatTile label="Cashback balance" value={money(stats?.cashBalance)} hint={`${money(stats?.cashEarned)} earned in total`} />
         <StatTile label="Coupons used" value={(stats?.couponUses || 0).toLocaleString()} hint="Redemptions" />
       </KpiGrid>
