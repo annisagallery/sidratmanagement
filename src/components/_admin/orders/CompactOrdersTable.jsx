@@ -8,7 +8,8 @@ import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState, TableSkeleton } from 'src/components/_admin/ui/TableStates';
 import { BulkActionBar, SelectionCheckbox, useBulkSelection } from 'src/components/_admin/ui/bulkSelection';
 import { StatusBadge } from 'src/components/_admin/shared/StatusBadge';
-import { fDate, fDateTime } from 'src/utils/formatTime';
+import { fDateTime } from 'src/utils/formatTime';
+import OrderSignals, { orderRowTone } from './OrderSignals';
 
 /**
  * The detailed orders view — one row per order item, grouped by order.
@@ -33,14 +34,13 @@ const money = (amount) =>
     maximumFractionDigits: 0
   }).format(Number(amount) || 0);
 
-const date = (value) => (value ? fDate(value) : '—');
 const dateTime = (value) => (value ? fDateTime(value) : '—');
 const valueOrDash = (value) => (value === 0 || value ? value : '—');
 
 const itemName = (item) => item.pid?.name || item.product?.name || item.productSnapshot?.name || 'Unknown product';
 
-const itemCode = (item) =>
-  item.packingBarcode || item.assignedUnit?.barcode || item.productSnapshot?.code || item.pid?.code || null;
+const productionCode = (item) =>
+  item.assignedUnit?.barcode || (item.packVerificationSource === 'production-unit' ? item.packingBarcode : null);
 
 /**
  * The variation, the way a picker says it: values only, slash-separated.
@@ -104,7 +104,7 @@ function OrderCell({ order }) {
 function CustomerCell({ order }) {
   const address = order.shippingAddress || {};
   const phone = address.phone || order.user?.phone;
-  const location = [address.address, address.upazila, address.district].filter(Boolean).join(', ');
+  const location = [address.upazila, address.district].filter(Boolean).join(', ');
   return (
     <div>
       <p className="font-semibold leading-4 text-slate-900">{address.name || order.user?.name || 'Guest customer'}</p>
@@ -115,7 +115,7 @@ function CustomerCell({ order }) {
       ) : (
         <p className="mt-0.5 text-xs text-slate-500">No phone</p>
       )}
-      <p className="mt-0.5 text-xs leading-4 text-slate-500">{location || 'No delivery address'}</p>
+      <p className="mt-0.5 text-xs leading-4 text-slate-500">{location || 'Location not set'}</p>
     </div>
   );
 }
@@ -124,7 +124,7 @@ function FulfillmentCell({ order, statuses }) {
   return (
     <div>
       <StatusBadge status={order.status} statuses={statuses} />
-      <p className="mt-1 text-xs font-semibold text-slate-500">Due {date(order.estimatedDelivery)}</p>
+      <OrderSignals order={order} />
     </div>
   );
 }
@@ -146,12 +146,11 @@ function ItemCell({ item }) {
 }
 
 function ItemStateCell({ item, itemStatuses }) {
-  const code = itemCode(item);
+  const code = productionCode(item);
   return (
     <div>
       <StatusBadge status={item.status} statuses={itemStatuses} />
       {code ? <p className="mt-1 font-mono text-xs font-semibold text-slate-600">{code}</p> : null}
-      {item.deliveryDate ? <p className="mt-0.5 text-xs text-slate-500">Due {date(item.deliveryDate)}</p> : null}
     </div>
   );
 }
@@ -314,9 +313,9 @@ export default function CompactOrdersTable({
                 const selected = isSelected(key);
                 const groupColor = selected
                   ? 'bg-[var(--brand-soft)]'
-                  : orderIndex % 2 === 0
+                  : orderRowTone(order) || (orderIndex % 2 === 0
                     ? 'bg-white'
-                    : 'bg-slate-50/70';
+                    : 'bg-slate-50/70');
 
                 return items.map((item, itemIndex) => (
                   <tr
@@ -326,7 +325,7 @@ export default function CompactOrdersTable({
                   >
                     {itemIndex === 0 ? (
                       <>
-                        <td rowSpan={rowSpan} className="border-l-4 border-l-slate-900 px-2 py-2 text-center">
+                        <td rowSpan={rowSpan} className="px-2 py-2 text-center">
                           <SelectionCheckbox
                             checked={selected}
                             onChange={() => toggleRow(key, order)}

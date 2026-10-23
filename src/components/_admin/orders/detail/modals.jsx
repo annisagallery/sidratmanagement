@@ -379,6 +379,8 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
   const defaultAccount = options.find((option) => option.isDefault) || options[0];
 
   const [form, setForm] = useState({
+    method: 'courier',
+    employeeName: '',
     accountId: '',
     codAmount: String(meta?.suggestedCod ?? ''),
     weight: '0.5',
@@ -387,6 +389,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
     note: ''
   });
   const [accountError, setAccountError] = useState('');
+  const manual = form.method === 'manual';
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   // The default account is derived rather than written into state on load, so
@@ -399,7 +402,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
     () =>
       api.createOrderShipment({
         orderNo,
-        accountId,
+        ...(manual ? { provider: 'manual', employeeName: form.employeeName.trim() } : { accountId }),
         codAmount: Number(form.codAmount) || 0,
         weight: Number(form.weight) || 0.5,
         itemQuantity: Number(form.itemQuantity) || 1,
@@ -432,7 +435,11 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
   );
 
   const submit = () => {
-    if (!accountId) {
+    if (manual && !form.employeeName.trim()) {
+      setAccountError('Enter the employee name for this handoff.');
+      return;
+    }
+    if (!manual && !accountId) {
       setAccountError('Choose the courier account to book with.');
       return;
     }
@@ -443,19 +450,25 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
 
   return (
     <ModalShell
-      title={isResend ? 'Re-send parcel' : 'Send parcel to courier'}
+      title={manual ? 'Manual shipment' : isResend ? 'Re-send parcel' : 'Send parcel to courier'}
       subtitle={`Order #${orderNo}`}
       onClose={onClose}
       footer={
         <>
           <CancelButton onClose={onClose} disabled={send.isLoading} />
-          <SubmitButton onClick={submit} disabled={send.isLoading || !options.length}>
-            <FiTruck size={16} aria-hidden /> {send.isLoading ? 'Sending…' : isResend ? 'Re-send parcel' : 'Send parcel'}
+          <SubmitButton onClick={submit} disabled={send.isLoading || (!manual && !options.length)}>
+            <FiTruck size={16} aria-hidden /> {send.isLoading ? 'Saving…' : manual ? 'Record manual shipment' : isResend ? 'Re-send parcel' : 'Send parcel'}
           </SubmitButton>
         </>
       }
     >
       <div className="space-y-5">
+        <Field label="Shipment method">
+          <select className={selectClass} value={form.method} disabled={send.isLoading} onChange={(event) => { set('method', event.target.value); setAccountError(''); }}>
+            <option value="courier">Courier shipment</option>
+            <option value="manual">Manual shipment</option>
+          </select>
+        </Field>
         {isResend ? (
           <Notice tone="warn" icon={FiAlertTriangle} title="This creates a new consignment">
             The previous parcel was cancelled or returned. It stays in the shipment history.
@@ -473,7 +486,19 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
           </div>
         </div>
 
-        {loadingOptions ? (
+        {manual ? (
+          <div className="space-y-4">
+            <Field label="Employee name" required error={accountError} hint="Employee responsible for delivering this parcel." showHint>
+              <input className={fieldClass} value={form.employeeName} maxLength={150} disabled={send.isLoading} onChange={(event) => { set('employeeName', event.target.value); setAccountError(''); }} />
+            </Field>
+            <Field label="Cash to collect (৳)">
+              <input type="number" min="0" step="1" className={fieldClass} value={form.codAmount} disabled={send.isLoading} onChange={(event) => set('codAmount', event.target.value)} />
+            </Field>
+            <Field label="Delivery note" optional>
+              <textarea rows={3} className={fieldClass} value={form.note} disabled={send.isLoading} onChange={(event) => set('note', event.target.value)} />
+            </Field>
+          </div>
+        ) : loadingOptions ? (
           <div className="space-y-3" aria-busy="true">
             <div className="skeleton h-9 w-full" />
             <div className="grid grid-cols-2 gap-4">

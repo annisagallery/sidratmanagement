@@ -61,6 +61,7 @@ export default function DataTable({
   selectionLabel = 'rows',
   exportFileName = 'selected-rows.csv',
   onSelectionChange,
+  rowClassName,
   children,
   className = ''
 }) {
@@ -174,7 +175,7 @@ export default function DataTable({
                   tabIndex={onRowClick ? 0 : undefined}
                   aria-label={onRowClick && rowLabel ? rowLabel(row) : undefined}
                   aria-selected={selectable ? rowSelected : undefined}
-                  className={`${rowSelected ? '!bg-slate-50' : ''} ${onRowClick ? 'cursor-pointer' : ''}`}
+                  className={`${rowClassName?.(row) || ''} ${rowSelected ? '!bg-slate-50' : ''} ${onRowClick ? 'cursor-pointer' : ''}`}
                 >
                   {selectable && (
                     <td className="w-11 text-center" onClick={(event) => event.stopPropagation()}>

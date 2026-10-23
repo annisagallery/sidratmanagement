@@ -87,7 +87,7 @@ export default function ShipmentsCard({
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-800">
                         {PROVIDER_LABEL[shipment.provider] || shipment.provider}
-                        <span className="font-medium text-slate-500">{shipment.accountName}</span>
+                        <span className="font-medium text-slate-500">{shipment.employeeName || shipment.accountName}</span>
                         {shipment.attempt > 1 ? <Pill tone="neutral">Attempt {shipment.attempt}</Pill> : null}
                         {!shipment.isActive ? <Pill tone="neutral">Superseded</Pill> : null}
                       </p>
@@ -110,7 +110,7 @@ export default function ShipmentsCard({
 
                     <div className="flex shrink-0 items-center gap-2">
                       <ShipmentStatusPill status={shipment.status} />
-                      <button
+                      {shipment.provider !== 'manual' && <button
                         type="button"
                         onClick={() => onRefresh(id)}
                         disabled={refreshingId === id}
@@ -119,7 +119,7 @@ export default function ShipmentsCard({
                         className="btn-icon btn-icon-sm disabled:opacity-50"
                       >
                         <FiRefreshCw size={15} className={refreshingId === id ? 'animate-spin' : ''} aria-hidden />
-                      </button>
+                      </button>}
                       {url ? (
                         <a
                           href={url}

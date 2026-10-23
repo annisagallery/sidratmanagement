@@ -35,8 +35,9 @@ import Pagination from 'src/components/_admin/ui/Pagination';
 import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import { StatusBadge, StatusSelect, TagChips } from 'src/components/_admin/shared/StatusBadge';
 import { useStatuses } from 'src/components/_admin/shared/useStatuses';
-import { fDate, fDateTime } from 'src/utils/formatTime';
+import { fDateTime } from 'src/utils/formatTime';
 import CompactOrdersTable from './CompactOrdersTable';
+import OrderSignals, { OrderReadiness, orderRowTone } from './OrderSignals';
 
 const PAYMENT_TONE = { paid: 'success', unpaid: 'neutral', refunded: 'warning' };
 
@@ -49,7 +50,6 @@ function PaymentBadge({ status }) {
 }
 
 
-const fmtDate = (date) => (date ? fDate(date) : '—');
 
 const fmtMoney = (amount) =>
   new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 0 }).format(amount || 0);
@@ -120,11 +120,12 @@ export default function OrderList() {
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery(
     ['admin-orders', params],
     () => api.getOrdersByAdmin(params),
-    { keepPreviousData: true }
+    { keepPreviousData: true, refetchInterval: 60000 }
   );
   const filtered = Boolean(urlSearch || status || view !== 'active' || channel !== 'orders' || paymentStatus || from || to || preset || tag || deliveryType || courier || createdBy);
 
   const orders = data?.data || [];
+  const shortcutCounts = data?.shortcutCounts;
   const total = data?.total || 0;
   const totalPages = data?.count || 1;
   const sort = { by: sortBy, order: sortOrder, onSort: handleSort };
@@ -290,14 +291,10 @@ export default function OrderList() {
     },
     {
       key: 'items',
-      label: 'Ready / Total',
+      label: 'Products',
       align: 'center',
       hideBelow: 'lg',
-      render: (order) => (
-        <span className="whitespace-nowrap font-medium tabular-nums text-slate-700" title="Ready pieces / total pieces (includes packed, shipped and delivered)">
-          {order.readyItemCount ?? 0} / {order.itemCount ?? order.items?.reduce((sum, item) => sum + Number(item.quantity || 1), 0) ?? 0}
-        </span>
-      )
+      render: (order) => <OrderReadiness order={order} />
     },
     {
       key: 'createdBy',
@@ -321,7 +318,7 @@ export default function OrderList() {
       render: (order) => (
         <div className="min-w-[135px]">
           <StatusBadge status={order.status} statuses={statuses} />
-          <div className="mt-1.5 text-xs text-slate-500">Due {fmtDate(order.estimatedDelivery)}</div>
+          <OrderSignals order={order} />
         </div>
       )
     },
@@ -426,9 +423,18 @@ export default function OrderList() {
         {optionsQuery.isError && <p role="alert" className="px-4 pb-3 text-sm text-rose-700 sm:px-5">Channel and staff filters could not be loaded. <button type="button" className="underline" onClick={() => optionsQuery.refetch()}>Retry</button></p>}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:px-5">
           <div className="flex flex-wrap items-center gap-1" aria-label="Order shortcuts">
-            {[['', 'All open'], ['overdue', 'Overdue'], ['due-today', 'Due today'], ['ready', 'Products ready'], ['unpaid', 'Payment pending']].map(([id, label]) => {
+            {[['', 'All open'], ['overdue', 'Overdue'], ['due-today', 'Due today'], ['due-soon', 'Due soon'], ['ready', 'Products ready'], ['unpaid', 'Payment pending']].map(([id, label]) => {
               const active = preset === id && (id !== '' || (view === 'active' && !status));
-              return <button key={id} type="button" aria-pressed={active} className={'inline-flex min-h-9 items-center rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ' + (active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200/70 hover:text-slate-900')} onClick={() => patchFilters({ preset: id, status: '', view: 'active', paymentStatus: id === 'unpaid' ? '' : paymentStatus })}>{label}</button>;
+              const tone = id === 'overdue' ? 'text-rose-800 hover:bg-rose-100' : ['due-today', 'due-soon'].includes(id) ? 'text-amber-800 hover:bg-amber-100' : id === 'ready' ? 'text-emerald-800 hover:bg-emerald-100' : 'text-slate-600 hover:bg-slate-200/70 hover:text-slate-900';
+              const dot = id === 'overdue' ? 'bg-rose-500' : ['due-today', 'due-soon'].includes(id) ? 'bg-amber-500' : id === 'ready' ? 'bg-emerald-500' : '';
+              const count = shortcutCounts?.[id || 'all'];
+              return <button key={id} type="button" aria-pressed={active} title={id === 'due-soon' ? 'Due in the next two days, excluding today (Bangladesh time)' : undefined} className={'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 ' + (active ? 'bg-slate-900 text-white shadow-sm' : tone)} onClick={() => patchFilters({ preset: id, status: '', view: 'active', paymentStatus: id === 'unpaid' ? '' : paymentStatus })}>
+                {dot && <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-white' : dot}`} />}
+                {label}
+                <span className={`min-w-6 rounded px-1.5 py-0.5 text-center text-xs tabular-nums ${active ? 'bg-white/15 text-white' : 'bg-slate-200/70 text-slate-700'} ${isFetching ? 'opacity-60' : ''}`}>
+                  {count == null ? '—' : Number(count).toLocaleString()}
+                </span>
+              </button>;
             })}
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -465,7 +471,7 @@ export default function OrderList() {
           orders={orders}
           statuses={statuses}
           itemStatuses={itemStatuses}
-          isLoading={isLoading || isFetching}
+          isLoading={isLoading}
           page={page}
           totalPages={totalPages}
           total={total}
@@ -481,6 +487,7 @@ export default function OrderList() {
       ) : (
         <DataTable
           columns={columns}
+          rowClassName={orderRowTone}
           data={orders}
           sort={sort}
           rowKey={(order) => order.orderNo}

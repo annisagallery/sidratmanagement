@@ -12,6 +12,7 @@ import * as api from 'src/services';
 import { usePermissions } from 'src/context/PermissionsContext';
 import { addressDistrict, addressUpazila, districts, upazilasForDistrict } from 'src/utils/bangladeshAddress';
 import AdvancePaymentsPanel from './AdvancePaymentsPanel';
+import { availableForVariation, availabilityForOrderLine, findOrderVariation as findVariation, orderStockProblems } from 'src/utils/orderStock.mjs';
 
 // Items, prices, discount and shipping can change only until packing starts —
 // the server refuses them afterwards (services/orderWorkflow EDITABLE_ORDER_STATUSES).
@@ -126,20 +127,6 @@ const getAttrDimensions = (product = {}) => {
   ];
 };
 
-const findVariation = (variations = [], attrs = {}) => {
-  return (
-    variations.find((variation) => {
-      const vAttrs = variation.attributes || [];
-
-      return vAttrs.every((attr) => {
-        const name = attr.attributeName || attr.name;
-        const value = attr.valueName || attr.value;
-        return attrs[name] === value;
-      });
-    }) || null
-  );
-};
-
 // "Type" (Standard / Custom) is this screen's switch for a custom piece; the
 // order carries it as isCustom. It is only sent as an attribute for items that
 // were saved with it before, so their stored selection still compares equal.
@@ -210,11 +197,6 @@ const pickPrice = (product, variation) => {
   return { regularPrice, discountPrice, baseRegular, baseDiscount };
 };
 
-const availableForVariation = (variation = {}) =>
-  variation.available != null
-    ? Number(variation.available)
-    : Number(variation.presaleAvailable || (variation.overSale ? 999999 : 0));
-
 const buildItem = (product) => {
   const variations = product.variations || [];
   const firstVariation = variations.find((variation) => availableForVariation(variation) > 0) || variations[0] || null;
@@ -244,9 +226,12 @@ const buildItem = (product) => {
     discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
     catalogRegular: Number(prices.regularPrice || 0),
     catalogDiscount: prices.discountPrice != null ? Number(prices.discountPrice) : null,
-    stock: Math.max(0, availableForVariation(firstVariation) - Number(firstVariation?.presaleAvailable || 0)),
+    stock: Math.max(0, Number(firstVariation?.stock || 0)),
     overSale: Boolean(firstVariation?.overSale ?? product.overSale),
     availableQuantity: availableForVariation(firstVariation),
+    productionCapacity: Number(firstVariation?.productionCapacity || 0),
+    backorderCapacity: Number(firstVariation?.backorderCapacity || 0),
+    materialBackorderAvailable: Number(product.materialBackorderAvailable || 0),
     preorderCapacity: firstVariation?.preorderCapacity ?? null,
     qty: 1,
     customizeDetails: '',
@@ -300,18 +285,18 @@ const sm = 'input-ui h-8 px-2 text-[13px] sm:text-[13px]';
 // the label sits next to its value instead of in a row of small print above.
 // They are see-through, taking the white or grey of the card they sit on.
 const lineField =
-  'flex h-7 items-center gap-1.5 rounded-md border border-slate-300/80 bg-transparent px-2 transition hover:border-slate-400 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_3px_var(--brand-ring)]';
+  'flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 transition hover:border-slate-300 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_2px_var(--brand-ring)]';
 const lineLabel = 'shrink-0 text-xs text-slate-500';
 const lineControl =
   'h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed';
 // The desk's order panel uses the same named-box fields, a step taller.
 const deskField =
-  'flex h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 transition hover:border-slate-300 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_3px_var(--brand-ring)]';
+  'flex h-9 min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 transition hover:border-slate-300 focus-within:!border-[var(--brand-strong)] focus-within:shadow-[0_0_0_2px_var(--brand-ring)]';
 
 function DeskField({ label, required = false, invalid = false, className = '', children }) {
   return (
     <label className={`${deskField} ${invalid ? '!border-rose-400' : ''} ${className}`}>
-      <span className="shrink-0 text-xs text-slate-500">
+      <span className="shrink-0 text-xs font-medium text-slate-500">
         {label}
         {required ? (
           <span className="ml-0.5 text-rose-700" aria-hidden>
@@ -481,7 +466,7 @@ function POSProductSearch({ onAdd, autoFocus = false, large = false }) {
         onKeyDown={handleKeyDown}
         placeholder="Search products by name or code — ↑↓ to choose, Enter to add"
         autoFocus={autoFocus}
-        className={`${inp} h-10 pl-9`}
+        className={`${inp} ${large ? '!h-10 !bg-white !pl-9 !text-sm' : 'h-10 pl-9'}`}
         autoComplete="off"
         role="combobox"
         aria-label="Search products to add"
@@ -506,10 +491,7 @@ function POSProductSearch({ onAdd, autoFocus = false, large = false }) {
         >
           {results.map((product, index) => {
             const key = product.id || product.id || product.slug;
-            const stock =
-              product.stock ??
-              product.quantity ??
-              product.variations?.reduce((s, v) => s + availableForVariation(v), 0);
+            const stock = (product.variations || []).reduce((sum, variation) => sum + Number(variation.stock || 0), 0);
 
             return (
               <button
@@ -526,7 +508,11 @@ function POSProductSearch({ onAdd, autoFocus = false, large = false }) {
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-slate-900">{product.name || product.title}</p>
-                  <p className="text-xs text-slate-500">{stock ?? '—'} in stock</p>
+                  <p className="text-xs text-slate-500">
+                    {stock} ready to send
+                    {product.productionReadiness?.canMake ? ' · Can make more' : ''}
+                    {product.variations?.some((variation) => variation.backorderCapacity > 0) ? ' · Approved backorder available' : ''}
+                  </p>
                 </div>
                 <span className="shrink-0 text-[13px] font-semibold tabular-nums text-slate-700">
                   {fmt(product.price || product.regularPrice)}
@@ -543,6 +529,7 @@ function POSProductSearch({ onAdd, autoFocus = false, large = false }) {
 // ─── Products Table ──────────────────────────────────────────────────────────
 function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, canOverridePrice = true, missing = false }) {
   const compact = useContext(Compact);
+  const displayedItems = locked ? items : items.map(item => availabilityForOrderLine(items, item));
   const updateAttrs = (item, attrName, value) => {
     let selectedAttrs = { ...item.selectedAttrs, [attrName]: value };
     const isCustom = selectedAttrs['Type'] === 'Custom';
@@ -556,20 +543,22 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
       });
     }
 
-    const matched = findVariation(item.variations, selectedAttrs);
+    const matched = findVariation(item.variations, selectedAttrs, item.selectedVariationId);
     const prices = pickPrice({ price: item.baseRegular, priceSale: item.baseDiscount }, matched || undefined);
 
     onUpdate(item._key, {
       selectedAttrs,
-      selectedVariationId: matched?.id || matched?.id || item.selectedVariationId || null,
+      selectedVariationId: matched?.id || null,
       regularPrice: Number(prices.regularPrice || item.baseRegular || 0),
       discountPrice: prices.discountPrice != null ? Number(prices.discountPrice) : null,
       catalogRegular: Number(prices.regularPrice || item.baseRegular || 0),
       catalogDiscount: prices.discountPrice != null ? Number(prices.discountPrice) : null,
-      stock: isCustom ? 0 : Math.max(0, availableForVariation(matched) - Number(matched?.presaleAvailable || 0)),
-      overSale: isCustom ? true : Boolean(matched?.overSale ?? item.overSale),
+      stock: isCustom ? 0 : Math.max(0, Number(matched?.stock || 0)),
+      overSale: Boolean(matched?.overSale),
       isCustom,
-      availableQuantity: isCustom ? null : availableForVariation(matched),
+      availableQuantity: availableForVariation(matched, isCustom),
+      productionCapacity: Number(matched?.productionCapacity || 0),
+      backorderCapacity: Number(matched?.backorderCapacity || 0),
       preorderCapacity: matched?.preorderCapacity ?? null
     });
   };
@@ -577,7 +566,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
   if (!items.length) {
     return (
       <div
-        className={`rounded-lg border border-dashed px-4 text-center ${compact ? 'm-3 py-6' : 'py-10'} ${
+        className={`rounded-md border border-dashed px-4 text-center ${compact ? 'm-3 py-8' : 'py-10'} ${
           missing ? 'border-rose-300 bg-rose-50/50' : 'border-slate-300 bg-slate-50'
         }`}
       >
@@ -589,33 +578,26 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
 
   return (
     compact ? (
-      // The desk's cart: one card per line, every other card shaded. Each
-      // field carries its name inside it, so there is no row of tiny labels;
-      // the money reads as a sum — price × quantity = total — with every
-      // total in the same right-hand column. Custom pieces have a violet edge.
+      // One card per line: options first, then price, quantity and line total.
+      // Custom measurements have their own inset area.
       // Newest first, on screen only: the order keeps its lines in the order
       // they were added, and each card keeps that line number.
-      <ol className="space-y-1.5 p-2" aria-label="Products in this order, newest first">
-        {[...items].reverse().map((item, index) => {
+      <ol className="divide-y divide-slate-200" aria-label="Products in this order, newest first">
+        {[...displayedItems].reverse().map((item, index) => {
           const lineNo = items.length - index;
           const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
           const lineTotal = getLineUnit(item) * Number(item.qty || 1);
-          const totalAvailable =
-            item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
-          const stockLabel = isTypeCustom
-            ? 'Made to order'
-            : item.stock > 0
-              ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
-              : totalAvailable == null
-                ? 'To make'
-                : totalAvailable > 0
-                  ? `${totalAvailable} to make`
-                  : 'Out of stock';
-          const stockTone = isTypeCustom
-            ? 'text-violet-700'
+          const totalAvailable = Number(item.availableQuantity || 0);
+          const stockLabel = [
+            !isTypeCustom && item.stock > 0 ? `${item.stock} in stock` : '',
+            item.productionCapacity > 0 ? `${item.productionCapacity} from shared materials` : '',
+            item.backorderCapacity > 0 ? `${item.backorderCapacity} approved backorder` : '',
+          ].filter(Boolean).join(' · ') || (isTypeCustom ? 'Custom unavailable — materials needed' : 'Out of stock — materials needed');
+          const stockTone = totalAvailable <= 0
+            ? 'text-rose-700'
             : item.stock > 0
               ? 'text-emerald-700'
-              : item.overSale
+              : totalAvailable > 0
                 ? 'text-amber-700'
                 : 'text-rose-700';
           const priceLocked = locked || !canOverridePrice;
@@ -625,13 +607,11 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
           return (
             <li
               key={item._key}
-              className={`rounded-lg border border-l-[3px] border-slate-300 py-1.5 pl-1.5 pr-2 ${index % 2 ? 'bg-slate-100' : 'bg-white'} ${
-                isTypeCustom ? 'border-l-violet-500' : 'border-l-slate-300'
-              }`}
+              className="min-w-0 bg-white px-3 py-2.5"
             >
               {/* Which product, and what kind */}
               <div className="flex items-center gap-2">
-                <span className="w-6 shrink-0 text-right text-sm tabular-nums text-slate-400">{lineNo}.</span>
+                <span className="w-4 shrink-0 font-mono text-xs tabular-nums text-slate-400">{lineNo}</span>
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
                   <p className="max-w-full truncate text-sm font-semibold text-slate-900" title={item.productName}>
                     {item.productName}
@@ -643,7 +623,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                       aria-pressed={isTypeCustom}
                       title={isTypeCustom ? 'Made to order — switch back to standard' : 'Switch to a custom, made-to-order piece'}
                       onClick={() => updateAttrs(item, 'Type', isTypeCustom ? 'Standard' : 'Custom')}
-                      className={`inline-flex items-center gap-1 rounded px-1.5 py-px font-medium ring-1 ring-inset ${
+                      className={`inline-flex min-h-6 items-center gap-1 rounded px-1.5 font-medium ring-1 ring-inset ${
                         isTypeCustom ? 'bg-violet-50 text-violet-800 ring-violet-600/20' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-100'
                       }`}
                     >
@@ -655,13 +635,13 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                 </div>
                 {locked ? null : (
                   <div className="flex shrink-0 gap-0.5">
-                    <button type="button" onClick={() => onDuplicate(item._key)} className="btn-icon btn-icon-sm !h-7 !w-7" title="Duplicate" aria-label={`Duplicate ${item.productName}`}>
+                    <button type="button" onClick={() => onDuplicate(item._key)} className="btn-icon btn-icon-sm !h-8 !w-8" title="Duplicate" aria-label={`Duplicate ${item.productName}`}>
                       <FiCopy size={14} aria-hidden />
                     </button>
                     <button
                       type="button"
                       onClick={() => onRemove(item._key)}
-                      className="btn-icon btn-icon-sm btn-icon-danger !h-7 !w-7"
+                      className="btn-icon btn-icon-sm btn-icon-danger !h-8 !w-8"
                       title="Remove"
                       aria-label={`Remove ${item.productName}`}
                     >
@@ -672,19 +652,19 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
               </div>
 
               {/* Options, then the sum */}
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-8">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 {nonTypeDims.length ? (
-                  <div className="flex max-w-full shrink-0 flex-wrap gap-1.5">
+                  <div className="flex min-w-0 max-w-full flex-1 flex-wrap gap-1.5">
                     {nonTypeDims.map((dim) => {
                       const values = isTypeCustom && !dim.values.includes('Custom') ? [...dim.values, 'Custom'] : dim.values;
                       return (
-                        <label key={dim.name} className={`${lineField} shrink-0 ${locked ? 'bg-slate-50' : ''}`}>
+                        <label key={dim.name} className={`${lineField} min-w-0 max-w-full ${locked ? 'bg-slate-50' : ''}`}>
                           <span className={lineLabel}>{dim.name}</span>
                           <select
                             value={item.selectedAttrs[dim.name] || ''}
                             onChange={(e) => updateAttrs(item, dim.name, e.target.value)}
                             disabled={locked}
-                            className={`${lineControl} !w-auto !flex-none cursor-pointer pr-1 font-medium`}
+                            className={`${lineControl} !w-auto max-w-full cursor-pointer pr-1 font-medium`}
                           >
                             {values.map((value) => (
                               <option key={value} value={value}>
@@ -700,9 +680,9 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                   <p className="flex-1 text-xs text-slate-400">No options</p>
                 )}
 
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                <div className="ml-auto grid w-full grid-cols-2 items-center gap-1.5 sm:w-auto sm:grid-cols-[108px_96px_64px_88px]">
                   <label
-                    className={`${lineField} w-[108px] ${priceLocked ? 'bg-slate-50' : ''}`}
+                    className={`${lineField} min-w-0 ${priceLocked ? 'bg-slate-50' : ''}`}
                     title={!canOverridePrice ? 'You do not have permission to change prices' : undefined}
                   >
                     <span className={lineLabel}>Regular</span>
@@ -716,7 +696,7 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                     />
                   </label>
                   <label
-                    className={`${lineField} w-[96px] ${priceLocked ? 'bg-slate-50' : ''} ${priceChanged ? '!border-amber-400' : ''}`}
+                    className={`${lineField} min-w-0 ${priceLocked ? 'bg-slate-50' : ''} ${priceChanged ? '!border-amber-400' : ''}`}
                     title={priceChanged ? 'Changed from the catalogue price' : undefined}
                   >
                     <span className={priceChanged ? 'shrink-0 text-xs font-medium text-amber-700' : lineLabel}>Sale</span>
@@ -731,28 +711,27 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
                     />
                     {priceChanged ? <span className="sr-only">Changed from the catalogue price</span> : null}
                   </label>
-                  <span className="text-sm text-slate-400" aria-hidden>
-                    ×
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
-                    value={item.qty}
-                    onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
-                    disabled={locked}
-                    aria-label={`Quantity of ${item.productName}`}
-                    className={`${sm} !h-7 !w-14 !border-slate-300/80 !bg-transparent !px-1.5 text-center tabular-nums !shadow-none hover:!border-slate-400`}
-                  />
-                  <span className="text-sm text-slate-400" aria-hidden>
-                    =
-                  </span>
-                  <span className="w-20 text-right text-[15px] font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</span>
+                  <label className={`${lineField} min-w-0 !px-2`}>
+                    <span className={lineLabel}>Qty</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={totalAvailable == null ? undefined : Math.max(1, totalAvailable)}
+                      value={item.qty}
+                      onChange={(e) => onUpdate(item._key, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                      disabled={locked}
+                      aria-label={`Quantity of ${item.productName}`}
+                      className={`${lineControl} text-center tabular-nums`}
+                    />
+                  </label>
+                  <div className="text-right" aria-label={`Line total ${fmt(lineTotal)}`}>
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{fmt(lineTotal)}</p>
+                  </div>
                 </div>
               </div>
 
               {isTypeCustom ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-8">
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <label className={`${lineField} min-w-[220px] flex-1 ${locked ? 'bg-slate-50' : ''}`}>
                     <span className={lineLabel}>Measurements</span>
                     <input
@@ -803,30 +782,25 @@ function ItemsTable({ items, onUpdate, onRemove, onDuplicate, locked = false, ca
         </thead>
 
         <tbody>
-          {items.map((item, index) => {
+          {displayedItems.map((item, index) => {
             const isTypeCustom = item.selectedAttrs['Type'] === 'Custom';
             const lineTotal = getLineUnit(item) * Number(item.qty || 1);
             // Shade every other product, both of its rows together.
             const stripe = index % 2 ? 'bg-slate-100/70' : 'bg-white';
-            const totalAvailable =
-              item.availableQuantity == null ? (item.overSale ? null : item.stock) : Number(item.availableQuantity);
+            const totalAvailable = Number(item.availableQuantity || 0);
             // In stock now, and how many more production can make.
-            const stockLabel = isTypeCustom
-              ? 'Made to order'
-              : item.stock > 0
-                ? `${item.stock} in stock${totalAvailable != null && totalAvailable > item.stock ? ` · +${totalAvailable - item.stock} to make` : ''}`
-                : totalAvailable == null
-                  ? 'To make'
-                  : totalAvailable > 0
-                    ? `${totalAvailable} to make`
-                    : 'Out of stock';
+            const stockLabel = [
+              !isTypeCustom && item.stock > 0 ? `${item.stock} in stock` : '',
+              item.productionCapacity > 0 ? `${item.productionCapacity} from shared materials` : '',
+              item.backorderCapacity > 0 ? `${item.backorderCapacity} approved backorder` : '',
+            ].filter(Boolean).join(' · ') || (isTypeCustom ? 'Custom unavailable — materials needed' : 'Out of stock — materials needed');
             const priceChanged = isPriceOverridden(item);
             const priceLocked = locked || !canOverridePrice;
-            const stockTone = isTypeCustom
-              ? 'bg-violet-50 text-violet-800 ring-violet-600/20'
+            const stockTone = totalAvailable <= 0
+              ? 'bg-rose-50 text-rose-800 ring-rose-600/20'
               : item.stock > 0
                 ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/20'
-                : item.overSale
+                : totalAvailable > 0
                   ? 'bg-amber-50 text-amber-800 ring-amber-600/20'
                   : 'bg-rose-50 text-rose-700 ring-rose-600/20';
 
@@ -1265,8 +1239,8 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
   // The desk's narrow panel: every field names itself inside its box.
   if (compact) {
     return (
-      <div className="space-y-1.5">
-        <div ref={addrWrapRef} className="relative flex gap-1.5">
+      <div className="space-y-2">
+        <div ref={addrWrapRef} className="relative flex items-stretch gap-2">
           <DeskField label="Phone" required invalid={Boolean(errors.phone)} className="flex-1">
             <input
               type="tel"
@@ -1281,7 +1255,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
             />
             {savedToggle}
           </DeskField>
-          <button type="button" onClick={() => doLookup()} disabled={loading || phone.trim().length < 7} className="btn-ghost btn-sm !h-8 shrink-0">
+          <button type="button" onClick={() => doLookup()} disabled={loading || phone.trim().length < 7} className="btn-ghost btn-sm !h-9 shrink-0 !border !border-slate-200 !px-2.5">
             <FiSearch size={14} aria-hidden /> {loading ? 'Finding…' : 'Find'}
           </button>
           {savedList}
@@ -1302,7 +1276,7 @@ function CustomerSection({ address, onCustomerChange, onAddressChange, onFraudDa
         </DeskField>
         <FieldError>{errors.name}</FieldError>
 
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           <DeskField label="District" required>
             <select id="order-district" value={address.district || ''} onChange={(e) => handleDistrictChange(e.target.value)} className={`${lineControl} cursor-pointer`}>
               <option value="">Select…</option>
@@ -1663,7 +1637,7 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
   // The desk: a slim three-way switch and a named date field.
   if (compact) {
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="grid grid-cols-3 gap-0.5 rounded-md bg-slate-100 p-0.5" role="group" aria-label="Delivery type">
           {deliveryTypes.map((type) => {
             const active = value.deliveryType === type.key;
@@ -1674,7 +1648,7 @@ function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYP
                 onClick={() => selectType(type.key)}
                 aria-pressed={active}
                 title={type.hint || undefined}
-                className={`h-7 rounded text-[13px] font-medium transition ${
+                className={`h-8 rounded text-[13px] font-medium transition ${
                   active ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -1951,24 +1925,16 @@ function OrderSummary({ items, linkedPayments, shipping, discount, onShippingCha
 
 // ─── Order desk parts ─────────────────────────────────────────────────────────
 
-/** One numbered step of the order panel; ticks green once it is complete. */
-function DeskStep({ n, title, done = false, aside, children }) {
+/** Compact section heading with completion feedback. */
+function DeskStep({ title, done = false, aside, children }) {
   return (
-    <section className="px-3 py-2.5" aria-label={title}>
-      <div className="mb-1.5 flex items-center gap-2">
-        <span
-          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-            done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
-          }`}
-          aria-hidden
-        >
-          {done ? <FiCheck size={11} /> : n}
-        </span>
+    <section className="px-3 py-3" aria-label={title}>
+      <div className="mb-2 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold text-slate-900">
           {title}
           {done ? <span className="sr-only"> (complete)</span> : null}
         </h2>
-        {aside ? <div className="ml-auto">{aside}</div> : null}
+        {aside ? <div className="ml-auto">{aside}</div> : done ? <FiCheck className="ml-auto text-emerald-700" size={14} aria-hidden /> : null}
       </div>
       {children}
     </section>
@@ -2004,7 +1970,7 @@ function CourierRecord({ customer, fraudData }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]"
+        className="flex min-h-8 w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs leading-relaxed"
       >
         <span className="min-w-0 flex-1">
           <span className="font-semibold">{ours}</span>
@@ -2185,9 +2151,10 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           (si.attributes || []).forEach((a) => {
             savedAttrs[a.attributeName] = a.valueName;
           });
+          savedAttrs.Type = si.isCustom ? 'Custom' : (savedAttrs.Type || 'Standard');
           if (Object.keys(savedAttrs).length) {
             base.selectedAttrs = savedAttrs;
-            const matched = findVariation(base.variations, savedAttrs);
+            const matched = findVariation(base.variations, savedAttrs, si.variationId);
             base.selectedVariationId = matched?.id || matched?.id || si.variationId || base.selectedVariationId;
           } else {
             base.selectedVariationId = si.variationId || base.selectedVariationId;
@@ -2198,6 +2165,11 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           base.customizeDetails = si.customizeDetails || '';
           base.isCustom = Boolean(si.isCustom) || hasCustomSelection(base);
           base.selectedAttrs.Type = base.isCustom ? 'Custom' : 'Standard';
+          const selectedVariation = base.variations.find((variation) => variation.id === base.selectedVariationId);
+          base.stock = base.isCustom ? 0 : Number(selectedVariation?.stock || 0);
+          base.productionCapacity = Number(selectedVariation?.productionCapacity || 0);
+          base.backorderCapacity = Number(selectedVariation?.backorderCapacity || 0);
+          base.availableQuantity = availableForVariation(selectedVariation, base.isCustom);
           base.regularPrice = si.regularPrice ?? base.regularPrice;
           base.discountPrice = si.salePrice != null ? si.salePrice : base.discountPrice;
           // What was saved is this item's baseline: unchanged, it is not an override.
@@ -2242,6 +2214,9 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
     });
 
   const handleSubmit = async () => {
+    // Shared by the button and keyboard shortcut. Capacity is checked again
+    // under database locks by the server before any order is committed.
+    if (!isEdit && orderStockProblems(items).length) return;
     // The delivery phone specifically. Accepting the customer's account phone
     // as a stand-in let an order through with an empty shipping phone — the
     // courier has no one to call, and the account number may belong to someone
@@ -2483,6 +2458,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
     items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0) + Number(shipping || 0) - Number(discount || 0)
   );
   const errorList = Object.values(errors).filter(Boolean);
+  const stockIssues = isEdit ? [] : orderStockProblems(items);
 
   const customerCard = (
     <Card title="Customer" description="Look up by phone to fill in a saved address.">
@@ -2527,7 +2503,8 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
       }}
     />
   );
-  const itemsTable = (
+  const itemsTable = (<>
+    {items.length > 0 && <p className="px-3 py-2 text-xs text-slate-500">Production quantities use one shared material pool across variations and products. Each line accounts for the other selections in this order.</p>}
     <ItemsTable
       items={items}
       onUpdate={updateItem}
@@ -2537,7 +2514,8 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
       canOverridePrice={canOverridePrice}
       missing={Boolean(errors.items)}
     />
-  );
+    {stockIssues.length > 0 && <div className="px-3 py-2"><FieldError>{stockIssues.join(' ')}</FieldError></div>}
+  </>);
   const noteCard = !isEdit ? (
     <Card title="First internal note" description="Visible to staff only.">
       <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
@@ -2568,10 +2546,8 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
   const submitLabel = submitting ? (isEdit ? 'Saving…' : 'Placing order…') : isEdit ? 'Save changes' : `Place order · ${fmt(orderTotal)}`;
 
   // ── Order desk: a full-screen, POS-style workstation ─────────────────────
-  // Two panels: what is being sold on the left, and the order itself on the
-  // right as numbered steps — customer, delivery, payment — with the total and
-  // the one button that matters pinned at the bottom. Each step ticks green
-  // once it is complete, so what is left to do is always visible.
+  // Product rows on the left; compact customer, delivery and payment sections
+  // on the right. The total and submit action stay visible below the form.
   if (desk) {
     const pieces = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
     const subTotal = items.reduce((sum, item) => sum + getLineUnit(item) * Number(item.qty || 1), 0);
@@ -2595,7 +2571,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
         onMouseDown={(e) => e.preventDefault()}
         onClick={onClick}
         disabled={disabled}
-        className="btn-icon btn-icon-sm !h-6 !w-6"
+        className="btn-icon btn-icon-sm !h-7 !w-7"
         aria-label={`Edit ${label.toLowerCase()}`}
         title={`Edit ${label.toLowerCase()}`}
       >
@@ -2603,7 +2579,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
       </button>
     );
     const amountRow = ({ id, label, value, onChange, sign = '', tone = 'text-slate-900' }) => (
-      <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
+      <div className="flex min-h-7 items-center justify-between gap-3 text-[13px]">
         <dt className="text-slate-500">{label}</dt>
         <dd className="flex items-center gap-1">
           {editingAmount === id ? (
@@ -2634,7 +2610,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
     return (
       <Compact.Provider value>
         <div
-          className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_440px] 2xl:grid-cols-[minmax(0,1fr)_500px]"
+          className="grid items-start gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch 2xl:grid-cols-[minmax(0,1fr)_400px]"
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && items.length && !submitting) {
               event.preventDefault();
@@ -2643,22 +2619,23 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           }}
         >
           {/* ── Products ─────────────────────────────────────────────────── */}
-          <section className="card-ui flex min-h-[420px] flex-col xl:min-h-0" aria-labelledby="desk-products-title">
-            <header className="border-b border-slate-200 px-4 pb-3 pt-3.5">
-              <div className="mb-2.5 flex items-baseline justify-between gap-3">
-                <h2 id="desk-products-title" className="text-sm font-semibold text-slate-900">
-                  Products
-                </h2>
-                <p className="text-xs text-slate-500">
+          <section className="card-ui flex min-w-0 min-h-[320px] flex-col !shadow-none xl:min-h-0" aria-labelledby="desk-products-title">
+            <header className="relative z-20 shrink-0 rounded-t-lg border-b border-slate-200 bg-white px-3 py-3">
+              <div className="mb-2.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <h2 id="desk-products-title" className="text-sm font-semibold text-slate-900">Products</h2>
+                  <span className="text-xs tabular-nums text-slate-500">{pieces} piece{pieces === 1 ? '' : 's'}</span>
+                </div>
+                <p className="hidden text-xs text-slate-500 sm:block">
                   Press <kbd className="rounded border border-slate-300 bg-slate-50 px-1 font-sans text-[11px]">/</kbd> to search
                 </p>
               </div>
               {itemsLocked ? lockedNotice : productSearch}
             </header>
-            <div className="min-h-0 flex-1 overflow-auto">{itemsTable}</div>
+            <div className="min-h-0 flex-1 xl:overflow-y-auto">{itemsTable}</div>
             {/* Order labels and the staff note — not needed to check out, so they
                 sit under the products rather than in the order panel. */}
-            <div className="border-t border-slate-200 px-3 py-2">
+            <div className="shrink-0 border-t border-slate-200 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <span className="text-xs font-medium text-slate-500">Tags</span>
                 <div className="min-w-0 flex-1">
@@ -2681,12 +2658,12 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
                 ) : null}
               </div>
               {noteOpen && !isEdit ? (
-                <div id="desk-note" className="mt-2">
+                <div id="desk-note" className="mt-3 max-h-52 overflow-y-auto">
                   <AdminNote value={adminNote} onChange={setAdminNote} images={adminNoteImages} onImagesChange={setAdminNoteImages} />
                 </div>
               ) : null}
             </div>
-            <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px]">
+            <footer className="flex shrink-0 items-center justify-between gap-3 rounded-b-lg border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs">
               <span className="text-slate-600">
                 {items.length} line{items.length === 1 ? '' : 's'} · {pieces} piece{pieces === 1 ? '' : 's'}
               </span>
@@ -2697,10 +2674,10 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           </section>
 
           {/* ── Order ────────────────────────────────────────────────────── */}
-          <aside className="card-ui flex min-h-0 flex-col" aria-label="Order">
-            <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
-              <DeskStep n={1} title="Customer" done={customerDone}>
-                <div className="space-y-1.5">
+          <aside className="card-ui flex min-w-0 min-h-0 flex-col overflow-hidden !shadow-none" aria-label="Customer, delivery and checkout">
+            <div className="min-h-0 flex-1 divide-y divide-slate-100 xl:overflow-y-auto">
+              <DeskStep title="Customer" done={customerDone}>
+                <div className="space-y-2">
                   <CustomerSection
                     key={initialized ? 'ready' : 'init'}
                     address={address}
@@ -2715,55 +2692,59 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
                 </div>
               </DeskStep>
 
-              <DeskStep n={2} title="Delivery" done={deliveryDone}>
+              <DeskStep title="Delivery" done={deliveryDone}>
                 <DeliverySection value={delivery} onChange={setDelivery} deliveryTypes={deliveryTypes} />
               </DeskStep>
+
+              <section className="px-3 py-3" aria-label="Charges and payment">
+                <h2 className="mb-1 text-[13px] font-semibold text-slate-900">Charges & payment</h2>
+                <dl>
+                  <div className="flex min-h-7 items-center justify-between gap-3 text-[13px]">
+                    <dt className="text-slate-500">Subtotal</dt>
+                    <dd className="pr-8 tabular-nums text-slate-900">{fmt(subTotal)}</dd>
+                  </div>
+                  {amountRow({ id: 'shipping', label: 'Shipping', value: shipping, onChange: setShipping })}
+                  {amountRow({ id: 'discount', label: 'Discount', value: discount, onChange: setDiscount, sign: '−', tone: 'text-emerald-700' })}
+                  {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
+                    <p className="pb-1 text-right text-xs font-medium text-rose-700" role="alert">
+                      The discount is larger than the order.
+                    </p>
+                  ) : null}
+                  <div className="flex min-h-7 items-center justify-between gap-3 text-[13px]">
+                    <dt className="text-slate-500">
+                      Advance
+                      {advanceUnverified > 0 ? <span className="ml-1.5 text-xs text-amber-700">{fmt(advanceUnverified)} unverified</span> : null}
+                    </dt>
+                    <dd className="flex items-center gap-1">
+                      <span className={`tabular-nums ${advanceTotal > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                        {advanceTotal > 0 ? `−${fmt(advanceTotal)}` : fmt(0)}
+                      </span>
+                      {editButton('Advance', () => setAdvanceOpen(true))}
+                    </dd>
+                  </div>
+                  {paidLinked > 0 ? row('Paid', `−${fmt(paidLinked)}`, 'text-emerald-700') : null}
+                </dl>
+              </section>
             </div>
 
             {/* Checkout — always in view */}
-            <footer className="space-y-2 border-t border-slate-200 bg-slate-50 px-3 py-2.5">
-              <dl>
-                <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
-                  <dt className="text-slate-500">Subtotal</dt>
-                  <dd className="pr-7 tabular-nums text-slate-900">{fmt(subTotal)}</dd>
-                </div>
-                {amountRow({ id: 'shipping', label: 'Shipping', value: shipping, onChange: setShipping })}
-                {amountRow({ id: 'discount', label: 'Discount', value: discount, onChange: setDiscount, sign: '−', tone: 'text-emerald-700' })}
-                {Number(discount || 0) > subTotal + Number(shipping || 0) ? (
-                  <p className="pb-1 text-right text-xs font-medium text-rose-700" role="alert">
-                    The discount is larger than the order.
-                  </p>
-                ) : null}
-                <div className="flex h-7 items-center justify-between gap-3 text-[13px]">
-                  <dt className="text-slate-500">
-                    Advance
-                    {advanceUnverified > 0 ? <span className="ml-1.5 text-xs text-amber-700">{fmt(advanceUnverified)} unverified</span> : null}
-                  </dt>
-                  <dd className="flex items-center gap-1">
-                    <span className={`tabular-nums ${advanceTotal > 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
-                      {advanceTotal > 0 ? `−${fmt(advanceTotal)}` : fmt(0)}
-                    </span>
-                    {editButton('Advance', () => setAdvanceOpen(true))}
-                  </dd>
-                </div>
-                {paidLinked > 0 ? row('Paid', `−${fmt(paidLinked)}`, 'text-emerald-700') : null}
-              </dl>
-              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2">
+            <footer className="shrink-0 space-y-2 border-t border-slate-200 bg-slate-50 px-3 py-3 xl:max-h-[50dvh] xl:overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-900">
                   {collected > 0 ? 'To collect' : 'Total'}
-                  {collected > 0 ? <span className="ml-1.5 text-xs font-normal text-slate-500">of {fmt(orderTotal)}</span> : null}
+                  {collected > 0 ? <span className="ml-2 text-xs font-normal text-slate-500">of {fmt(orderTotal)}</span> : null}
                 </span>
-                <span className="text-xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(collected > 0 ? dueNow : orderTotal)}</span>
+                <span className="ml-auto text-xl font-semibold tabular-nums tracking-tight text-slate-900">{fmt(collected > 0 ? dueNow : orderTotal)}</span>
               </div>
               {errorsBlock}
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={submitting || !items.length}
-                className="btn-brand h-11 w-full text-[15px]"
+                disabled={submitting || !items.length || stockIssues.length > 0}
+                className="btn-brand !h-10 w-full text-sm"
                 title="Ctrl + Enter"
               >
-                {submitting ? 'Placing order…' : items.length ? 'Place order' : 'Add a product to continue'}
+                {submitting ? 'Placing order…' : stockIssues.length ? 'Resolve availability to continue' : items.length ? 'Place order' : 'Add a product to continue'}
               </button>
             </footer>
           </aside>
@@ -2819,7 +2800,7 @@ export default function CreateOrder({ orderNo = null, desk = false }) {
           <Card title="Summary">{summary}</Card>
           <Card title="Payments received">{payments}</Card>
           {errorsBlock}
-          <button type="button" onClick={handleSubmit} disabled={submitting || !items.length} className="btn-brand h-11 w-full text-[15px]">
+          <button type="button" onClick={handleSubmit} disabled={submitting || !items.length || stockIssues.length > 0} className="btn-brand h-11 w-full text-[15px]">
             {submitLabel}
           </button>
         </aside>

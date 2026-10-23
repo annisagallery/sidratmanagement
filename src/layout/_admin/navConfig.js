@@ -289,7 +289,10 @@ export const navGroups = [
   {
     key: 'customers',
     label: 'Customers',
-    items: [{ key: 'customers', label: 'Customers', href: '/users', icon: LuUsers, subject: 'Customer' }]
+    items: [
+      { key: 'customers', label: 'Customers', href: '/users', icon: LuUsers, subject: 'Customer' },
+      { key: 'complaints', label: 'Complaints', href: '/complaints', icon: FiMessageSquare, subject: 'Complaint' }
+    ]
   },
   {
     key: 'marketing',

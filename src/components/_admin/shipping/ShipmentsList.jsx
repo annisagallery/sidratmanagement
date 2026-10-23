@@ -15,7 +15,7 @@ import { EmptyState } from 'src/components/_admin/ui/TableStates';
 
 const PAGE_SIZE = 20;
 
-const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee' };
+const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee', manual: 'Manual shipment' };
 
 const STATUS_META = {
   pending: { label: 'Pending pickup', tone: 'neutral' },
@@ -174,7 +174,7 @@ export default function ShipmentsList() {
       render: (s) => (
         <div>
           <p className="text-[13px] text-slate-900">{PROVIDER_LABEL[s.provider] || s.provider}</p>
-          {s.accountName && <p className="text-xs text-slate-500">{s.accountName}</p>}
+          {(s.employeeName || s.accountName) && <p className="text-xs text-slate-500">{s.employeeName || s.accountName}</p>}
         </div>
       )
     },
@@ -237,7 +237,7 @@ export default function ShipmentsList() {
             <button
               type="button"
               onClick={() => refresh(s)}
-              disabled={refreshingId === s.id || !s.consignmentId}
+              disabled={refreshingId === s.id || !s.consignmentId || s.provider === 'manual'}
               title={s.consignmentId ? 'Refresh status from the courier' : 'Reconcile the request before refreshing'}
               aria-label={`Refresh the status of order ${s.orderNo}`}
               className="btn-icon btn-icon-sm"
@@ -264,7 +264,7 @@ export default function ShipmentsList() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Shipments" subtitle="Every parcel sent to a courier. Statuses update on their own through webhooks." />
+      <PageHeader title="Shipments" subtitle="Courier parcels and employee handoffs. Manual shipment statuses follow the order." />
 
       <ListToolbar
         search={searchInput}

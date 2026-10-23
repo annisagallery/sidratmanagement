@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from 'react-query';
 import Image from 'next/image';
 import {
   MdAdd,
-  MdEdit,
   MdDelete,
   MdOpenInNew,
   MdVisibility,
@@ -22,6 +21,7 @@ import DataTable, { stopRow } from 'src/components/_admin/ui/DataTable';
 import Pagination from 'src/components/_admin/ui/Pagination';
 import Badge from 'src/components/_admin/ui/Badge';
 import ActionMenu from 'src/components/_admin/ui/ActionMenu';
+import ProductReadinessModal, { readinessLabel, readinessTone } from './ProductReadinessModal';
 import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 import { fDate } from 'src/utils/formatTime';
 
@@ -55,6 +55,7 @@ export default function ProductList() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [readinessProductId, setReadinessProductId] = useState(null);
   const limit = 20;
 
   const handleSort = (field) => {
@@ -160,6 +161,7 @@ export default function ProductList() {
   ];
 
   const products = data?.data || [];
+  const readinessProduct = products.find((product) => product.id === readinessProductId);
   const total = data?.total || 0;
   const totalPages = data?.count || 1;
   const sort = { by: sortBy, order: sortOrder, onSort: handleSort };
@@ -223,6 +225,30 @@ export default function ProductList() {
       }
     },
     {
+      key: 'totalStock',
+      label: 'Total stock',
+      align: 'right',
+      render: (p) => (
+        <div className="min-w-[105px]">
+          <p className="font-semibold tabular-nums text-slate-900">{p.totalStock == null ? '—' : Number(p.totalStock).toLocaleString()}</p>
+          <p className="mt-0.5 text-xs text-slate-500">All branches</p>
+          {Number(p.reservedStock) > 0 && <p className="mt-0.5 text-xs text-slate-600">{Number(p.reservedStock).toLocaleString()} reserved</p>}
+        </div>
+      )
+    },
+    {
+      key: 'productionReadiness',
+      label: 'Production',
+      render: (p) => (
+        <div className="min-w-[160px] max-w-[240px]" onClick={stopRow}>
+          <button type="button" className="min-h-11 rounded-md hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            aria-label={`Stock and production details for ${p.name}`} aria-haspopup="dialog" onClick={() => setReadinessProductId(p.id)}>
+            <Badge tone={readinessTone(p.productionReadiness)}>{readinessLabel(p.productionReadiness)}</Badge>
+          </button>
+        </div>
+      )
+    },
+    {
       key: 'createdAt',
       label: 'Added',
       sortable: true,
@@ -264,6 +290,7 @@ export default function ProductList() {
 
   return (
     <div className="space-y-6">
+      {readinessProduct && <ProductReadinessModal product={readinessProduct} onClose={() => setReadinessProductId(null)} />}
       <PageHeader title="Products" subtitle={`${total} product${total !== 1 ? 's' : ''} total`}>
         <button type="button" onClick={() => router.push('/products/add')} className="btn-brand">
           <MdAdd size={18} /> Add product

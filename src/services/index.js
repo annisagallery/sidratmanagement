@@ -241,6 +241,10 @@ export const getBomMaterials = async () => {
   const { data } = await http.get('/admin/accessories', { params: { all: true } });
   return data;
 };
+export const getBomCategories = async () => {
+  const { data } = await http.get('/admin/accessories/categories', { params: { all: true } });
+  return data;
+};
 export const deleteProductByAdmin = async (slug) => {
   const { data: response } = await http.delete(`/admin/products/${slug}`);
   return response;
@@ -532,7 +536,7 @@ export const uploadSiteFavicon = async (formData) => {
 
 // â”€â”€ Order item CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const addItemToOrder = async ({ orderNo, ...payload }) => {
-  const { data } = await http.post(`/admin/orders/${orderNo}/items`, payload);
+  const { data } = await http.post(`/admin/orders/${orderNo}/items`, payload, { timeout: 60000 });
   return data;
 };
 export const removeItemFromOrder = async ({ orderNo, itemId }) => {
@@ -540,7 +544,7 @@ export const removeItemFromOrder = async ({ orderNo, itemId }) => {
   return data;
 };
 export const updateItemInOrder = async ({ orderNo, itemId, ...payload }) => {
-  const { data } = await http.put(`/admin/orders/${orderNo}/items/${itemId}`, payload);
+  const { data } = await http.put(`/admin/orders/${orderNo}/items/${itemId}`, payload, { timeout: 60000 });
   return data;
 };
 export const removeOrderPayment = async ({ orderNo, paymentId }) => {
@@ -662,7 +666,7 @@ export const createGuestCustomer = async (payload) => {
   return data;
 };
 export const createAdminOrder = async (payload) => {
-  const { data } = await http.post(`/admin/orders/create`, payload);
+  const { data } = await http.post(`/admin/orders/create`, payload, { timeout: 60000 });
   return data;
 };
 
@@ -815,6 +819,22 @@ export const verifyOrderPayment = async ({ orderNo, paymentId, status }) => {
 };
 
 // ── Complaints ────────────────────────────────────────────────────────────────
+export const getComplaints = async (params = {}) => {
+  const { data } = await http.get('/admin/complaints', { params });
+  return data;
+};
+export const getComplaint = async (id) => {
+  const { data } = await http.get(`/admin/complaints/${id}`);
+  return data;
+};
+export const getComplaintImage = async (complaintId, imageId) => {
+  const { data } = await http.get(`/admin/complaints/${complaintId}/images/${imageId}`, { responseType: 'blob' });
+  return data;
+};
+export const updateComplaint = async ({ id, ...payload }) => {
+  const { data } = await http.put(`/admin/complaints/${id}`, payload);
+  return data;
+};
 export const createComplaintByAdmin = async (payload) => {
   const { data } = await http.post(`/admin/complaints`, payload);
   return data;

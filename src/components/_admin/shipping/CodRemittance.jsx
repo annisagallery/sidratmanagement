@@ -23,7 +23,7 @@ import GlobalTable from 'src/components/_admin/ui/GlobalTable';
 import { KpiGrid, StatTile } from 'src/components/_admin/ui/kpi';
 import { EmptyRow, ErrorRow, Field, LoadingRows, Pill, fieldClass, money } from 'src/components/_admin/ui/primitives';
 
-const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee' };
+const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee', manual: 'Manual shipment' };
 
 export default function CodRemittance() {
   const [provider, setProvider] = useState('');

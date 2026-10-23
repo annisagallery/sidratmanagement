@@ -36,6 +36,7 @@ function headline(order, packing, activeShipment) {
     case 'packed':
       return { title: 'Packed', detail: 'Send the parcel to a courier.' };
     case 'shipped':
+      if (activeShipment?.provider === 'manual') return { title: 'With the employee', detail: `Handed to ${activeShipment.employeeName || activeShipment.accountName || 'the delivery employee'}.` };
       return { title: 'With the courier', detail: courier ? `Sent with ${courier}.` : 'On its way to the customer.' };
     case 'delivered':
     case 'completed':

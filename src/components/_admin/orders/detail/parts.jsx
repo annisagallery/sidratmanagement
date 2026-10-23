@@ -86,7 +86,7 @@ export function PaymentBadge({ paid = 0, due = 0 }) {
 }
 
 /** Courier providers, named the way the operator names them. */
-export const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee' };
+export const PROVIDER_LABEL = { pathao: 'Pathao', steadfast: 'Steadfast', carrybee: 'CarryBee', manual: 'Manual shipment' };
 
 export const tagId = (tag) => (typeof tag === 'object' && tag !== null ? oid(tag) : String(tag ?? ''));
 export const tagName = (tag) =>
