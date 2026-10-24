@@ -7,7 +7,7 @@ const field = 'input-ui !h-10 min-h-10 w-full';
 const dropdown = 'select-ui !h-10 min-h-10 w-full';
 const categoryOf = (material) => material?.categoryId || material?.category?.id || null;
 const unitOf = (material) =>
-  !material ? '' : material.unitMode === 'roll_meter' ? 'm' : material.unit?.name || 'units';
+  !material ? '' : material.unit?.name || 'units';
 const choices = (materials, slot) =>
   materials.filter(
     (material) => material.isActive !== false && (!slot.categoryId || categoryOf(material) === slot.categoryId)
@@ -24,7 +24,7 @@ function MaterialSelect({ label, value, materials, onChange, emptyLabel }) {
       <option value="">{emptyLabel}</option>
       {materials.map((material) => (
         <option key={material.id} value={material.id}>
-          {material.name} ({material.code})
+          {material.name} · {unitOf(material)} ({material.code.split('/U-')[0]})
         </option>
       ))}
     </select>
