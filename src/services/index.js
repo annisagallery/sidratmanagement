@@ -353,21 +353,6 @@ export const deleteNotice = async (id) => {
   return data;
 };
 
-//homepage notices — two fixed slots, addressed by number rather than by id
-
-export const getHomeNoticesAdmin = async () => {
-  const { data } = await http.get(`/admin/homenotices`);
-  return data;
-};
-export const saveHomeNotice = async (slot, payload) => {
-  const { data } = await http.put(`/admin/homenotices/${slot}`, payload);
-  return data;
-};
-export const clearHomeNotice = async (slot) => {
-  const { data } = await http.delete(`/admin/homenotices/${slot}`);
-  return data;
-};
-
 //branch calendar — branches request closures, special openings and hours;
 //admins approve them
 
