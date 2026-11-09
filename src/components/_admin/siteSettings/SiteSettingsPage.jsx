@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from 'react-query';
 import Image from 'next/image';
@@ -144,7 +146,7 @@ function toForm(d = {}) {
     maintenanceHeading: d.maintenanceHeading || "We'll be back soon!",
     maintenanceSubheading: d.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.',
     maintenanceMessage: d.maintenanceMessage || '',
-    maintenanceEndTime: d.maintenanceEndTime ? new Date(d.maintenanceEndTime).toISOString().slice(0, 16) : ''
+    maintenanceEndTime: d.maintenanceEndTime ? new BDDate(d.maintenanceEndTime).toDhakaISOString().slice(0, 16) : ''
   };
 }
 

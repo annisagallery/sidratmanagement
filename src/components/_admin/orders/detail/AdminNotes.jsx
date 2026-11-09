@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 /**
  * Internal discussion about this order — never shown to the customer.
@@ -82,7 +84,7 @@ export default function AdminNotes({ orderNo, comments = [], onPosted }) {
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[13px] font-semibold text-slate-800">{comment.author?.name || 'Admin'}</p>
                 <p className="shrink-0 text-xs text-slate-500">
-                  {comment.createdAt ? format(new Date(comment.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
+                  {comment.createdAt ? format(new BDDate(comment.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
                 </p>
               </div>
               {comment.body ? (

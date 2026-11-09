@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * One purchase: what was ordered, what has actually arrived, and what is still
@@ -354,12 +356,12 @@ export default function PurchaseDetail({ id }) {
 
         <div className="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-[1fr_320px]">
           <dl className="space-y-0">
-            <Row label="Date" value={purchase.date ? format(new Date(purchase.date), 'dd MMM yyyy') : null} />
+            <Row label="Date" value={purchase.date ? format(new BDDate(purchase.date), 'dd MMM yyyy') : null} />
             <Row label="Challan / invoice no" value={purchase.refNo} mono />
             <Row label="Raised by" value={purchase.createdBy?.name} />
             <Row
               label="Received by"
-              value={purchase.receivedBy?.name ? `${purchase.receivedBy.name}${purchase.receivedAt ? ` · ${format(new Date(purchase.receivedAt), 'dd MMM yyyy')}` : ''}` : null}
+              value={purchase.receivedBy?.name ? `${purchase.receivedBy.name}${purchase.receivedAt ? ` · ${format(new BDDate(purchase.receivedAt), 'dd MMM yyyy')}` : ''}` : null}
             />
             <Row label="Note" value={purchase.note} />
           </dl>
@@ -404,7 +406,7 @@ export default function PurchaseDetail({ id }) {
               purchase.payments.map((row) => (
                 <tr key={oid(row)}>
                   <td className="whitespace-nowrap text-slate-600">
-                    {row.paidAt ? format(new Date(row.paidAt), 'dd MMM yyyy') : '—'}
+                    {row.paidAt ? format(new BDDate(row.paidAt), 'dd MMM yyyy') : '—'}
                   </td>
                   <td className="text-slate-700">{row.method}</td>
                   <td className="ops-code text-[12px] text-slate-500">{row.reference || '—'}</td>

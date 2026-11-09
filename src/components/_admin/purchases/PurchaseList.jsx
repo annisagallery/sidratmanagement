@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Every purchase, newest first — the old POS's purchase list.
@@ -67,7 +69,7 @@ export default function PurchaseList() {
     {
       key: 'date',
       label: 'Date',
-      render: (row) => <span className="whitespace-nowrap text-slate-600">{row.date ? format(new Date(row.date), 'dd MMM yyyy') : '—'}</span>
+      render: (row) => <span className="whitespace-nowrap text-slate-600">{row.date ? format(new BDDate(row.date), 'dd MMM yyyy') : '—'}</span>
     },
     {
       key: 'purchaseNo',

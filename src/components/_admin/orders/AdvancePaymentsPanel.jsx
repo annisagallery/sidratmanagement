@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { FiAlertTriangle, FiCheckCircle, FiCopy, FiPlus, FiX } from 'react-icons/fi';
@@ -32,7 +34,7 @@ function describeCheck(result) {
   if (!result) return null;
   const captured = result.captured;
   if (result.status === 'matched') {
-    const time = captured?.at ? new Date(captured.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null;
+    const time = captured?.at ? new BDDate(captured.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null;
     return { tone: 'match', text: ['Matched', `${money(captured?.amount)}${captured?.senderAccount ? ` from ${captured.senderAccount}` : ''}`, time].filter(Boolean).join(' · ') };
   }
   if (result.status === 'duplicate') {

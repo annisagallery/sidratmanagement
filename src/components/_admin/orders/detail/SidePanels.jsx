@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 import { orderChannelLabel } from 'src/utils/orderChannel';
 
@@ -161,14 +163,14 @@ export function MetaPanel({ order }) {
         <Row label="Delivery" value={DELIVERY_LABEL[order.deliveryType] || order.deliveryType} />
         <Row
           label="Promised by"
-          value={order.estimatedDelivery ? format(new Date(order.estimatedDelivery), 'dd MMM yyyy') : null}
+          value={order.estimatedDelivery ? format(new BDDate(order.estimatedDelivery), 'dd MMM yyyy') : null}
           keepEmpty
         />
         <Row label="Coupon" value={order.couponCode || (typeof order.coupon === 'string' ? order.coupon : null)} mono />
         <Row label="Branch" value={order.branch?.name} />
         <Row
           label="Last updated"
-          value={order.updatedAt ? format(new Date(order.updatedAt), 'dd MMM yyyy, hh:mm a') : null}
+          value={order.updatedAt ? format(new BDDate(order.updatedAt), 'dd MMM yyyy, hh:mm a') : null}
         />
       </dl>
       {tags.length ? (

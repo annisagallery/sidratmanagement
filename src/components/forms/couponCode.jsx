@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../utils/bdTime.js';
+
 import React from 'react';
 import { useMutation } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
@@ -13,7 +15,7 @@ import Callout from 'src/components/_admin/ui/Callout';
 import Badge, { RecordStatus } from 'src/components/_admin/ui/Badge';
 import { Field } from 'src/components/_admin/ui/fields';
 
-const fmt = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+const fmt = (d) => (d ? new BDDate(d).toDhakaISOString().slice(0, 10) : '');
 
 const TYPE_OPTIONS = [
   { id: 'fixed', label: 'Fixed amount (৳)' },

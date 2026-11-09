@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 /**
  * The four things an operator can change from the order screen: take money,
@@ -209,7 +211,7 @@ export function EditDetailsModal({ order, orderNo, onClose, onSaved }) {
     discount: order.discount || 0,
     paymentMethod: order.paymentMethod || 'cod',
     deliveryType: order.deliveryType || 'regular',
-    estimatedDelivery: order.estimatedDelivery ? format(new Date(order.estimatedDelivery), 'yyyy-MM-dd') : '',
+    estimatedDelivery: order.estimatedDelivery ? format(new BDDate(order.estimatedDelivery), 'yyyy-MM-dd') : '',
     tags: (order.tags || []).map(tagName).filter(Boolean).join(', '),
     note: order.note || ''
   });

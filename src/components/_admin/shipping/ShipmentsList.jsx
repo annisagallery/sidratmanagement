@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from 'react-query';
@@ -41,7 +43,7 @@ const SUBMITTING_REVIEW_AFTER_MS = 15 * 60 * 1000;
 function intentNeedsReview(shipment) {
   if (shipment.intentStatus === 'requires_review') return true;
   if (shipment.intentStatus !== 'submitting' || !shipment.submissionStartedAt) return false;
-  return Date.now() - new Date(shipment.submissionStartedAt).getTime() >= SUBMITTING_REVIEW_AFTER_MS;
+  return Date.now() - new BDDate(shipment.submissionStartedAt).getTime() >= SUBMITTING_REVIEW_AFTER_MS;
 }
 
 function StatusPill({ status }) {
@@ -212,7 +214,7 @@ export default function ShipmentsList() {
       key: 'createdAt',
       label: 'Sent',
       hideBelow: 'lg',
-      render: (s) => <span className="whitespace-nowrap text-slate-600">{format(new Date(s.createdAt), 'dd MMM yyyy, h:mm a')}</span>
+      render: (s) => <span className="whitespace-nowrap text-slate-600">{format(new BDDate(s.createdAt), 'dd MMM yyyy, h:mm a')}</span>
     },
     {
       key: 'actions',

@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { alertError } from 'src/utils/swal';
 
 import Link from 'next/link';
@@ -404,7 +406,7 @@ export default function ReportWorkspace({ reportKey }) {
       ws['!cols'] = meta.columns.map((c) => ({ wch: Math.max(c.label.length + 2, 14) }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, meta.label.slice(0, 31));
-      XLSX.writeFile(wb, `${reportKey}-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.writeFile(wb, `${reportKey}-report-${new BDDate().toDhakaISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
       alertError(err, { title: 'The Excel file was not exported' });
     } finally {

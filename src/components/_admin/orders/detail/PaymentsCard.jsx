@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 /**
  * The bill and the money received against it, in one card.
@@ -101,7 +103,7 @@ function PaymentRow({ payment, onRemove, onVerify }) {
           </span>
         </div>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-slate-500">
-          {payment.createdAt ? <span>{format(new Date(payment.createdAt), 'dd MMM yyyy, hh:mm a')}</span> : null}
+          {payment.createdAt ? <span>{format(new BDDate(payment.createdAt), 'dd MMM yyyy, hh:mm a')}</span> : null}
           {payment.trxId ? (
             <>
               <span aria-hidden="true">·</span>
@@ -169,7 +171,7 @@ export default function PaymentsCard({
 
   // Oldest first, so the list reads as the order was paid.
   const sorted = [...payments].sort(
-    (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    (a, b) => new BDDate(a.createdAt || 0).getTime() - new BDDate(b.createdAt || 0).getTime()
   );
   const byState = (key) => sorted.filter((payment) => stateOf(payment).key === key);
   const needsCheck = sum(byState('pending'));

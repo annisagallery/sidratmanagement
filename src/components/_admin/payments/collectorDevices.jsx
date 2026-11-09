@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { alertError, confirmAction, toastSuccess } from 'src/utils/swal';
@@ -28,7 +30,7 @@ const deviceKey = (device) => device?.id || device?._id;
 // alive right now" rather than "when exactly did this happen".
 function ago(date) {
   if (!date) return 'never';
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  const seconds = Math.floor((Date.now() - new BDDate(date).getTime()) / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;

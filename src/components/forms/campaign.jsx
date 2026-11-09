@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../utils/bdTime.js';
+
 import { useState, useRef } from 'react';
 import { useMutation } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
@@ -40,7 +42,7 @@ function toSlug(str) {
 function fmt(d) {
   if (!d) return '';
   // datetime-local expects "YYYY-MM-DDTHH:mm"
-  return new Date(d).toISOString().slice(0, 16);
+  return new BDDate(d).toDhakaISOString().slice(0, 16);
 }
 
 /** One uploadable image: preview (or a placeholder) and a replace button. */

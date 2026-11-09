@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../utils/bdTime.js';
+
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useQueryClient } from 'react-query';
@@ -119,7 +121,7 @@ export default function ServerStatusGate({ copy }) {
 
   const title = offline ? text.offlineTitle : text.title;
   const message = offline ? text.offlineMessage : text.message;
-  const time = checkedAt ? new Date(checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+  const time = checkedAt ? new BDDate(checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
 
   return (
     <div

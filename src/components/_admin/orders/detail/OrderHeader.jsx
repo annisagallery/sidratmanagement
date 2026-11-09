@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 /**
  * Identity and progress.
@@ -94,7 +96,7 @@ export default function OrderHeader({ order, orderStatuses, activeShipment, paid
               {activeShipment ? <ShipmentStatusPill status={activeShipment.status} /> : null}
             </div>
             <p className="mt-1 text-[13px] text-slate-500">
-              {order.createdAt ? format(new Date(order.createdAt), 'd MMM yyyy, h:mm a') : '—'}
+              {order.createdAt ? format(new BDDate(order.createdAt), 'd MMM yyyy, h:mm a') : '—'}
               {' · '}
               {channelLabel(order)}
               {order.createdBy?.name ? ` · by ${order.createdBy.name}` : ''}

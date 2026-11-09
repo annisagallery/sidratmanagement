@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../../utils/bdTime.js';
+
 
 /**
  * Every attempt to get this parcel to the customer.
@@ -102,7 +104,7 @@ export default function ShipmentsCard({
                         <span>{money(shipment.codAmount)} COD</span>
                         {shipment.deliveryFee ? <span>· {money(shipment.deliveryFee)} fee</span> : null}
                         {shipment.createdAt ? (
-                          <span>· {format(new Date(shipment.createdAt), 'dd MMM, hh:mm a')}</span>
+                          <span>· {format(new BDDate(shipment.createdAt), 'dd MMM, hh:mm a')}</span>
                         ) : null}
                         {shipment.createdBy?.name ? <span>· by {shipment.createdBy.name}</span> : null}
                       </p>

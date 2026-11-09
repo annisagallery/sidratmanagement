@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * The production queue — everything a customer is waiting for.
@@ -32,9 +34,9 @@ import { catalogCode, needName, variationLabel } from 'src/components/_admin/inv
 /** How late, in the words someone would use out loud. */
 function dueMeta(value) {
   if (!value) return { label: 'No date', tone: 'neutral', overdue: false };
-  const due = new Date(value);
-  const days = differenceInCalendarDays(due, startOfDay(new Date()));
-  if (isBefore(due, startOfDay(new Date()))) {
+  const due = new BDDate(value);
+  const days = differenceInCalendarDays(due, startOfDay(new BDDate()));
+  if (isBefore(due, startOfDay(new BDDate()))) {
     return { label: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} late`, tone: 'bad', overdue: true };
   }
   if (days === 0) return { label: 'Due today', tone: 'warn', overdue: false };
@@ -163,7 +165,7 @@ export default function ProductionQueue() {
         return (
           <div className="whitespace-nowrap">
             <Pill tone={due.tone}>{due.label}</Pill>
-            <p className="mt-1 text-xs text-slate-500">{need.deliveryDate ? format(new Date(need.deliveryDate), 'dd MMM yyyy') : '—'}</p>
+            <p className="mt-1 text-xs text-slate-500">{need.deliveryDate ? format(new BDDate(need.deliveryDate), 'dd MMM yyyy') : '—'}</p>
           </div>
         );
       }

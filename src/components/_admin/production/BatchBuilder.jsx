@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * New batch — decide what the floor makes next.
@@ -55,8 +57,8 @@ const num = (value) => {
 /** How the promised date reads out loud, and whether it is late. */
 function dueMeta(value) {
   if (!value) return { text: 'No date', tone: 'neutral', overdue: false };
-  const due = new Date(value);
-  const today = startOfDay(new Date());
+  const due = new BDDate(value);
+  const today = startOfDay(new BDDate());
   if (isBefore(due, today)) {
     return { text: `${Math.abs(differenceInCalendarDays(due, today))}d late`, tone: 'bad', overdue: true };
   }
@@ -133,11 +135,11 @@ export default function BatchBuilder() {
         .toLowerCase()
         .includes(term)
     );
-  const promised = (need) => (need.deliveryDate ? new Date(need.deliveryDate).getTime() : Number.POSITIVE_INFINITY);
+  const promised = (need) => (need.deliveryDate ? new BDDate(need.deliveryDate).getTime() : Number.POSITIVE_INFINITY);
   // Earliest promise first; un-promised rows last; ties by when they were ordered.
   const waitingOrders = needs
     .filter((need) => !need.productionBatch && !onBatch.has(oid(need)))
-    .sort((a, b) => promised(a) - promised(b) || new Date(a.createdAt) - new Date(b.createdAt));
+    .sort((a, b) => promised(a) - promised(b) || new BDDate(a.createdAt) - new BDDate(b.createdAt));
   const waitingRefills = refills.filter((row) => !refillOnBatch.has(row.variationId));
   const shownOrders = waitingOrders.filter((need) =>
     matches(need.orderNo, needName(need), catalogCode(need.product, need.variation), variationLabel(need.variation))

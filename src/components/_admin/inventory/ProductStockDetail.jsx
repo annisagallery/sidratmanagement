@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * One product's stock, branch by branch and piece by piece.
@@ -214,7 +216,7 @@ export default function ProductStockDetail({ productId }) {
                   </td>
                   <td className="text-slate-600">{unit.producedBy?.name || '—'}</td>
                   <td className="text-xs text-slate-500">
-                    {unit.submittedAt ? format(new Date(unit.submittedAt), 'dd MMM yyyy') : '—'}
+                    {unit.submittedAt ? format(new BDDate(unit.submittedAt), 'dd MMM yyyy') : '—'}
                   </td>
                 </tr>
               ))

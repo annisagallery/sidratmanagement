@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * What is happening to this order line's physical piece.
@@ -13,7 +15,7 @@ import { StateChip, readState } from 'src/components/_admin/ops/primitives';
 
 export default function SupplyBadge({ item, showDue = true }) {
   const { key, label } = readState(item);
-  const due = showDue && item?.deliveryDate ? new Date(item.deliveryDate) : null;
+  const due = showDue && item?.deliveryDate ? new BDDate(item.deliveryDate) : null;
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">

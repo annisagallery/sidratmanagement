@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import React, { useMemo, useState } from 'react';
 import { useQuery } from 'react-query';
 import Link from 'next/link';
@@ -179,7 +181,7 @@ function IncomeChart({ income, isLoading }) {
     if (period === 'year') return MONTHS;
     if (period === 'month') return Array.from({ length: 31 }, (_, i) => String(i + 1));
     return [...Array(7).keys()].map((d) =>
-      new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(new Date(Date.now() - 86400000 * (6 - d)))
+      new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka',  weekday: 'short' }).format(new BDDate(Date.now() - 86400000 * (6 - d)))
     );
   }, [period]);
 

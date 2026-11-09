@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import * as api from 'src/services';
@@ -32,8 +34,8 @@ const fmtAmount = (value) =>
 // only needs enough to tell one message from the next.
 function shortTime(value) {
   if (!value) return '';
-  const date = new Date(value);
-  const now = new Date();
+  const date = new BDDate(value);
+  const now = new BDDate();
   const sameDay = date.toDateString() === now.toDateString();
   if (sameDay) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const sameYear = date.getFullYear() === now.getFullYear();

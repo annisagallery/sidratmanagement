@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
@@ -74,7 +76,7 @@ export default function ReportPdf({ title, columns, rows, summary = [], filterTe
       <Page size="A4" orientation="landscape" style={styles.page}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>
-          {brandName ? `${brandName} — ` : ''}Generated {fDateTime(new Date())} · {rows.length.toLocaleString()} rows
+          {brandName ? `${brandName} — ` : ''}Generated {fDateTime(new BDDate())} · {rows.length.toLocaleString()} rows
         </Text>
         {filterText ? <Text style={styles.filters}>Filters: {filterText}</Text> : null}
 

@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 import { format } from 'date-fns';
 
@@ -18,7 +20,7 @@ import { variationLabel } from '../inventory/shared';
  *    the admin never print anything.
  */
 
-const fmtDate = (value) => (value ? format(new Date(value), 'dd MMM yyyy') : '');
+const fmtDate = (value) => (value ? format(new BDDate(value), 'dd MMM yyyy') : '');
 
 const titleCase = (value) =>
   String(value || '')

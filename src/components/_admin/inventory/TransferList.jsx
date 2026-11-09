@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Transfers — stock moving between branches.
@@ -266,7 +268,7 @@ export default function TransferList() {
                           {transfer.transferNo}
                         </span>
                         <span className="block text-xs text-slate-500">
-                          {transfer.createdAt ? format(new Date(transfer.createdAt), 'dd MMM yyyy') : ''}
+                          {transfer.createdAt ? format(new BDDate(transfer.createdAt), 'dd MMM yyyy') : ''}
                         </span>
                       </button>
                     </td>
@@ -467,7 +469,7 @@ function TransferDrawer({ transfer, onClose, onAct, onCorrect, onPrint, busy }) 
                 <li key={entry.label} className="flex items-baseline justify-between gap-3 text-[12px]">
                   <span className="font-semibold text-slate-700">{entry.label}</span>
                   <span className="text-slate-500">
-                    {format(new Date(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
+                    {format(new BDDate(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
                   </span>
                 </li>
               ))}

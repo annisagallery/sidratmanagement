@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Production batches — the register of runs.
@@ -169,7 +171,7 @@ export default function BatchList() {
       hideBelow: 'md',
       render: (batch) => (
         <div className="whitespace-nowrap">
-          <p className="text-[13px] text-slate-700">{batch.createdAt ? format(new Date(batch.createdAt), 'dd MMM yyyy') : '—'}</p>
+          <p className="text-[13px] text-slate-700">{batch.createdAt ? format(new BDDate(batch.createdAt), 'dd MMM yyyy') : '—'}</p>
           {batch.createdBy?.name && <p className="text-xs text-slate-500">{batch.createdBy.name}</p>}
         </div>
       )

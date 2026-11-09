@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Cash on delivery — what couriers still owe us, and matching their payouts.
@@ -153,7 +155,7 @@ export default function CodRemittance() {
                       </Link>
                       <p className="text-xs text-slate-500">
                         {row.customer}
-                        {row.deliveredAt ? ` · delivered ${format(new Date(row.deliveredAt), 'dd MMM')}` : ''}
+                        {row.deliveredAt ? ` · delivered ${format(new BDDate(row.deliveredAt), 'dd MMM')}` : ''}
                       </p>
                     </td>
                     <td>

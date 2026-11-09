@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useQuery } from 'react-query';
 import * as api from 'src/services';
 import { FiClock, FiEdit, FiPlusCircle, FiMinusCircle, FiCreditCard, FiAlertCircle } from 'react-icons/fi';
@@ -7,7 +9,7 @@ import Drawer from 'src/components/_admin/ui/Drawer';
 import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
 function timeAgo(date) {
-  const diff = Date.now() - new Date(date).getTime();
+  const diff = Date.now() - new BDDate(date).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;

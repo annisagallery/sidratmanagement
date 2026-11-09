@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,14 +17,14 @@ const typeStyle = {
 };
 
 function relativeTime(value) {
-  const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  const seconds = Math.max(1, Math.floor((Date.now() - new BDDate(value).getTime()) / 1000));
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return days < 7 ? `${days}d ago` : new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return days < 7 ? `${days}d ago` : new BDDate(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
 export default function NotificationInbox() {

@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * New transfer — the old POS's transfer docket.
@@ -65,8 +67,8 @@ const num = (value) => {
 const squash = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const todayValue = () => {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const d = new BDDate();
+  return d.toDhakaISOString().slice(0, 10);
 };
 
 export default function TransferBuilder() {

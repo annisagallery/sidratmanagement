@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from 'react-query';
@@ -41,9 +43,9 @@ const fmt = (n) => `৳${Number(n || 0).toLocaleString('en-BD')}`;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 const addDays = (days) => {
-  const d = new Date();
+  const d = new BDDate();
   d.setDate(d.getDate() + Number(days || 0));
-  return d.toISOString().split('T')[0];
+  return d.toDhakaISOString().split('T')[0];
 };
 
 const normalizeList = (res) => {
@@ -1627,7 +1629,7 @@ function TagPicker({ selected, onChange }) {
 // ─── Delivery ─────────────────────────────────────────────────────────────────
 function DeliverySection({ value, onChange, deliveryTypes = DEFAULT_DELIVERY_TYPES }) {
   const compact = useContext(Compact);
-  const today = new Date().toISOString().split('T')[0];
+  const today = new BDDate().toDhakaISOString().split('T')[0];
 
   const selectType = (type) => {
     const found = deliveryTypes.find((item) => item.key === type);

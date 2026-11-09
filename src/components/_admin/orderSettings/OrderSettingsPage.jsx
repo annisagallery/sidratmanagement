@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { getOrderSettings, updateOrderSettings } from 'src/services';
@@ -16,7 +18,7 @@ const TYPES = [
 const DAY_FIELD = { regular: 'regularDays', urgent: 'urgentDays', sameDay: 'sameDayDays' };
 
 const dueFor = (days) =>
-  new Date(Date.now() + Math.max(0, Number(days) || 0) * 86400000).toLocaleDateString('en-US', {
+  new BDDate(Date.now() + Math.max(0, Number(days) || 0) * 86400000).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric'

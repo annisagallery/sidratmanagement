@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * One production batch, on its own page.
@@ -198,7 +200,7 @@ export default function BatchDetail({ batchNo }) {
     { label: 'Batch completed', at: batch.completedAt, by: batch.completedBy?.name }
   ]
     .filter((entry) => entry.at)
-    .sort((a, b) => new Date(a.at) - new Date(b.at));
+    .sort((a, b) => new BDDate(a.at) - new BDDate(b.at));
 
   // Once something has been received a batch cannot be cancelled; it is closed
   // short instead, and the reason is kept on the batch.
@@ -408,7 +410,7 @@ export default function BatchDetail({ batchNo }) {
                           {unit.producedBy?.name || '—'}
                           {unit.submittedAt ? (
                             <span className="block text-xs text-slate-500">
-                              {format(new Date(unit.submittedAt), 'dd MMM, hh:mm a')}
+                              {format(new BDDate(unit.submittedAt), 'dd MMM, hh:mm a')}
                             </span>
                           ) : null}
                         </td>
@@ -466,7 +468,7 @@ export default function BatchDetail({ batchNo }) {
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800">{entry.label}</p>
                       <p className="text-xs text-slate-500">
-                        {format(new Date(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
+                        {format(new BDDate(entry.at), 'dd MMM yyyy, hh:mm a')} · {entry.by || 'System'}
                       </p>
                     </div>
                   </li>

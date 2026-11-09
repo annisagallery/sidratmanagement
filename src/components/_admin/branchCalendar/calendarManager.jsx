@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useState } from 'react';
 import { useQuery, useQueryClient } from 'react-query';
 import { MdAdd, MdCalendarMonth, MdCheck, MdClose, MdDelete, MdSchedule } from 'react-icons/md';
@@ -61,7 +63,7 @@ const formatDate = (isoDate) =>
     day: 'numeric',
     month: 'short',
     year: 'numeric'
-  }).format(new Date(`${isoDate}T00:00:00Z`));
+  }).format(new BDDate(`${isoDate}T00:00:00Z`));
 
 const EMPTY_FORM = { branch: '', date: '', kind: 'CLOSED', openTime: '', closeTime: '', reason: '' };
 

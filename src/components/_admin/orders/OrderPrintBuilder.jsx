@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Pick orders, then print them.
@@ -219,7 +221,7 @@ export default function OrderPrintBuilder({
                       <td>
                         <span className="ops-code text-[13px] font-semibold text-slate-900">#{order.orderNo}</span>
                         <span className="block text-xs text-slate-500">
-                          {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
+                          {order.createdAt ? format(new BDDate(order.createdAt), 'dd MMM yyyy') : '—'}
                         </span>
                       </td>
                       <td>

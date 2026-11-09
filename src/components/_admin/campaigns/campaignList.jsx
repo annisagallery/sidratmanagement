@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 import { useRouter } from 'next-nprogress-bar';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
@@ -34,7 +36,7 @@ const TYPE_META = {
 const fmt = (d) => (d ? fDate(d) : '—');
 
 function StatusBadge({ status, endDate }) {
-  const expired = endDate && new Date(endDate) < new Date();
+  const expired = endDate && new BDDate(endDate) < new BDDate();
   return <RecordStatus status={expired ? 'expired' : status === 'active' ? 'active' : 'inactive'} />;
 }
 

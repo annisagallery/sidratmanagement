@@ -1,4 +1,6 @@
 'use client';
+import { BDDate } from '../../../utils/bdTime.js';
+
 
 /**
  * Shared scan surface for the receipt and packing stations.
@@ -119,13 +121,13 @@ export default function ScanStation({
       tone(ok);
       setFeedback({ ok, message: outcome.message || (ok ? 'Accepted.' : 'Rejected.'), detail: outcome.detail, code: value });
       setHistory((entries) =>
-        [{ code: value, ok, message: outcome.message, at: new Date() }, ...entries].slice(0, historyLimit)
+        [{ code: value, ok, message: outcome.message, at: new BDDate() }, ...entries].slice(0, historyLimit)
       );
     } catch (error) {
       tone(false);
       const message = error?.response?.data?.message || error?.message || 'That scan could not be processed.';
       setFeedback({ ok: false, message, code: value });
-      setHistory((entries) => [{ code: value, ok: false, message, at: new Date() }, ...entries].slice(0, historyLimit));
+      setHistory((entries) => [{ code: value, ok: false, message, at: new BDDate() }, ...entries].slice(0, historyLimit));
     } finally {
       setBusy(false);
       focus();
