@@ -45,6 +45,10 @@ function fmt(d) {
   return new BDDate(d).toDhakaISOString().slice(0, 16);
 }
 
+function imageValue(image, path) {
+  return typeof image === 'string' ? { path: image } : image || (path ? { path } : null);
+}
+
 /** One uploadable image: preview (or a placeholder) and a replace button. */
 function ImageSlot({ title, description, image, uploading, onPick }) {
   const ref = useRef();
@@ -83,8 +87,8 @@ export default function CampaignForm({ data: existing }) {
     description: existing?.description || '',
     metaTitle: existing?.metaTitle || '',
     metaDescription: existing?.metaDescription || '',
-    cover: existing?.cover || null,
-    cardImage: existing?.cardImage || null,
+    cover: imageValue(existing?.cover, existing?.coverPath),
+    cardImage: imageValue(existing?.cardImage, existing?.cardImagePath),
     discountType: existing?.discountType || 'percent',
     discount: existing?.discount || '',
     startDate: fmt(existing?.startDate) || '',
@@ -270,14 +274,14 @@ export default function CampaignForm({ data: existing }) {
 
           <ImageSlot
             title="Cover image"
-            description="The banner at the top of the campaign page."
+              description="Wide (3:1). Used on mobile and at the top of the campaign page. Include the campaign name in your artwork."
             image={form.cover}
             uploading={imgLoading}
             onPick={upload('cover', setImgLoading)}
           />
           <ImageSlot
             title="Card image"
-            description="Pinned as the first card in the homepage campaign carousel."
+            description="Square (1:1). Shown beside campaign products on desktop."
             image={form.cardImage}
             uploading={cardImgLoading}
             onPick={upload('cardImage', setCardImgLoading)}
