@@ -15,7 +15,7 @@ import { BDDate } from '../../../../utils/bdTime.js';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import Swal from 'sweetalert2';
+import { fireSwal } from 'src/utils/swal';
 import { format } from 'date-fns';
 import { FiAlertTriangle, FiMapPin, FiTruck } from 'react-icons/fi';
 
@@ -421,7 +421,7 @@ export function ShipModal({ orderNo, order, meta, isResend, onClose, onSent }) {
         const providerError = error?.response?.data?.providerError;
         // The courier's raw reply is shown as-is, because it is what support
         // asks for; the operator's message leads.
-        Swal.fire({
+        fireSwal({
           title: 'Could not send the parcel',
           html: `<p style="margin:0">${escapeHtml(message)}</p>${
             providerError

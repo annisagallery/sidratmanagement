@@ -4,7 +4,7 @@ import { alertError } from 'src/utils/swal';
 import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { useMutation, useQuery } from 'react-query';
 import { useRouter } from 'next-nprogress-bar';
-import Swal from 'sweetalert2';
+import { fireSwal } from 'src/utils/swal';
 import Image from 'next/image';
 import * as api from 'src/services';
 import {
@@ -576,7 +576,7 @@ function LivePreview({
             {sizeChart?.path && (
               <button
                 type="button"
-                onClick={() => Swal.fire({ imageUrl: sizeChart.path, imageAlt: 'Size chart', padding: '10px' })}
+                onClick={() => fireSwal({ imageUrl: sizeChart.path, imageAlt: 'Size chart', padding: '10px' })}
                 className="btn-ghost btn-sm w-full"
               >
                 Size chart

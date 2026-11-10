@@ -4,7 +4,7 @@
 /**
  * The one place dialogs are defined for this app.
  *
- * SweetAlert's stock look (big animated icon, blue OK button, `Swal.fire(msg)`
+ * SweetAlert's stock look (big animated icon, blue OK button, `fireSwal(msg)`
  * positional args) had drifted into every list and form with a different tone
  * and wording each time. Everything here renders through one template so a
  * confirm, an error and a bulk summary read as the same product, and so the
@@ -14,6 +14,9 @@
  */
 
 import Swal from 'sweetalert2';
+import { fireLayeredAlert } from './alertLayer.mjs';
+
+export const fireSwal = (...args) => fireLayeredAlert(Swal, args, document);
 import { toast as toastify } from 'react-toastify';
 
 // Session scope for password re-confirmation, and the CSS variable this app
@@ -60,6 +63,7 @@ function ensureStyles() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
+    .swal2-container,.Toastify__toast-container{z-index:2147483647}
     .sw-popup{width:min(430px,92vw);border-radius:18px;padding:26px 24px 20px;font-family:inherit;
       box-shadow:0 24px 60px -22px rgba(15,23,42,.4),0 0 0 1px rgba(15,23,42,.06)}
     .sw-html{margin:0!important;padding:0!important}
@@ -107,7 +111,7 @@ function ensureStyles() {
     /* SweetAlert's own defaults, restyled to match.
        Not every dialog in the app has been moved onto the helpers above yet, and
        a half-converted app looks worse than an unconverted one. These rules make
-       a plain Swal.fire() land in the same visual language, so the migration can
+       a plain fireSwal() land in the same visual language, so the migration can
        finish call site by call site without the UI ever looking mixed. */
     .swal2-popup{border-radius:18px!important;padding:26px 24px 20px!important;font-family:inherit!important;
       width:min(430px,92vw)!important;
@@ -138,7 +142,7 @@ function ensureStyles() {
   document.head.appendChild(style);
 }
 
-// Injected on import rather than on first dialog: an un-migrated `Swal.fire()`
+// Injected on import rather than on first dialog: an un-migrated `fireSwal()`
 // elsewhere in the app must not be the one dialog that renders unstyled.
 ensureStyles();
 
@@ -253,7 +257,7 @@ export const failureLines = (failures = []) =>
 // ── Notices ───────────────────────────────────────────────────────────────────
 
 export const alertSuccess = (title, text, options = {}) =>
-  Swal.fire(
+  fireSwal(
     baseDialog({
       tone: 'success',
       html: bodyMarkup({ tone: 'success', title, text, ...options }),
@@ -265,7 +269,7 @@ export const alertSuccess = (title, text, options = {}) =>
 export const alertError = (error, { title = "That didn't work", text, ...options } = {}) =>
   isConfirmationCancelled(error)
     ? Promise.resolve({ isDismissed: true })
-    : Swal.fire(
+    : fireSwal(
     baseDialog({
       tone: 'danger',
       glyph: 'warning',
@@ -282,7 +286,7 @@ export const alertError = (error, { title = "That didn't work", text, ...options
   );
 
 export const alertWarning = (title, text, options = {}) =>
-  Swal.fire(
+  fireSwal(
     baseDialog({
       tone: 'warning',
       html: bodyMarkup({ tone: 'warning', title, text, ...options }),
@@ -292,7 +296,7 @@ export const alertWarning = (title, text, options = {}) =>
   );
 
 export const alertInfo = (title, text, options = {}) =>
-  Swal.fire(
+  fireSwal(
     baseDialog({
       tone: 'info',
       html: bodyMarkup({ tone: 'info', title, text, ...options }),
@@ -317,7 +321,7 @@ export async function confirmAction({
   confirmText = 'Continue',
   cancelText = 'Cancel'
 } = {}) {
-  const result = await Swal.fire(
+  const result = await fireSwal(
     baseDialog({
       tone,
       html: bodyMarkup({ tone, glyph, title, text, subject, items }),
@@ -379,7 +383,7 @@ export async function promptPassword({
   confirmText = 'Confirm',
   verify
 } = {}) {
-  const result = await Swal.fire(
+  const result = await fireSwal(
     baseDialog({
       tone: 'danger',
       glyph: 'lock',
@@ -428,7 +432,7 @@ export async function promptText({
   // Optional extra check: return a message to block confirming, or nothing.
   validate
 } = {}) {
-  const result = await Swal.fire(
+  const result = await fireSwal(
     baseDialog({
       tone,
       html: `${bodyMarkup({ tone, title, text })}
@@ -462,7 +466,7 @@ export async function promptSelect({
   tone = 'question',
   requiredMessage = 'Pick an option to continue.'
 } = {}) {
-  const result = await Swal.fire(
+  const result = await fireSwal(
     baseDialog({
       tone,
       html: `${bodyMarkup({ tone, title, text })}<div class="sw-field"></div>`,
@@ -483,7 +487,7 @@ export async function promptSelect({
 /** Blocking spinner for multi-request bulk work. Always pair with closeProgress. */
 export function openProgress(title = 'Working…', text = 'Please keep this tab open.') {
   ensureStyles();
-  return Swal.fire(
+  return fireSwal(
     baseDialog({
       tone: 'info',
       html: bodyMarkup({ tone: 'info', title, text }),
@@ -527,7 +531,7 @@ export function alertBulkResult({ action = 'Updated', unit = 'records', succeede
       items: failureLines(failures)
     });
   }
-  return Swal.fire(
+  return fireSwal(
     baseDialog({
       tone: 'warning',
       html: bodyMarkup({
