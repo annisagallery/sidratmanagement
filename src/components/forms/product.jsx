@@ -23,6 +23,7 @@ import {
   MdDescription,
   MdInventory2,
   MdPhotoLibrary,
+  MdStraighten,
   MdOpenInNew,
   MdReceiptLong,
   MdSearch,
@@ -633,7 +634,8 @@ function LivePreview({
 const STEPS = [
   { label: 'Product details', description: 'Identity and pricing', icon: MdInventory2 },
   { label: 'Content & SEO', description: 'Copy and search', icon: MdDescription },
-  { label: 'Media', description: 'Gallery and size chart', icon: MdPhotoLibrary },
+  { label: 'Media', description: 'Product gallery', icon: MdPhotoLibrary },
+  { label: 'Measurement', description: 'Size information and chart', icon: MdStraighten },
   { label: 'Options', description: 'Attributes and variations', icon: MdTune },
   { label: 'Presale', description: 'Sell beyond finished stock', icon: MdShoppingCart },
   { label: 'Materials', description: 'Bill of materials', icon: MdReceiptLong }
@@ -698,6 +700,7 @@ export default function ProductForm({ currentProduct }) {
   // Description
   const [shortDescription, setShortDescription] = useState('');
   const [description, setDescription] = useState('');
+  const [measurementDescription, setMeasurementDescription] = useState('');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
 
@@ -768,6 +771,7 @@ export default function ProductForm({ currentProduct }) {
     setIsVisible(p.isVisible !== false);
     setShortDescription(p.shortDescription || '');
     setDescription(p.description || '');
+    setMeasurementDescription(p.measurementDescription || '');
     setMetaTitle(p.metaTitle || '');
     setMetaDescription(p.metaDescription || '');
     setSizeChart(p.sizeChart || null);
@@ -924,6 +928,7 @@ export default function ProductForm({ currentProduct }) {
       isVisible,
       shortDescription,
       description,
+      measurementDescription,
       metaTitle,
       metaDescription,
       featuredImage: featuredImageId || imagePool[0]?.id || null,
@@ -956,7 +961,7 @@ export default function ProductForm({ currentProduct }) {
     // tells you nothing about a bill of materials.
     <div
       className={`product-form grid items-start gap-5 ${
-        step === 5 ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'
+        step === 6 ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'
       }`}
     >
       {/* ═══════ LEFT: FORM ═══════ */}
@@ -979,7 +984,7 @@ export default function ProductForm({ currentProduct }) {
           </div>
         )}
         {/* Step tabs */}
-        <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="card-ui mb-5 grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-7">
           {STEPS.map((item, i) => {
             const Icon = item.icon;
             return (
@@ -1208,8 +1213,8 @@ export default function ProductForm({ currentProduct }) {
         {/* ── STEP 2: IMAGES ── */}
         {step === 2 && (
           <div className="card-ui space-y-6 p-5 sm:p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-              <div className="md:col-span-2">
+            <div>
+              <div>
                 <FL>
                   Image pool <span className="text-xs text-slate-500 font-normal ml-1">(star one = featured)</span>
                 </FL>
@@ -1220,18 +1225,31 @@ export default function ProductForm({ currentProduct }) {
                   setFeaturedId={setFeaturedImageId}
                 />
               </div>
-              <div>
-                <FL>
-                  Size chart <span className="text-xs text-slate-500 font-normal ml-1">(separate)</span>
-                </FL>
-                <SizeChartUploader value={sizeChart} onChange={setSizeChart} />
-              </div>
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: ATTRIBUTES & VARIATIONS ── */}
+        {/* Measurement text and the existing chart stay independent of gallery images. */}
         {step === 3 && (
+          <div className="card-ui grid grid-cols-1 gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div>
+              <FL>Size description</FL>
+              <RichTextEditor
+                value={measurementDescription}
+                onChange={setMeasurementDescription}
+                placeholder="Measurements, fit notes and how to measure…"
+                minHeight={240}
+              />
+            </div>
+            <div>
+              <FL>Size chart</FL>
+              <SizeChartUploader value={sizeChart} onChange={setSizeChart} />
+            </div>
+          </div>
+        )}
+
+        {/* Attributes & variations */}
+        {step === 4 && (
           <div className="card-ui space-y-6 p-5 sm:p-6">
             {/* Attribute selector */}
             <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/50 p-4 sm:p-5">
@@ -1680,7 +1698,7 @@ export default function ProductForm({ currentProduct }) {
         )}
 
         {/* ── STEP 4: PRESALE ── */}
-        {step === 4 && (
+        {step === 5 && (
           <div className="card-ui space-y-5 p-5 sm:p-6">
             {/* The only warning that changes what happens: with production
                 off, presale is inert no matter what is switched on here. */}
@@ -1697,7 +1715,7 @@ export default function ProductForm({ currentProduct }) {
               <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <MdTune size={28} className="mx-auto mb-3 text-slate-300" />
                 <p className="text-sm font-semibold text-slate-600">No options yet</p>
-                <button type="button" className="btn-ghost mt-4" onClick={() => setStep(3)}>
+                <button type="button" className="btn-ghost mt-4" onClick={() => setStep(4)}>
                   <MdChevronLeft size={16} /> Back to options
                 </button>
               </div>
@@ -1774,7 +1792,7 @@ export default function ProductForm({ currentProduct }) {
         )}
 
         {/* ── STEP 5: MATERIALS (BOM) ── */}
-        {step === 5 && (
+        {step === 6 && (
           <div className="space-y-5">
             {isEdit && currentProduct?.slug ? (
               // Saved on its own endpoint, per scope, with its own buttons —
@@ -1855,7 +1873,7 @@ export default function ProductForm({ currentProduct }) {
       </div>
 
       {/* ═══════ RIGHT: LIVE PREVIEW ═══════ */}
-      {step !== 5 && (
+      {step !== 6 && (
       <LivePreview
         name={name}
         slug={slug}
