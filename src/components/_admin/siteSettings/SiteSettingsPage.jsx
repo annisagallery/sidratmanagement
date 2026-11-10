@@ -100,6 +100,7 @@ const DEFAULT_FORM = {
   refundPolicy: DEFAULT_REFUND_HTML,
   termsConditions: DEFAULT_TERMS_HTML,
   maintenanceMode: false,
+  maintenancePin: '',
   maintenanceHeading: "We'll be back soon!",
   maintenanceSubheading: 'Our site is currently undergoing scheduled maintenance.',
   maintenanceMessage: '',
@@ -143,6 +144,7 @@ function toForm(d = {}) {
     refundPolicy: decodeHtml(d.refundPolicy) || DEFAULT_REFUND_HTML,
     termsConditions: decodeHtml(d.termsConditions) || DEFAULT_TERMS_HTML,
     maintenanceMode: d.maintenanceMode ?? false,
+    maintenancePin: '',
     maintenanceHeading: d.maintenanceHeading || "We'll be back soon!",
     maintenanceSubheading: d.maintenanceSubheading || 'Our site is currently undergoing scheduled maintenance.',
     maintenanceMessage: d.maintenanceMessage || '',
@@ -287,6 +289,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
   const [saving, setSaving] = useState(false);
   const [loadState, setLoadState] = useState({ loading: true, error: null });
   const [imageKeyConfigured, setImageKeyConfigured] = useState(false);
+  const [maintenancePinConfigured, setMaintenancePinConfigured] = useState(false);
 
   const load = useCallback(() => {
     setLoadState({ loading: true, error: null });
@@ -299,6 +302,7 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
         if (d.logo) setLogo(d.logo);
         if (d.favicon) setFavicon(d.favicon);
         setImageKeyConfigured(Boolean(d.imageServerApiKeyConfigured));
+        setMaintenancePinConfigured(Boolean(d.maintenancePinConfigured));
         setLoadState({ loading: false, error: null });
       })
       // A failed load must not fall through to the form: saving the defaults
@@ -316,14 +320,19 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
   const hasUnsavedChanges = saved !== null && saved !== JSON.stringify(form);
 
   const handleSave = async () => {
+    if (form.maintenancePin && !/^\d{6}$/.test(form.maintenancePin)) {
+      alertError(new Error('Maintenance PIN must contain exactly 6 digits.'), { title: 'Check the access PIN' });
+      return;
+    }
     setSaving(true);
     try {
-      await updateSiteSettings(form);
-      const next = form.imageServerApiKey ? { ...form, imageServerApiKey: '' } : form;
+      const response = await updateSiteSettings(form);
+      const next = { ...form, imageServerApiKey: '', maintenancePin: '' };
       if (form.imageServerApiKey) {
         setImageKeyConfigured(true);
-        setForm(next);
       }
+      setMaintenancePinConfigured(Boolean(response.data?.maintenancePinConfigured));
+      setForm(next);
       setSaved(JSON.stringify(next));
       qc.invalidateQueries('site-settings');
       toastSuccess('Settings saved', 'The storefront picks them up within a minute.');
@@ -796,15 +805,28 @@ export default function SiteSettingsPage({ section = 'global', page = null }) {
             <SettingsCard title="Maintenance mode">
               <Toggle
                 label="Take the storefront offline"
-                help="Visitors see the maintenance page instead. Signed-in admin accounts can still browse normally."
+                help="Visitors see the maintenance page. Staff can enter the store using the access PIN."
                 checked={form.maintenanceMode}
                 onChange={(on) => put('maintenanceMode', on)}
               />
               {form.maintenanceMode && (
                 <Callout tone="danger" title="The storefront is hidden from shoppers">
-                  {hasUnsavedChanges ? 'Once you save, only admin accounts can browse the site.' : 'Only admin accounts can browse the site until this is turned off.'}
+                  {hasUnsavedChanges ? 'Once you save, the access PIN is required to browse.' : 'The access PIN is required to browse until this is turned off.'}
                 </Callout>
               )}
+              <Field label="Access PIN" help={maintenancePinConfigured ? 'PIN saved. Leave blank to keep it, or enter a new 6-digit PIN.' : 'Enter a 6-digit PIN for staff access.'}>
+                <input
+                  name="maintenancePin"
+                  value={form.maintenancePin}
+                  onChange={(e) => put('maintenancePin', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  maxLength={6}
+                  placeholder={maintenancePinConfigured ? 'Saved PIN' : '6-digit PIN'}
+                  className="input-ui"
+                />
+              </Field>
             </SettingsCard>
 
             <SettingsCard title="Maintenance page" description="What visitors see while the site is offline.">
