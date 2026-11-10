@@ -12,12 +12,12 @@ import ActionMenu from 'src/components/_admin/ui/ActionMenu';
 import { Field, Switch, Toggle } from 'src/components/_admin/ui/fields';
 import { EmptyState, ErrorState } from 'src/components/_admin/ui/TableStates';
 
-// Homepage customer reviews. Deliberately the same screen as Home Banners, with
-// the banner's title/subtitle replaced by a single reviewer name — the uploaded
-// screenshot is the review, so there is no copy to write, only who said it.
+// Admin-curated feedback supplements positive product reviews on the homepage.
 
 const EMPTY_FORM = {
   name: '',
+  review: '',
+  productId: '',
   link: '',
   alt: '',
   isActive: true,
@@ -32,6 +32,8 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
     review
       ? {
           name: review.name || '',
+          review: review.review || '',
+          productId: review.productId || '',
           link: review.link || '',
           alt: review.alt || '',
           isActive: review.isActive !== false,
@@ -43,6 +45,13 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [productSearch, setProductSearch] = useState('');
+  const { data: productResults } = useQuery(
+    ['home-review-products', productSearch],
+    () => api.searchProducts({ search: productSearch, limit: 20 }),
+    { staleTime: 30_000 }
+  );
+  const products = productResults?.data || [];
 
   const set = (k) => (e) => {
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -73,6 +82,7 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
     const next = {};
     if (!form.imageId) next.image = 'Upload the review screenshot.';
     if (!form.name.trim()) next.name = 'Enter the name of the customer who wrote it.';
+    if (!form.review.trim()) next.review = 'Enter the customer’s review text.';
     setErrors(next);
     if (Object.keys(next).length) return;
     setSaving(true);
@@ -80,6 +90,8 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
       const payload = {
         image: form.imageId,
         name: form.name.trim(),
+        review: form.review.trim(),
+        productId: form.productId || null,
         link: form.link,
         alt: form.alt,
         isActive: form.isActive
@@ -120,7 +132,7 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
       <div className="space-y-5">
         <div>
           <p className="mb-1.5 text-[13px] font-medium text-slate-800">
-            Screenshot
+            Review photo or screenshot
             <span className="ml-0.5 text-rose-600" aria-hidden>
               *
             </span>
@@ -152,7 +164,18 @@ function ReviewDrawer({ mode, review, onClose, onSaved }) {
         <Field label="Customer name" required error={errors.name} help="Printed on the card, under the screenshot.">
           <input value={form.name} onChange={set('name')} placeholder="e.g. Farhana Akter" className="input-ui" />
         </Field>
-        <Field label="Link" optional help="Opened when the card is tapped. Link the original post so shoppers can check it.">
+        <Field label="Review text" required error={errors.review}>
+          <textarea value={form.review} onChange={set('review')} maxLength={5000} rows={4} className="input-ui" placeholder="The customer's own words" />
+        </Field>
+        <Field label="Product" optional>
+          <input value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="Search products" className="input-ui mb-2" aria-label="Search review product" />
+          <select value={form.productId} onChange={set('productId')} className="input-ui" aria-label="Product linked to this review">
+            <option value="">No product linked</option>
+            {form.productId && !products.some((p) => p.id === form.productId) && <option value={form.productId}>{review?.product?.name || 'Selected product'}</option>}
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Original feedback link" optional>
           <input value={form.link} onChange={set('link')} placeholder="Facebook post link" className="input-ui" />
         </Field>
         <Field label="Image description" optional help="Read aloud by screen readers and used by search engines.">
@@ -286,7 +309,7 @@ export default function HomeReviewList() {
       <EmptyState
         icon={MdRateReview}
         title="No reviews yet"
-        hint="Upload a screenshot of a customer review — a Facebook recommendation, a message, a comment — and it appears in the homepage carousel."
+        hint="Add a customer photo or feedback screenshot, review text, and a product link."
         action={addButton}
       />
     );
@@ -330,7 +353,7 @@ export default function HomeReviewList() {
                 <p className={`truncate text-sm font-semibold ${review.name ? 'text-slate-900' : 'text-slate-500'}`}>{name}</p>
                 <p className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
                   <MdLink size={14} className="shrink-0" aria-hidden />
-                  <span className="truncate">{review.link || 'No link'}</span>
+                  <span className="truncate">{review.product?.name || review.link || 'No product linked'}</span>
                 </p>
               </div>
 
@@ -391,7 +414,7 @@ export default function HomeReviewList() {
         description={
           localReviews.length
             ? `${activeCount} showing${hiddenCount ? ` · ${hiddenCount} hidden` : ''}${localReviews.length > 1 ? ' · drag or use the menu to reorder' : ''}`
-            : 'Screenshots of real customer reviews, shown in order on the homepage.'
+            : 'Admin-added feedback appears alongside positive customer product reviews.'
         }
         bodyClassName="!p-0"
       >
